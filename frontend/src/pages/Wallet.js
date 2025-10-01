@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { DEFAULT_MINT_URL, ECASH_CONFIG } from '../config';
+import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl } from '../config';
 // Cashu mode: no join/federation or gateway UI
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, saveProofs, exportProofsJson, importProofsFrom } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs } from '../services/cashuProtocol';
@@ -389,7 +389,7 @@ function Wallet() {
     try {
       setLoading(true);
       setReceiveCompleted(false);
-      const resp = await fetch('http://localhost:5001/api/cashu/mint/quote', {
+      const resp = await fetch(apiUrl('/api/cashu/mint/quote'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: parseInt(receiveAmount, 10) })
       });
@@ -455,7 +455,7 @@ function Wallet() {
         // Check quote state to get actual paid/issued amount before building outputs
         // If not paid yet, skip this cycle
         try {
-          const cs = await fetch(`http://localhost:5001/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`);
+          const cs = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`));
           if (cs.ok) {
             const st = await cs.json();
             const s = (st?.state || '').toUpperCase();
@@ -467,12 +467,12 @@ function Wallet() {
         redeemInFlightRef.current = true;
         // Ensure we have mint keys and prebuilt blinded outputs once (for the correct amount)
         if (!redeemCtxRef.current) {
-          const keysResp = await fetch('http://localhost:5001/api/cashu/keys');
+          const keysResp = await fetch(apiUrl('/api/cashu/keys'));
           if (!keysResp.ok) throw new Error('Mint keys 조회 실패');
           const mintKeys = await keysResp.json();
           let amount = parseInt(localStorage.getItem('cashu_last_mint_amount') || '0', 10);
           try {
-            const js = await fetch(`http://localhost:5001/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`);
+            const js = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`));
             if (js.ok) {
               const jd = await js.json();
               amount = parseInt(jd?.amount_issued || jd?.amount || amount || 0, 10);
@@ -482,7 +482,7 @@ function Wallet() {
           redeemCtxRef.current = { outputs, outputDatas, mintKeys, amount, quote };
         }
         const { outputs, outputDatas, mintKeys } = redeemCtxRef.current;
-        const r = await fetch('http://localhost:5001/api/cashu/mint/redeem', {
+        const r = await fetch(apiUrl('/api/cashu/mint/redeem'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ quote, outputs })
         });
@@ -588,7 +588,7 @@ function Wallet() {
       if (!bolt11 && hasAddress) {
         const amt = parseInt(sendAmount, 10);
         if (!amt || amt <= 0) throw new Error('금액이 필요합니다');
-        const rq = await fetch('http://localhost:5001/api/lightningaddr/quote', {
+        const rq = await fetch(apiUrl('/api/lightningaddr/quote'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: sendAddress, amount: amt })
         });
@@ -602,7 +602,7 @@ function Wallet() {
         if (!bolt11) throw new Error('인보이스 발급 실패');
       }
       // quote for bolt11
-      const q = await fetch('http://localhost:5001/api/cashu/melt/quote', {
+      const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request: bolt11, invoice: bolt11 })
       });
@@ -658,7 +658,7 @@ function Wallet() {
       let changeOutputDatas = undefined;
       const change = Math.max(0, Number(total) - Number(need));
       if (change > 0) {
-        const kr = await fetch('http://localhost:5001/api/cashu/keys');
+      const kr = await fetch(apiUrl('/api/cashu/keys'));
         if (!kr.ok) throw new Error('Mint keys 조회 실패');
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
@@ -667,7 +667,7 @@ function Wallet() {
       }
       // Deduplicate inputs defensively
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
-      const m = await fetch('http://localhost:5001/api/cashu/melt', {
+      const m = await fetch(apiUrl('/api/cashu/melt'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: uniquePicked, outputs: changeOutputs })
       });
@@ -692,7 +692,7 @@ function Wallet() {
       let changeProofs = [];
       const signatures = md?.change || md?.signatures || md?.promises || [];
       if (Array.isArray(signatures) && signatures.length && changeOutputDatas) {
-        const kr2 = await fetch('http://localhost:5001/api/cashu/keys');
+        const kr2 = await fetch(apiUrl('/api/cashu/keys'));
         const mintKeys2 = kr2.ok ? await kr2.json() : null;
         if (mintKeys2) {
           changeProofs = await signaturesToProofs(signatures, mintKeys2, changeOutputDatas);
@@ -765,7 +765,7 @@ function Wallet() {
   const connectMint = async () => {
     try {
       setLoading(true);
-      const resp = await fetch('http://localhost:5001/api/cashu/info');
+      const resp = await fetch(apiUrl('/api/cashu/info'));
       if (!resp.ok) throw new Error('Mint 정보 조회 실패');
       setIsConnected(true);
       await loadWalletData();

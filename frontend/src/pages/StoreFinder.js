@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './StoreFinder.css';
 import Icon from '../components/Icon';
+import { apiUrl } from '../config';
 
 function StoreFinder() {
   const [stores, setStores] = useState([]);
@@ -44,7 +45,7 @@ function StoreFinder() {
 
   const fetchStores = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/stores');
+      const response = await fetch(apiUrl('/api/stores'));
       const data = await response.json();
       setStores(data);
     } catch (error) {
@@ -175,7 +176,7 @@ function StoreFinder() {
         hours: hours.trim() ? hours.trim() : null,
         description: description.trim() ? description.trim() : null,
       };
-      const resp = await fetch('http://localhost:5001/api/stores', {
+      const resp = await fetch(apiUrl('/api/stores'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

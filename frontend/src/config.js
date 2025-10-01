@@ -19,3 +19,11 @@ export const ECASH_CONFIG = {
   maxAmount: 100000, // 100k sats max per transaction
   feeRate: 0.001, // 0.1% fee
 };
+
+const RAW_API_BASE = process.env.REACT_APP_API_BASE_URL || '';
+export const API_BASE_URL = RAW_API_BASE.endsWith('/') ? RAW_API_BASE.slice(0, -1) : RAW_API_BASE;
+
+export const apiUrl = (path = '/') => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};
