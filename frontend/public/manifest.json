@@ -1,0 +1,17 @@
+{
+  "short_name": "한입 결제",
+  "name": "한입 결제 - Cashu 지갑 & 매장찾기",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f59e0b",
+  "description": "비트코인 결제 가능한 매장을 찾고 지도에서 확인하세요",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

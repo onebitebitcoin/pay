@@ -1,0 +1,181 @@
+/* Note: Header styles were moved to Layout.css. The legacy styles here are namespaced
+   to avoid overriding the fixed header’s appearance. */
+
+.legacy-app-header {}
+.legacy-app-header-content {}
+.legacy-app-title {}
+.legacy-app-bitcoin-icon {}
+.legacy-app-subtitle {}
+
+.main {
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 2rem 1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.search-container {
+  flex: 1;
+  min-width: 300px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+}
+
+.random-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+
+.random-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.random-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  height: 70vh;
+}
+
+.map-container {
+  background: var(--surface-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.store-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.store-card {
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--card-bg);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.store-card:hover {
+  background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08) 0%, rgba(var(--secondary-rgb), 0.08) 100%);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.store-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.store-category {
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.store-address {
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 2rem;
+  }
+
+  .bitcoin-icon {
+    font-size: 2.5rem;
+  }
+
+  .controls {
+    flex-direction: column;
+  }
+
+  .content {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 1rem;
+  }
+
+  .map-container {
+    height: 50vh;
+  }
+
+  .sidebar {
+    height: 40vh;
+  }
+}
