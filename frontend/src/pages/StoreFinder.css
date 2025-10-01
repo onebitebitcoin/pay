@@ -201,6 +201,7 @@
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
 .store-action-link {
@@ -216,6 +217,7 @@
   color: var(--text);
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .store-action-link:hover {
