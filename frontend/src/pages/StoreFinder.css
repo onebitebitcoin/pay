@@ -226,6 +226,25 @@
   box-shadow: var(--shadow-sm);
 }
 
+.store-action-link.danger {
+  background: rgba(var(--danger-rgb), 0.08);
+  border-color: rgba(var(--danger-rgb), 0.3);
+  color: var(--danger);
+}
+
+.store-action-link.danger:hover {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+
+.store-action-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .store-name {
   font-size: 1.125rem;
   font-weight: 600;
@@ -371,6 +390,21 @@
 }
 .sf-btn.primary { background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: white; border: none; box-shadow: var(--shadow-sm); }
 .sf-btn.primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.sf-btn.danger {
+  background: linear-gradient(135deg, rgba(var(--danger-rgb), 0.12) 0%, rgba(var(--danger-rgb), 0.05) 100%);
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  color: var(--danger);
+}
+.sf-btn.danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+  box-shadow: var(--shadow-sm);
+}
+.sf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 @media (max-width: 768px) {
   .sf-form-grid { grid-template-columns: 1fr; }

@@ -135,6 +135,15 @@ const paths = {
       <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2" />
     </>
   ),
+  trash: (
+    <>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 1.85H8a2 2 0 0 1-2-1.85L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6l1-2h4l1 2" />
+    </>
+  ),
 };
 
 function Icon({ name, size = 20, className = '', title }) {

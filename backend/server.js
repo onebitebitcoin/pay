@@ -235,6 +235,25 @@ app.post('/api/stores', (req, res) => {
   }
 });
 
+app.delete('/api/stores/:id', (req, res) => {
+  try {
+    const storeId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(storeId)) {
+      return res.status(400).json({ error: '유효한 매장 ID가 필요합니다' });
+    }
+
+    const removed = db.remove(storeId);
+    if (!removed) {
+      return res.status(404).json({ error: '매장을 찾을 수 없습니다' });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('매장 삭제 오류:', error);
+    res.status(500).json({ error: '서버 내부 오류' });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: '정상', timestamp: new Date().toISOString() });
 });

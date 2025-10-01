@@ -14,6 +14,7 @@ function StoreFinder() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const createEmptyStore = () => ({
     name: '',
     category: '',
@@ -338,6 +339,32 @@ function StoreFinder() {
     setSelectedStore(null);
   };
 
+  const handleDeleteStore = async (store) => {
+    if (!store || !store.id) return;
+    if (deleteLoadingId) return;
+    if (!window.confirm(`정말로 "${store.name}" 매장을 삭제하시겠습니까?`)) return;
+
+    try {
+      setDeleteLoadingId(store.id);
+      const resp = await fetch(apiUrl(`/api/stores/${store.id}`), {
+        method: 'DELETE',
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || '매장 삭제에 실패했습니다');
+      }
+      await fetchStores();
+      if (selectedStore && selectedStore.id === store.id) {
+        closeStoreDetail();
+      }
+    } catch (error) {
+      console.error('매장 삭제 오류:', error);
+      alert(error.message || '매장 삭제에 실패했습니다');
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
   return (
     <>
     <div className="store-finder">
@@ -399,6 +426,7 @@ function StoreFinder() {
                 </div>
                 <div className="store-card-actions">
                   <button
+                    type="button"
                     className="store-action-link"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -408,6 +436,7 @@ function StoreFinder() {
                     <Icon name="map" size={14} /> 위치 보기
                   </button>
                   <button
+                    type="button"
                     className="store-action-link"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -415,6 +444,17 @@ function StoreFinder() {
                     }}
                   >
                     <Icon name="info" size={14} /> 자세히
+                  </button>
+                  <button
+                    type="button"
+                    className="store-action-link danger"
+                    disabled={deleteLoadingId === store.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteStore(store);
+                    }}
+                  >
+                    <Icon name="trash" size={14} /> {deleteLoadingId === store.id ? '삭제 중...' : '삭제'}
                   </button>
                 </div>
               </div>
@@ -566,6 +606,15 @@ function StoreFinder() {
           </div>
           <div className="sf-modal-actions">
             <button
+              type="button"
+              className="sf-btn danger"
+              disabled={deleteLoadingId === selectedStore.id}
+              onClick={() => handleDeleteStore(selectedStore)}
+            >
+              <Icon name="trash" size={16} /> {deleteLoadingId === selectedStore.id ? '삭제 중...' : '삭제'}
+            </button>
+            <button
+              type="button"
               className="sf-btn primary"
               onClick={() => {
                 handleStoreClick(selectedStore);
@@ -574,7 +623,7 @@ function StoreFinder() {
             >
               <Icon name="map" size={16} /> 지도에서 보기
             </button>
-            <button className="sf-btn" onClick={closeStoreDetail}>닫기</button>
+            <button type="button" className="sf-btn" onClick={closeStoreDetail}>닫기</button>
           </div>
         </div>
       </div>

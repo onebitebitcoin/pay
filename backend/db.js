@@ -170,4 +170,16 @@ module.exports = {
     writeJsonStores(stores);
     return newStore;
   },
+  remove(id) {
+    if (!Number.isInteger(id)) return false;
+    if (mode === 'sqlite') {
+      const result = sql.prepare('DELETE FROM stores WHERE id = ?').run(id);
+      return result.changes > 0;
+    }
+    const stores = readJsonStores();
+    const next = stores.filter((s) => s.id !== id);
+    if (next.length === stores.length) return false;
+    writeJsonStores(next);
+    return true;
+  },
 };
