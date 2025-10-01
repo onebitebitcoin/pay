@@ -20,13 +20,30 @@ export const ECASH_CONFIG = {
   feeRate: 0.001, // 0.1% fee
 };
 
-const DEFAULT_API_BASE =
-  process.env.REACT_APP_API_BASE_URL ||
-  (process.env.NODE_ENV === 'development'
-    ? 'http://localhost:5001'
-    : 'https://pay.onebitebitcoin.com');
+const resolveDefaultApiBase = () => {
+  if (process.env.REACT_APP_API_BASE_URL) {
+    return process.env.REACT_APP_API_BASE_URL;
+  }
 
-const RAW_API_BASE = DEFAULT_API_BASE;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    if (host.endsWith('onebitebitcoin.com')) {
+      return 'https://pay.onebitebitcoin.com';
+    }
+    return `${window.location.protocol}//${window.location.host}`;
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:5001';
+  }
+
+  return 'https://pay.onebitebitcoin.com';
+};
+
+const RAW_API_BASE = resolveDefaultApiBase();
 export const API_BASE_URL = RAW_API_BASE.endsWith('/') ? RAW_API_BASE.slice(0, -1) : RAW_API_BASE;
 
 export const apiUrl = (path = '/') => {
