@@ -24,23 +24,48 @@ function Settings() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('app_settings');
+      const defaultSettings = {
+        language: 'ko',
+        currency: 'SATS',
+        notifications: true,
+        darkMode: false,
+        mintUrl: DEFAULT_MINT_URL,
+        autoBackup: false,
+        pinEnabled: false
+      };
       if (saved) {
         const parsed = JSON.parse(saved);
-        setSettings(prev => ({
-          ...prev,
+        const merged = {
+          ...defaultSettings,
           ...parsed,
           mintUrl: parsed.mintUrl || DEFAULT_MINT_URL
-        }));
+        };
+        setSettings(merged);
+        document.documentElement.classList.toggle('dark', !!merged.darkMode);
       } else {
-        setSettings(prev => ({ ...prev, mintUrl: DEFAULT_MINT_URL }));
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const merged = {
+          ...defaultSettings,
+          darkMode: prefersDark
+        };
+        setSettings(merged);
+        document.documentElement.classList.toggle('dark', prefersDark);
+        localStorage.setItem('app_settings', JSON.stringify(merged));
       }
-
-      // Apply dark mode
-      const darkMode = saved ? JSON.parse(saved).darkMode : false;
-      document.documentElement.classList.toggle('dark', darkMode);
     } catch (e) {
       console.error('Failed to load settings:', e);
-      setSettings(prev => ({ ...prev, mintUrl: DEFAULT_MINT_URL }));
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const fallback = {
+        language: 'ko',
+        currency: 'SATS',
+        notifications: true,
+        darkMode: prefersDark,
+        mintUrl: DEFAULT_MINT_URL,
+        autoBackup: false,
+        pinEnabled: false
+      };
+      setSettings(fallback);
+      document.documentElement.classList.toggle('dark', prefersDark);
     }
   }, []);
 

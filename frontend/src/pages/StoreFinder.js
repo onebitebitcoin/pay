@@ -247,9 +247,9 @@ function StoreFinder() {
     // Create custom marker image for Bitcoin stores
     const svgIcon = `
       <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="#f59e0b"/>
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="#2563eb"/>
         <circle cx="15" cy="15" r="10" fill="#ffffff"/>
-        <text x="15" y="19" text-anchor="middle" fill="#f59e0b" font-size="12" font-weight="bold">B</text>
+        <text x="15" y="19" text-anchor="middle" fill="#2563eb" font-size="12" font-weight="bold">B</text>
       </svg>
     `;
     const imageSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
@@ -273,10 +273,10 @@ function StoreFinder() {
       // Create info window
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `
-          <div style="padding: 15px; width: 250px; text-align: center;">
-            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px;">${store.name}</h3>
-            <p style="margin: 0 0 5px 0; color: #f59e0b; font-size: 14px; font-weight: 600;">${store.category}</p>
-            <p style="margin: 0; color: #a06421; font-size: 12px; line-height: 1.4;">${store.address}</p>
+          <div style="padding: 15px; width: 250px; text-align: center; color: var(--text);">
+            <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 16px;">${store.name}</h3>
+            <p style="margin: 0 0 5px 0; color: var(--primary); font-size: 14px; font-weight: 600;">${store.category}</p>
+            <p style="margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4;">${store.address}</p>
           </div>
         `
       });

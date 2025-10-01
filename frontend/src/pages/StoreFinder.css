@@ -17,7 +17,7 @@
 .category-label {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--muted);
 }
 
 .category-select {

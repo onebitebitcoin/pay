@@ -126,19 +126,19 @@
   bottom: 12px;
   left: 12px;
   right: 12px;
-  background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
-  color: #fff7ed;
+  background: linear-gradient(135deg, rgba(var(--secondary-rgb), 0.85) 0%, rgba(var(--primary-rgb), 0.9) 100%);
+  color: var(--text);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;
-  box-shadow: 0 10px 24px rgba(var(--primary-rgb), 0.35);
+  box-shadow: 0 12px 28px rgba(var(--secondary-rgb), 0.25);
   display: flex;
   align-items: center;
   gap: 0.75rem;
   z-index: 70;
 }
 .install-banner .actions { margin-left: auto; display: flex; gap: 0.5rem; }
-.install-banner button { background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: white; border: none; padding: 0.4rem 0.75rem; border-radius: 0.5rem; font-weight: 700; cursor: pointer; }
-.install-banner .dismiss { background: transparent; color: #fef3c7; border: 1px solid rgba(255, 255, 255, 0.4); }
+.install-banner button { background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color: #ffffff; border: none; padding: 0.4rem 0.75rem; border-radius: 0.5rem; font-weight: 700; cursor: pointer; }
+.install-banner .dismiss { background: transparent; color: var(--text); border: 1px solid rgba(255, 255, 255, 0.35); }
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
