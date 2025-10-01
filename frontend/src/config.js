@@ -27,3 +27,61 @@ export const apiUrl = (path = '/') => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
 };
+
+export const KAKAO_APP_KEY = process.env.REACT_APP_KAKAO_APP_KEY || 'b6df438d2c946f441b6ff06cd87868ba';
+export const KAKAO_SDK_URL = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+
+let kakaoLoaderPromise = null;
+
+export const loadKakaoSdk = () => {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('브라우저 환경이 아닙니다'));
+  }
+
+  if (window.kakao && window.kakao.maps) {
+    return Promise.resolve(window.kakao);
+  }
+
+  if (!KAKAO_APP_KEY) {
+    return Promise.reject(new Error('카카오 앱 키가 설정되지 않았습니다'));
+  }
+
+  if (!kakaoLoaderPromise) {
+    kakaoLoaderPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-kakao-sdk="true"]') ||
+        document.querySelector('script[src*="dapi.kakao.com/v2/maps/sdk.js"]');
+
+      const handleLoad = () => {
+        if (window.kakao && window.kakao.maps) {
+          resolve(window.kakao);
+        } else {
+          reject(new Error('카카오 SDK 로드 후 window.kakao가 없습니다'));
+        }
+      };
+
+      const handleError = () => {
+        reject(new Error('카카오 SDK 스크립트를 불러오지 못했습니다'));
+      };
+
+      if (existing) {
+        existing.addEventListener('load', handleLoad, { once: true });
+        existing.addEventListener('error', handleError, { once: true });
+        if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
+          handleLoad();
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = KAKAO_SDK_URL;
+      script.async = true;
+      script.defer = true;
+      script.dataset.kakaoSdk = 'true';
+      script.onload = handleLoad;
+      script.onerror = handleError;
+      document.head.appendChild(script);
+    });
+  }
+
+  return kakaoLoaderPromise;
+};

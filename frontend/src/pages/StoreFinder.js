@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './StoreFinder.css';
 import Icon from '../components/Icon';
-import { apiUrl } from '../config';
+import { apiUrl, loadKakaoSdk } from '../config';
 
 function StoreFinder() {
   const [stores, setStores] = useState([]);
@@ -34,7 +34,21 @@ function StoreFinder() {
 
   useEffect(() => {
     fetchStores();
-    initKakaoMap();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadKakaoSdk()
+      .then(() => {
+        if (!cancelled) initKakaoMap();
+      })
+      .catch((err) => {
+        console.error('카카오맵 SDK 로드 실패:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
