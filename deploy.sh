@@ -99,7 +99,7 @@ if [ ! -d "$FRONTEND_DIR" ] || [ ! -f "$FRONTEND_DIR/package.json" ]; then
   exit 1
 fi
 
-su - "$DEPLOY_USER" -c "cd '$BACKEND_DIR' && npm ci --omit=dev || npm install --production"
+su - "$DEPLOY_USER" -c "cd '$BACKEND_DIR' && npm install --omit=dev --no-audit"
 
 cat <<SERVICE | tee /etc/systemd/system/${SERVICE_NAME}.service >/dev/null
 [Unit]
@@ -133,7 +133,7 @@ systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 
-su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm ci || npm install"
+su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm install --no-audit"
 su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm run build"
 
 rsync -a --delete "$FRONTEND_DIR/build/" "$FRONTEND_DEPLOY_DIR/"
