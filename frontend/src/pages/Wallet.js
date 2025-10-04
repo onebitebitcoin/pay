@@ -30,6 +30,7 @@ function Wallet() {
   const [ecashBalance, setEcashBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const TX_STORAGE_KEY = 'cashu_tx_v1';
+  const [displayedTxCount, setDisplayedTxCount] = useState(10);
   const [showSend, setShowSend] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   // Cashu mode: no explicit join modal
@@ -56,6 +57,11 @@ function Wallet() {
   const [passphraseConfirm, setPassphraseConfirm] = useState('');
   const [showTxDetail, setShowTxDetail] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
+  const [invoiceCopied, setInvoiceCopied] = useState(false);
+  const [qrLoaded, setQrLoaded] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
+  const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
+  const [showProofs, setShowProofs] = useState(false);
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
   const pendingMintRef = useRef(null);
@@ -63,7 +69,9 @@ function Wallet() {
   const navigate = useNavigate();
   const location = useLocation();
   const receiveOriginRef = useRef('/wallet');
+  const sendOriginRef = useRef('/wallet');
   const isReceiveView = location.pathname === '/wallet/receive';
+  const isSendView = location.pathname === '/wallet/send';
 
   const clearPendingMint = useCallback(() => {
     pendingMintRef.current = null;
@@ -156,7 +164,13 @@ function Wallet() {
         receiveOriginRef.current = state.from;
       }
     }
-  }, [isReceiveView, location.state]);
+    if (isSendView) {
+      const state = location.state;
+      if (state && typeof state === 'object' && state.from) {
+        sendOriginRef.current = state.from;
+      }
+    }
+  }, [isReceiveView, isSendView, location.state]);
 
   useEffect(() => {
     // Show backup banner when there is balance and not dismissed
@@ -189,15 +203,15 @@ function Wallet() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [ecashBalance]);
 
-  const loadWalletData = useCallback(async () => {
+  const loadWalletData = useCallback(async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       try { importProofsFrom(loadProofs()); } catch {}
       setEcashBalance(getBalanceSats());
     } catch (error) {
       console.error('지갑 데이터 로드 오류:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
@@ -207,6 +221,16 @@ function Wallet() {
     if (timeout) {
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, timeout);
+    }
+  }, []);
+
+  const showInfoMessage = useCallback((message, type = 'info', timeout = 5000) => {
+    setInfoMessage(message);
+    setInfoMessageType(type);
+    if (timeout) {
+      setTimeout(() => {
+        setInfoMessage('');
       }, timeout);
     }
   }, []);
@@ -283,7 +307,7 @@ function Wallet() {
           throw new Error('메인 및 백업 Mint 연결 모두 실패');
         }
 
-        addToast('백업 Mint에 연결되었습니다', 'info');
+        showInfoMessage('백업 Mint에 연결되었습니다', 'info');
       } else if (!resp.ok) {
         throw new Error('Mint 정보 조회 실패');
       }
@@ -366,7 +390,7 @@ function Wallet() {
           markQuoteRedeemed(quote);
         }
       } else if (applyResult.reason === 'missing_output_datas') {
-        addToast('증명서 데이터가 없어 잔액 자동 반영에 실패했습니다. "미처리 결제 확인"으로 복구하세요.', 'error', 6000);
+        showInfoMessage('증명서 데이터가 없어 잔액 자동 반영에 실패했습니다. "미처리 결제 확인"으로 복구하세요.', 'error', 6000);
       }
     }
 
@@ -382,7 +406,8 @@ function Wallet() {
         amount: creditedAmount,
         timestamp,
         status: 'confirmed',
-        description: '라이트닝 수신'
+        description: '라이트닝 받기',
+        memo: detail?.memo || ''
       });
     } else if (!isReceiveView || quote !== lastQuote) {
       addTransaction({
@@ -391,7 +416,8 @@ function Wallet() {
         amount,
         timestamp,
         status: 'pending',
-        description: '라이트닝 수신 (확인 필요)'
+        description: '라이트닝 받기',
+        memo: detail?.memo || ''
       });
     }
 
@@ -450,18 +476,18 @@ function Wallet() {
     try {
       const lastQuote = localStorage.getItem('cashu_last_quote');
       if (!lastQuote) {
-        addToast('확인할 대기 중인 인보이스가 없습니다', 'info');
+        showInfoMessage('확인할 대기 중인 인보이스가 없습니다', 'info');
         return;
       }
 
       // Check if already redeemed
       if (hasQuoteRedeemed(lastQuote)) {
-        addToast('이미 처리된 인보이스입니다', 'info');
+        showInfoMessage('이미 처리된 인보이스입니다', 'info');
         return;
       }
 
       setLoading(true);
-      addToast('인보이스 상태 확인 중...', 'info', 2000);
+      showInfoMessage('인보이스 상태 확인 중...', 'info', 2000);
 
       // Check quote state
       const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}`));
@@ -471,7 +497,7 @@ function Wallet() {
       const state = (quoteData?.state || '').toUpperCase();
 
       if (state !== 'PAID' && state !== 'ISSUED') {
-        addToast('아직 결제되지 않은 인보이스입니다', 'info');
+        showInfoMessage('아직 결제되지 않은 인보이스입니다', 'info');
         return;
       }
 
@@ -491,9 +517,10 @@ function Wallet() {
               amount: applied.added,
               timestamp: new Date().toISOString(),
               status: 'confirmed',
-              description: '라이트닝 수신 (자동 복구)'
+              description: '라이트닝 받기',
+              memo: ''
             });
-            addToast(`${formatAmount(applied.added)} sats를 성공적으로 복구했습니다!`, 'success');
+            showInfoMessage(`${formatAmount(applied.added)} sats를 성공적으로 복구했습니다!`, 'success');
             await loadWalletData();
             return;
           }
@@ -543,16 +570,17 @@ function Wallet() {
           amount: added,
           timestamp: new Date().toISOString(),
           status: 'confirmed',
-          description: '라이트닝 수신 (복구됨)'
+          description: '라이트닝 받기',
+          memo: ''
         });
 
-        addToast(`${formatAmount(added)} sats를 성공적으로 복구했습니다!`, 'success');
+        showInfoMessage(`${formatAmount(added)} sats를 성공적으로 복구했습니다!`, 'success');
       } else {
         throw new Error('유효한 서명을 받지 못했습니다');
       }
     } catch (error) {
       console.error('Quote 확인 오류:', error);
-      addToast(error?.message || 'Quote 확인에 실패했습니다', 'error');
+      showInfoMessage(error?.message || 'Quote 확인에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -687,11 +715,11 @@ function Wallet() {
       setShowPassphraseModal(false);
       setPassphrase('');
       setPassphraseConfirm('');
-      addToast('암호화된 백업 파일을 다운로드했습니다', 'success');
+      showInfoMessage('암호화된 백업 파일을 다운로드했습니다', 'success');
       try { localStorage.setItem('cashu_backup_dismissed', '1'); setShowBackupBanner(false); } catch {}
     } catch (e) {
       console.error('Backup failed:', e);
-      addToast('백업 실패: ' + e.message, 'error');
+      showInfoMessage('백업 실패: ' + e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -718,11 +746,11 @@ function Wallet() {
         // Legacy unencrypted backup
         const { added, total } = importProofsFrom(text);
         setEcashBalance(getBalanceSats());
-        addToast(`복구 완료: ${added}건 추가, 총 ${total}건`, 'success');
+        showInfoMessage(`복구 완료: ${added}건 추가, 총 ${total}건`, 'success');
       }
     } catch (e) {
       console.error('Restore failed:', e);
-      addToast('복구 실패: 잘못된 파일입니다', 'error');
+      showInfoMessage('복구 실패: 잘못된 파일입니다', 'error');
     } finally {
       try { e.target.value = ''; } catch {}
     }
@@ -748,10 +776,10 @@ function Wallet() {
       setShowPassphraseModal(false);
       setPassphrase('');
       window._pendingRestoreData = null;
-      addToast(`복구 완료: ${added}건 추가, 총 ${total}건`, 'success');
+      showInfoMessage(`복구 완료: ${added}건 추가, 총 ${total}건`, 'success');
     } catch (e) {
       console.error('Restore failed:', e);
-      addToast('복구 실패: 패스프레이즈가 올바르지 않거나 파일이 손상되었습니다', 'error');
+      showInfoMessage('복구 실패: 패스프레이즈가 올바르지 않거나 파일이 손상되었습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -760,19 +788,19 @@ function Wallet() {
   const handleSendQrScan = useCallback((rawValue) => {
     const normalized = normalizeQrValue(rawValue);
     if (!normalized) {
-      addToast('QR 코드에서 유효한 값을 찾지 못했습니다', 'error', 3000);
+      showInfoMessage('QR 코드에서 유효한 값을 찾지 못했습니다', 'error', 3000);
       return;
     }
     setSendAddress(normalized);
     setEnableSendScanner(false);
-    addToast('QR 코드를 불러왔습니다', 'info', 2500);
-  }, [addToast]);
+    showInfoMessage('QR 코드를 불러왔습니다', 'info', 2500);
+  }, [showInfoMessage]);
 
   const handleSendQrError = useCallback((err) => {
     console.error('QR scanner error:', err);
     const message = err && err.message ? err.message : 'QR 스캔 기능을 사용할 수 없습니다';
-    addToast(message, 'error', 3500);
-  }, [addToast]);
+    showInfoMessage(message, 'error', 3500);
+  }, [showInfoMessage]);
 
   const generateInvoice = async () => {
     if (!receiveAmount || receiveAmount <= 0) {
@@ -782,6 +810,7 @@ function Wallet() {
 
     try {
       setLoading(true);
+      setQrLoaded(false);
       setReceiveCompleted(false);
       setCheckingPayment(false);
 
@@ -820,7 +849,6 @@ function Wallet() {
       localStorage.setItem('cashu_last_quote', quoteId);
       localStorage.setItem('cashu_last_mint_amount', String(amount));
       setCheckingPayment(true);
-      addToast('결제를 기다리는 중입니다', 'info', 2000);
     } catch (error) {
       console.error('인보이스 생성 오류:', error);
       alert('인보이스 생성에 실패했습니다');
@@ -851,6 +879,27 @@ function Wallet() {
     navigate('/wallet/receive', { state: { from: fallback } });
   }, [location.pathname, navigate, stopAutoRedeem]);
 
+  const handleSendNavigation = useCallback(() => {
+    const origin = location.pathname || '/wallet';
+    const fallback = origin === '/wallet/send' ? '/wallet' : origin;
+    sendOriginRef.current = fallback;
+    setSendAmount('');
+    setSendAddress('');
+    setInvoiceQuote(null);
+    setInvoiceError('');
+    navigate('/wallet/send', { state: { from: fallback } });
+  }, [location.pathname, navigate]);
+
+  const exitSendFlow = useCallback(() => {
+    setSendAmount('');
+    setSendAddress('');
+    setInvoiceQuote(null);
+    setInvoiceError('');
+    setEnableSendScanner(false);
+    const target = sendOriginRef.current || '/wallet';
+    navigate(target, { replace: true });
+  }, [navigate]);
+
   useEffect(() => {
     if (!isReceiveView && wasReceiveViewRef.current) {
       try { stopAutoRedeem(); } catch {}
@@ -858,9 +907,24 @@ function Wallet() {
       setInvoice('');
       setReceiveCompleted(false);
       setReceivedAmount(0);
+      setLoading(false);
+    }
+    if (isReceiveView && !wasReceiveViewRef.current) {
+      // Reset loading state when entering receive page
+      setLoading(false);
     }
     wasReceiveViewRef.current = isReceiveView;
   }, [isReceiveView, stopAutoRedeem]);
+
+  useEffect(() => {
+    if (!isSendView) {
+      setSendAmount('');
+      setSendAddress('');
+      setInvoiceQuote(null);
+      setInvoiceError('');
+      setEnableSendScanner(false);
+    }
+  }, [isSendView]);
 
   const isBolt11Invoice = (val) => {
     if (!val || typeof val !== 'string') return false;
@@ -1046,13 +1110,20 @@ function Wallet() {
         try {
           const err = await m.json();
           if (err?.error) {
-            try {
-              const inner = JSON.parse(err.error);
-              if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
-                msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
-              } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
-              else msg = err.error;
-            } catch { msg = err.error; }
+            const errorStr = typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
+
+            // Check for "already spent" error
+            if (/already spent|token.*spent/i.test(errorStr)) {
+              msg = '이미 사용된 토큰입니다. 다른 기기에서 이미 사용되었거나 잔액이 동기화되지 않았을 수 있습니다. 페이지를 새로고침한 후 다시 시도해주세요.';
+            } else {
+              try {
+                const inner = JSON.parse(err.error);
+                if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
+                  msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
+                } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
+                else msg = err.error;
+              } catch { msg = err.error; }
+            }
           }
         } catch {}
         throw new Error(msg);
@@ -1078,10 +1149,11 @@ function Wallet() {
       addTransaction({
         id: Date.now(),
         type: 'send',
-        amount: -invoiceAmount,
+        amount: invoiceAmount,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
-        description: '라이트닝 송금'
+        description: '라이트닝 보내기',
+        memo: ''
       });
 
       setSendAmount('');
@@ -1090,11 +1162,11 @@ function Wallet() {
       setEnableSendScanner(false);
       setInvoiceQuote(null);
       setInvoiceError('');
-      addToast('라이트닝 송금이 완료되었습니다', 'success');
+      showInfoMessage('라이트닝 송금이 완료되었습니다', 'success');
     } catch (error) {
       console.error('송금 오류:', error);
       setInvoiceError(error?.message || '송금에 실패했습니다');
-      addToast(error?.message || '송금에 실패했습니다', 'error');
+      showInfoMessage(error?.message || '송금에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -1135,13 +1207,20 @@ function Wallet() {
         try {
           const err = await m.json();
           if (err?.error) {
-            try {
-              const inner = JSON.parse(err.error);
-              if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
-                msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
-              } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
-              else msg = err.error;
-            } catch { msg = err.error; }
+            const errorStr = typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
+
+            // Check for "already spent" error
+            if (/already spent|token.*spent/i.test(errorStr)) {
+              msg = '이미 사용된 토큰입니다. 다른 기기에서 이미 사용되었거나 잔액이 동기화되지 않았을 수 있습니다. 페이지를 새로고침한 후 다시 시도해주세요.';
+            } else {
+              try {
+                const inner = JSON.parse(err.error);
+                if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
+                  msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
+                } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
+                else msg = err.error;
+              } catch { msg = err.error; }
+            }
           }
         } catch {}
         throw new Error(msg);
@@ -1164,10 +1243,11 @@ function Wallet() {
       addTransaction({
         id: Date.now(),
         type: 'send',
-        amount: -(pendingSendDetails?.invoiceAmount || 0),
+        amount: pendingSendDetails?.invoiceAmount || 0,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
-        description: '라이트닝 송금'
+        description: '라이트닝 보내기',
+        memo: ''
       });
       setSendAmount('');
       setSendAddress('');
@@ -1175,10 +1255,10 @@ function Wallet() {
       setEnableSendScanner(false);
       setShowSendConfirm(false);
       setPendingSendDetails(null);
-      addToast('라이트닝 송금이 완료되었습니다', 'success');
+      showInfoMessage('라이트닝 송금이 완료되었습니다', 'success');
     } catch (error) {
       console.error('송금 오류:', error);
-      addToast(error?.message || '송금에 실패했습니다', 'error');
+      showInfoMessage(error?.message || '송금에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -1236,125 +1316,255 @@ function Wallet() {
           <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
         ))}
       </div>
-      {isReceiveView ? (
+      {isSendView ? (
+        <div className="send-page">
+          <div className="send-card">
+            <div className="send-card-header">
+              <h2><Icon name="send" size={20} /> 라이트닝 보내기</h2>
+            </div>
+            <div className="send-card-body">
+              {!isConnected || !isWebSocketConnected ? (
+                <div className="network-warning" style={{ marginBottom: '1rem' }}>
+                  네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다.
+                </div>
+              ) : null}
+              {enableSendScanner ? (
+                <div className="qr-scanner-section">
+                  <QrScanner onScan={handleSendQrScan} onError={handleSendQrError} />
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => setEnableSendScanner(false)}
+                  >
+                    QR 스캐너 닫기
+                  </button>
+                </div>
+              ) : (
+                <div className="qr-rescan">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => setEnableSendScanner(true)}
+                    disabled={!isConnected || !isWebSocketConnected}
+                  >
+                    <Icon name="camera" size={16} /> QR 코드 스캔
+                  </button>
+                </div>
+              )}
+              <div className="input-group">
+                <label>라이트닝 인보이스 또는 주소</label>
+                <textarea
+                  value={sendAddress}
+                  onChange={(e) => setSendAddress(e.target.value)}
+                  placeholder="lnbc... 또는 user@domain"
+                  rows="3"
+                  disabled={!isConnected || !isWebSocketConnected}
+                />
+                <small>
+                  {isBolt11Invoice(sendAddress)
+                    ? '✓ 인보이스 감지됨'
+                    : isLightningAddress(sendAddress)
+                      ? '✓ 라이트닝 주소 감지됨'
+                      : 'lnbc... 또는 user@domain 입력'}
+                </small>
+              </div>
+              {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && (
+                <div className="input-group">
+                  <label>보낼 금액 (sats)</label>
+                  <input
+                    type="number"
+                    value={sendAmount}
+                    onChange={(e) => setSendAmount(e.target.value)}
+                    placeholder="금액 입력"
+                    min="1"
+                    max={ecashBalance}
+                    disabled={!isConnected || !isWebSocketConnected}
+                  />
+                  <small>사용 가능: {formatAmount(ecashBalance)} sats</small>
+                </div>
+              )}
+              {invoiceQuote && (
+                <div className="conversion-info" style={{ marginTop: '1rem' }}>
+                  <div className="info-item"><Icon name="bolt" size={16} /> 송금 금액: {formatAmount(invoiceQuote.invoiceAmount)} sats</div>
+                  <div className="info-item"><Icon name="info" size={16} /> 수수료: {formatAmount(invoiceQuote.feeReserve)} sats</div>
+                  <div className="info-item"><Icon name="diamond" size={16} /> 총 필요: {formatAmount(invoiceQuote.need)} sats</div>
+                  <div className="info-item"><Icon name="shield" size={16} /> 보유 잔액: {formatAmount(invoiceQuote.available)} sats</div>
+                </div>
+              )}
+              {invoiceError && (
+                <div className="warning-banner danger" style={{ marginTop: '1rem' }}>
+                  {invoiceError}
+                </div>
+              )}
+              <div className="send-actions">
+                <button
+                  onClick={prepareSend}
+                  className="primary-btn"
+                  disabled={
+                    loading ||
+                    !isConnected ||
+                    !isWebSocketConnected ||
+                    !!invoiceError ||
+                    (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
+                    (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
+                  }
+                >
+                  {loading ? '보내는 중...' : '보내기'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={exitSendFlow}
+                >
+                  지갑으로 돌아가기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : isReceiveView ? (
         <div className="receive-page">
           <div className="receive-card">
             <div className="receive-card-header">
-              <button type="button" className="receive-back-btn" onClick={exitReceiveFlow}>
-                <Icon name="arrow-left" size={18} /> 지갑으로 돌아가기
-              </button>
               <h2><Icon name="inbox" size={20} /> 라이트닝 받기</h2>
-              <p className="receive-subtext">받을 금액을 입력하고 인보이스를 생성해 결제를 받아보세요.</p>
+              <p className="receive-subtext">받을 금액을 입력하고 비트코인을 받아보세요</p>
             </div>
             <div className="receive-card-body">
               {!receiveCompleted ? (
                 <>
-                  <div className="input-group">
-                    <label>받을 금액 (sats)</label>
-                    <input
-                      type="number"
-                      value={receiveAmount}
-                      onChange={(e) => setReceiveAmount(e.target.value)}
-                      placeholder="10000"
-                      min="1"
-                    />
-                  </div>
-                  {invoice ? (
-                    <div className="invoice-section receive-invoice">
-                      <div className="qr-placeholder">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                          alt="Lightning Invoice QR"
-                          className="qr-image"
-                        />
-                        <small>QR 코드로 스캔하여 결제해 주세요. 결제되면 자동으로 수신 처리됩니다.</small>
-                      </div>
-                      <label>라이트닝 인보이스</label>
-                      <div className="input-with-action">
+                  {!invoice ? (
+                    <>
+                      {!isConnected || !isWebSocketConnected ? (
+                        <div className="network-warning" style={{ marginBottom: '1rem' }}>
+                          네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다.
+                        </div>
+                      ) : null}
+                      <div className="input-group">
+                        <label>받을 금액 (sats)</label>
                         <input
-                          type="text"
-                          value={invoice}
-                          readOnly
-                          className="invoice-input"
-                          onFocus={(e) => e.target.select()}
+                          type="number"
+                          value={receiveAmount}
+                          onChange={(e) => setReceiveAmount(e.target.value)}
+                          placeholder="10000"
+                          min="1"
+                          disabled={!isConnected || !isWebSocketConnected}
                         />
+                      </div>
+                      <div className="receive-actions">
+                        <button
+                          onClick={generateInvoice}
+                          className="primary-btn"
+                          disabled={loading || !receiveAmount || !isConnected || !isWebSocketConnected}
+                        >
+                          {loading ? '생성 중...' : '인보이스 생성'}
+                        </button>
                         <button
                           type="button"
-                          aria-label="인보이스 복사"
-                          className="copy-icon-btn"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(invoice);
-                              if (typeof addToast === 'function') addToast('인보이스를 복사했습니다', 'info');
-                            } catch {
-                              alert('복사에 실패했습니다');
-                            }
-                          }}
+                          className="secondary-btn"
+                          onClick={exitReceiveFlow}
                         >
-                          <Icon name="copy" size={18} />
+                          지갑으로 돌아가기
                         </button>
                       </div>
+                    </>
+                  ) : (loading || (invoice && !qrLoaded)) ? (
+                    <div className="invoice-loading">
+                      <div className="loading-spinner"></div>
+                      <p>인보이스를 생성하는 중...</p>
+                      {invoice && (
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                          alt="Loading QR"
+                          style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                          onLoad={() => setQrLoaded(true)}
+                          onError={() => setQrLoaded(true)}
+                        />
+                      )}
                     </div>
                   ) : (
-                    <div className="receive-helper">
-                      <Icon name="info" size={16} />
-                      <span>금액을 입력해서 인보이스를 생성하세요.</span>
-                    </div>
+                    <>
+                      <div className="invoice-section receive-invoice">
+                        <div className="qr-placeholder">
+                          <div className="qr-code-wrapper">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                              alt="Lightning Invoice QR"
+                              className="qr-image"
+                            />
+                            <div className="qr-logo-overlay">
+                              <img src="/logo-192.png" alt="Logo" className="qr-logo" />
+                            </div>
+                          </div>
+                          <div className="qr-amount-display">{formatAmount(receiveAmount)} sats</div>
+                        </div>
+                        <label>탭해서 복사하세요</label>
+                        <div className="invoice-input-wrapper">
+                          <textarea
+                            value={invoice}
+                            readOnly
+                            className="invoice-textarea clickable"
+                            onFocus={(e) => e.target.select()}
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(invoice);
+                                setInvoiceCopied(true);
+                                setTimeout(() => setInvoiceCopied(false), 2000);
+                              } catch {
+                                alert('복사에 실패했습니다');
+                              }
+                            }}
+                            rows="5"
+                          />
+                          {invoiceCopied && (
+                            <div className="copy-success-message">복사되었습니다</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="receive-actions">
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          onClick={() => {
+                            try { stopAutoRedeem(); } catch {}
+                            setInvoice('');
+                            setCheckingPayment(false);
+                            setReceiveCompleted(false);
+                            setReceivedAmount(0);
+                            setQrLoaded(false);
+                          }}
+                        >
+                          다시 만들기
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={exitReceiveFlow}
+                        >
+                          지갑으로 돌아가기
+                        </button>
+                      </div>
+                    </>
                   )}
                 </>
               ) : (
-                <div className="payment-success receive-success">
-                  <div className="success-checkmark">
-                    <svg className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                      <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
-                      <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-                    </svg>
+                <>
+                  <div className="payment-success receive-success">
+                    <div className="success-checkmark">
+                      <svg className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                        <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                      </svg>
+                    </div>
+                    <h2 className="success-title">수신 완료!</h2>
+                    <p className="success-amount">
+                      <span className="amount-value">{formatAmount(receivedAmount)}</span> sats
+                    </p>
+                    <p className="success-message">라이트닝 결제를 성공적으로 받았습니다.</p>
                   </div>
-                  <h2 className="success-title">수신 완료!</h2>
-                  <p className="success-amount">
-                    <span className="amount-value">{formatAmount(receivedAmount)}</span> sats
-                  </p>
-                  <p className="success-message">라이트닝 결제를 성공적으로 받았습니다.</p>
-                </div>
-              )}
-            </div>
-            <div className="receive-card-footer">
-              {!receiveCompleted ? (
-                <div className="receive-actions">
-                  {!invoice && (
-                    <button
-                      onClick={generateInvoice}
-                      className="primary-btn"
-                      disabled={loading || !receiveAmount}
-                    >
-                      {loading ? '생성 중...' : '인보이스 생성'}
-                    </button>
-                  )}
-                  {invoice && (
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => {
-                        try { stopAutoRedeem(); } catch {}
-                        setInvoice('');
-                        setCheckingPayment(false);
-                        setReceiveCompleted(false);
-                        setReceivedAmount(0);
-                      }}
-                    >
-                      다시 만들기
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={exitReceiveFlow}
-                  >
-                    지갑으로 돌아가기
-                  </button>
-                </div>
-              ) : (
-                <button className="primary-btn" onClick={exitReceiveFlow}>확인</button>
+                  <div className="receive-actions">
+                    <button className="primary-btn" onClick={exitReceiveFlow}>확인</button>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1363,7 +1573,7 @@ function Wallet() {
         <div className="wallet">
       <div className="wallet-header">
         <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
-        <p>Cashu 기반 프라이버시 중심 비트코인 지갑</p>
+        <p>Cashu 기반 프라이버시 중심 라이트닝 지갑</p>
       </div>
 
       {/* Storage warning banners */}
@@ -1385,29 +1595,6 @@ function Wallet() {
         </div>
       )}
 
-      {/* Connection Status (minimal) */}
-      <div className="connection-status minimal" style={{ alignItems: 'flex-start' }}>
-        <div className="status-indicator">
-          <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <small className="status-text">{isConnected ? 'Mint 연결됨' : 'Mint 연결 안됨'}</small>
-            {mintUrl && (
-              <small style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>
-                {mintUrl}
-              </small>
-            )}
-          </div>
-        </div>
-        <div className="status-indicator">
-          <span className={`status-dot ${isWebSocketConnected ? 'on' : 'off'}`}></span>
-          <small className="status-text">{isWebSocketConnected ? '웹 소켓 연결' : '웹 소켓 연결 끊김'}</small>
-        </div>
-        {!isConnected && (
-          <button onClick={connectMint} className="connect-btn" disabled={loading}>
-            Mint 연결
-          </button>
-        )}
-      </div>
 
       {/* Mint explainer moved to About page for clarity */}
 
@@ -1418,7 +1605,10 @@ function Wallet() {
           <div className="balance-header">
             <div className="balance-info">
               <h3>
-                <Icon name="shield" size={20} /> 잔액
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm1-11.414V7h-2v3.586l-2.293-2.293-1.414 1.414L11 13.414V17h2v-3.586l3.707-3.707-1.414-1.414L13 10.586z"/>
+                </svg>
+                잔액
               </h3>
               <div className="balance-amount">
                 {formatAmount(ecashBalance)} <span className="unit">sats</span>
@@ -1434,48 +1624,48 @@ function Wallet() {
               <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title="복구">
                 <Icon name="upload" size={18} />
               </button>
-              <button
-                className="icon-btn"
-                onClick={() => setShowEcashInfo(!showEcashInfo)}
-                title="eCash 정보"
-              >
-                <Icon name="info" size={18} />
-              </button>
               <input type="file" accept="application/json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleRestoreFile} />
             </div>
           </div>
-          {showEcashInfo && (
-            <div className="ecash-info-box">
-              <h4><Icon name="shield" size={16} /> eCash란?</h4>
-              <p>eCash는 Cashu 프로토콜을 사용하는 디지털 현금입니다. Mint 서버가 발행하는 암호화된 토큰으로, 라이트닝 네트워크와 연동되어 빠르고 저렴한 결제가 가능합니다.</p>
-              <h4><Icon name="info" size={16} /> 주요 특징</h4>
-              <ul>
-                <li><strong>프라이버시:</strong> 거래 내역이 블록체인에 기록되지 않습니다</li>
-                <li><strong>즉시 결제:</strong> 라이트닝 네트워크를 통한 빠른 송수신</li>
-                <li><strong>낮은 수수료:</strong> 소액 결제에 최적화</li>
-                <li><strong>수탁형이 아님:</strong> 토큰은 브라우저에만 저장됩니다</li>
-              </ul>
+          <div className="balance-actions">
+            {infoMessage && (
+              <div className="network-warning" style={{
+                backgroundColor: infoMessageType === 'success' ? 'rgba(16, 185, 129, 0.1)' : infoMessageType === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                borderColor: infoMessageType === 'success' ? 'rgba(16, 185, 129, 0.3)' : infoMessageType === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)',
+                color: 'var(--text)',
+                marginBottom: '0.75rem'
+              }}>
+                {infoMessage}
+              </div>
+            )}
+            {!isConnected || !isWebSocketConnected ? (
+              <div className="network-warning">
+                네트워크 연결 (Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket'})이 필요합니다
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleReceiveNavigation}
+                  className="action-btn receive-btn"
+                >
+                  <Icon name="inbox" size={16} /> 받기
+                </button>
+                <button
+                  onClick={handleSendNavigation}
+                  className="action-btn send-btn"
+                  disabled={ecashBalance === 0}
+                >
+                  <Icon name="send" size={16} /> 보내기
+                </button>
+              </>
+            )}
+          </div>
+          {isConnected && (
+            <div className="mint-status-bottom">
+              <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
+              <small className="status-text">Mint 연결됨</small>
             </div>
           )}
-          <div className="balance-actions">
-            <button
-              onClick={handleReceiveNavigation}
-              className="action-btn receive-btn"
-              disabled={!isConnected}
-            >
-              <Icon name="inbox" size={16} /> 받기
-            </button>
-            <button
-              onClick={() => {
-                setEnableSendScanner(true);
-                setShowSend(true);
-              }}
-              className="action-btn send-btn"
-              disabled={!isConnected || ecashBalance === 0}
-            >
-              <Icon name="send" size={16} /> 보내기
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1857,52 +2047,76 @@ function Wallet() {
         ) : transactions.length === 0 ? (
           <div className="empty-state">거래 내역이 없습니다</div>
         ) : (
-          <div className="transaction-list">
-            {transactions.map(tx => (
-              <div key={tx.id} className={`transaction-item ${tx.type}`}>
-                <div className="tx-icon">
-                  <Icon
-                    name={
-                      tx.type === 'receive' ? 'inbox' :
-                      tx.type === 'send' ? 'send' :
-                      'repeat'
-                    }
-                    size={18}
-                  />
-                </div>
-                <div className="tx-details">
-                  <div className="tx-description">{tx.description}</div>
-                  <div className="tx-date">{formatDate(tx.timestamp)}</div>
-                  {tx.actualAmount && (
-                    <div className="tx-conversion-details">
-                      실제 전환: {formatAmount(tx.actualAmount)} sats | 수수료: {formatAmount(tx.fee)} sats
-                    </div>
-                  )}
-                </div>
-                <div className="tx-amount-container">
-                  <div className={`tx-amount ${tx.amount > 0 ? 'positive' : 'negative'}`}>
-                    {tx.type === 'convert' ? (
-                      <span className="convert-amount">
-                        {formatAmount(Math.abs(tx.amount))} sats
-                      </span>
-                    ) : (
-                      <>
-                        {tx.amount > 0 ? '+' : ''}{formatAmount(Math.abs(tx.amount))} sats
-                      </>
-                    )}
+          <>
+            <div className="transaction-list">
+              {transactions.slice(0, displayedTxCount).map(tx => (
+                <div key={tx.id} className="transaction-item">
+                  <div className="tx-icon">
+                    <Icon
+                      name={
+                        tx.type === 'receive' ? 'inbox' :
+                        tx.type === 'send' ? 'send' :
+                        'repeat'
+                      }
+                      size={18}
+                    />
                   </div>
-                  <button
-                    className="tx-detail-btn"
-                    onClick={() => {
-                      setSelectedTx(tx);
-                      setShowTxDetail(true);
-                    }}
-                  >
-                    <Icon name="info" size={14} /> 자세히
-                  </button>
+                  <div className="tx-details">
+                    <div className="tx-description">{tx.description}</div>
+                    {tx.memo && <div className="tx-memo">{tx.memo}</div>}
+                    <div className="tx-date">{formatDate(tx.timestamp)}</div>
+                  </div>
+                  <div className={`tx-amount ${tx.type === 'send' ? 'negative' : 'positive'}`}>
+                    {tx.type === 'send' ? '-' : '+'}{formatAmount(Math.abs(tx.amount))} sats
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            {displayedTxCount < transactions.length && (
+              <button
+                className="load-more-btn"
+                onClick={() => setDisplayedTxCount(prev => prev + 10)}
+              >
+                더보기 ({transactions.length - displayedTxCount}개 남음)
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* eCash Proofs Section */}
+      <div className="proofs-section">
+        <div className="proofs-header" onClick={() => setShowProofs(!showProofs)}>
+          <h3>eCash 보유 현황 ({loadProofs().length}개)</h3>
+          <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
+        </div>
+        {showProofs && (
+          <div className="proofs-list">
+            {loadProofs().length === 0 ? (
+              <div className="empty-state">보유한 eCash가 없습니다</div>
+            ) : (
+              loadProofs().map((proof, index) => {
+                const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
+                return (
+                  <div key={proof?.secret || index} className="proof-item">
+                    <div className="proof-info">
+                      <div className="proof-amount-status">
+                        <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
+                        <div className={`proof-status ${isValid ? 'valid' : 'invalid'}`}>
+                          {isValid ? '사용 가능' : '사용 불가'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="proof-secret">
+                      Secret: <span className="monospace">{(proof?.secret || '').substring(0, 16)}...</span>
+                    </div>
+                    <div className="proof-id monospace">
+                      ID: {(proof?.id || proof?.C || '').substring(0, 12)}...
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </div>

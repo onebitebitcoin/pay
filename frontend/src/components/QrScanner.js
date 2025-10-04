@@ -1,142 +1,71 @@
 import React, { useEffect, useRef, useState } from 'react';
-
-const CAN_USE_MEDIA =
-  typeof navigator !== 'undefined' &&
-  !!navigator.mediaDevices &&
-  typeof navigator.mediaDevices.getUserMedia === 'function';
-
-function stopStream(stream, videoEl) {
-  if (stream) {
-    stream.getTracks().forEach((track) => {
-      try {
-        track.stop();
-      } catch (err) {
-        // ignore track stop errors
-      }
-    });
-  }
-  if (videoEl) {
-    try {
-      videoEl.pause();
-    } catch (err) {
-      // ignore pause errors
-    }
-    videoEl.srcObject = null;
-  }
-}
+import { Html5Qrcode } from 'html5-qrcode';
 
 function QrScanner({ onScan, onError, className = '' }) {
-  const videoRef = useRef(null);
-  const animationRef = useRef(null);
-  const scannedRef = useRef(false);
-  const streamRef = useRef(null);
+  const scannerRef = useRef(null);
+  const elementIdRef = useRef(`qr-scanner-${Math.random().toString(36).substring(7)}`);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const videoElement = videoRef.current;
+    let scanner = null;
+    const elementId = elementIdRef.current;
 
-    async function setupScanner() {
-      if (!CAN_USE_MEDIA) {
-        const err = new Error('이 브라우저에서는 카메라 접근을 지원하지 않습니다.');
-        setErrorMessage(err.message);
-        if (typeof onError === 'function') onError(err);
-        return;
-      }
-
+    async function startScanner() {
       try {
-        const constraints = { video: { facingMode: { ideal: 'environment' } } };
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (cancelled) {
-          stopStream(mediaStream, videoElement);
-          return;
-        }
+        scanner = new Html5Qrcode(elementId);
+        scannerRef.current = scanner;
 
-        streamRef.current = mediaStream;
-        const videoEl = videoElement;
-        if (!videoEl) {
-          stopStream(mediaStream);
-          streamRef.current = null;
-          return;
-        }
-
-        videoEl.srcObject = mediaStream;
-        try {
-          await videoEl.play();
-        } catch (err) {
-          const playError = new Error('카메라 스트림을 재생할 수 없습니다. 권한을 확인해 주세요.');
-          setErrorMessage(playError.message);
-          stopStream(mediaStream, videoEl);
-          streamRef.current = null;
-          if (typeof onError === 'function') onError(playError);
-          return;
-        }
-
-        if (typeof window.BarcodeDetector !== 'function') {
-          const detectorError = new Error('QR 스캔을 지원하는 BarcodeDetector API가 없습니다.');
-          setErrorMessage(detectorError.message);
-          stopStream(mediaStream, videoEl);
-          streamRef.current = null;
-          if (typeof onError === 'function') onError(detectorError);
-          return;
-        }
-
-        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-
-        const detect = async () => {
-          if (cancelled || scannedRef.current) {
-            return;
-          }
-
-          try {
-            if (videoEl.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
-              const barcodes = await detector.detect(videoEl);
-              if (barcodes && barcodes.length > 0) {
-                const value = barcodes[0].rawValue || '';
-                if (value) {
-                  scannedRef.current = true;
-                  stopStream(streamRef.current, videoEl);
-                  streamRef.current = null;
-                  if (typeof onScan === 'function') onScan(value.trim());
-                  return;
-                }
-              }
-            }
-          } catch (err) {
-            if (!cancelled) {
-              setErrorMessage('QR 코드를 스캔하는 중 오류가 발생했습니다.');
-              stopStream(streamRef.current, videoEl);
-              streamRef.current = null;
-              if (typeof onError === 'function') onError(err);
-            }
-            return;
-          }
-
-          animationRef.current = requestAnimationFrame(detect);
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
         };
 
-        detect();
+        await scanner.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => {
+            // Success callback
+            if (decodedText && typeof onScan === 'function') {
+              onScan(decodedText.trim());
+              // Stop scanner after successful scan
+              if (scanner && scanner.isScanning) {
+                scanner.stop().catch(err => console.error('Failed to stop scanner:', err));
+              }
+            }
+          },
+          (errorMessage) => {
+            // Error callback - we can ignore these as they're mostly "no QR code found" messages
+          }
+        );
+
+        setIsScanning(true);
       } catch (err) {
-        let message = err && err.message ? err.message : '카메라를 시작할 수 없습니다.';
-        if (err.name === 'NotAllowedError') {
-          message = '카메라 권한이 거부되었습니다.';
+        let message = err?.message || '카메라를 시작할 수 없습니다.';
+        if (err?.name === 'NotAllowedError' || message.includes('Permission')) {
+          message = '카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.';
+        } else if (message.includes('NotFoundError') || message.includes('Camera')) {
+          message = '사용 가능한 카메라를 찾을 수 없습니다.';
         }
         setErrorMessage(message);
         if (typeof onError === 'function') onError(err);
       }
     }
 
-    setupScanner();
+    startScanner();
 
     return () => {
-      cancelled = true;
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
+      if (scanner && scanner.isScanning) {
+        scanner.stop()
+          .then(() => {
+            scanner.clear();
+          })
+          .catch(err => {
+            console.error('Failed to stop scanner:', err);
+          });
       }
-      scannedRef.current = false;
-      stopStream(streamRef.current, videoElement);
-      streamRef.current = null;
+      scannerRef.current = null;
     };
   }, [onScan, onError]);
 
@@ -149,14 +78,10 @@ function QrScanner({ onScan, onError, className = '' }) {
         </div>
       ) : (
         <div className="qr-scanner__viewport">
-          <video ref={videoRef} muted playsInline className="qr-scanner__video" />
-          <div className="qr-scanner__overlay">
-            <div className="qr-scanner__corner qr-scanner__corner--tl" />
-            <div className="qr-scanner__corner qr-scanner__corner--tr" />
-            <div className="qr-scanner__corner qr-scanner__corner--bl" />
-            <div className="qr-scanner__corner qr-scanner__corner--br" />
-          </div>
-          <div className="qr-scanner__hint">QR 코드를 중앙에 맞춰 주세요</div>
+          <div id={elementIdRef.current} style={{ width: '100%' }} />
+          {!isScanning && (
+            <div className="qr-scanner__hint">카메라를 시작하는 중...</div>
+          )}
         </div>
       )}
     </div>

@@ -1,0 +1,137 @@
+.payment-success-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.payment-success-modal {
+  background-color: white;
+  border-radius: 16px;
+  padding: 48px;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+  animation: scaleIn 0.3s ease-out;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.success-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #10b981;
+  margin-bottom: 16px;
+}
+
+.success-amount {
+  font-size: 48px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 24px 0;
+}
+
+.amount-unit {
+  font-size: 24px;
+  color: #6b7280;
+}
+
+.success-message {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 32px;
+}
+
+.confirm-btn {
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.confirm-btn:hover {
+  background-color: #4b5563;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Dark mode support */
+:root.dark .payment-success-modal {
+  background-color: #1f2937;
+}
+
+:root.dark .success-amount {
+  color: #f9fafb;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .payment-success-modal {
+    padding: 32px 24px;
+  }
+
+  .success-icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  .success-icon svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  .success-title {
+    font-size: 24px;
+  }
+
+  .success-amount {
+    font-size: 36px;
+  }
+
+  .amount-unit {
+    font-size: 20px;
+  }
+
+  .success-message {
+    font-size: 14px;
+  }
+}

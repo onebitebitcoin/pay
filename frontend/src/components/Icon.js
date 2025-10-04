@@ -144,6 +144,16 @@ const paths = {
       <path d="M9 6l1-2h4l1 2" />
     </>
   ),
+  'chevron-up': (
+    <>
+      <path d="M18 15l-6-6-6 6" />
+    </>
+  ),
+  'chevron-down': (
+    <>
+      <path d="M6 9l6 6 6-6" />
+    </>
+  ),
 };
 
 function Icon({ name, size = 20, className = '', title }) {

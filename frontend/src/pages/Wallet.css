@@ -148,9 +148,8 @@
 }
 
 .icon-btn {
-  background: rgba(var(--primary-rgb), 0.1);
+  background: none;
   border: none;
-  border-radius: 0.5rem;
   width: 40px;
   height: 40px;
   display: inline-flex;
@@ -162,8 +161,8 @@
 }
 
 .icon-btn:hover {
-  background: rgba(var(--primary-rgb), 0.2);
-  transform: translateY(-2px);
+  color: var(--primary-600);
+  transform: scale(1.1);
 }
 
 .ecash-info-box {
@@ -246,6 +245,31 @@
   gap: 1rem;
 }
 
+.network-warning {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 0.5rem;
+  color: var(--accent-600);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.mint-status-bottom {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.mint-status-bottom .status-text {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .manage-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
 .manage-btn { padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.35); color: var(--text); cursor: pointer; transition: background-color 0.2s; }
 .manage-btn:hover { background: rgba(var(--primary-rgb), 0.16); }
@@ -264,12 +288,41 @@
 .info-card ul { margin: 0.5rem 0 0 1rem; padding: 0; }
 .info-card li { margin: 0.25rem 0; }
 
-.action-btn { flex: 1; padding: 0.8rem 1.2rem; border: 1px solid var(--border); border-radius: 0.5rem; background: rgba(255, 255, 255, 0.4); color: var(--text); font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-.action-btn:hover:not(:disabled) { background: rgba(var(--primary-rgb), 0.2); border-color: var(--primary); }
+.action-btn {
+  flex: 1;
+  padding: 0.8rem 1.2rem;
+  border: none;
+  border-radius: 0.5rem;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.receive-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.receive-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.send-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
 
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* Modals */
@@ -585,9 +638,10 @@
 }
 
 .transactions h3 {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 1rem 0;
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .loading,
@@ -595,70 +649,174 @@
   text-align: center;
   color: var(--muted);
   padding: 2rem;
-  font-style: italic;
+  font-size: 0.9rem;
 }
 
 .transaction-list {
   display: flex;
   flex-direction: column;
+  gap: 0;
+}
+
+/* eCash Proofs Section */
+.proofs-section {
+  margin-top: 1.5rem;
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.proofs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.proofs-header:hover {
+  opacity: 0.7;
+}
+
+.proofs-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.proofs-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.proof-item {
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s;
+}
+
+.proof-item:last-child {
+  border-bottom: none;
+}
+
+.proof-item:hover {
+  background: rgba(var(--primary-rgb), 0.03);
+}
+
+.proof-info {
+  margin-bottom: 0.5rem;
+}
+
+.proof-amount-status {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
+}
+
+.proof-amount {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.proof-status {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+.proof-status.valid {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.proof-status.invalid {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.proof-secret {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.proof-id {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.monospace {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85em;
 }
 
 .transaction-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  transition: all 0.2s;
+  gap: 0.75rem;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s;
+}
+
+.transaction-item:last-child {
+  border-bottom: none;
 }
 
 .transaction-item:hover {
-  background: rgba(var(--primary-rgb), 0.16);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(var(--primary-rgb), 0.12);
+  background: rgba(var(--primary-rgb), 0.03);
 }
 
 .tx-icon {
-  font-size: 1.5rem;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-  color: #ffffff;
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
   border-radius: 50%;
-  box-shadow: 0 6px 12px rgba(var(--primary-rgb), 0.25);
+  flex-shrink: 0;
 }
 
 .tx-details {
   flex: 1;
+  min-width: 0;
 }
 
 .tx-description {
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 500;
   color: var(--text);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.125rem;
+}
+
+.tx-memo {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tx-date {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
-.tx-amount-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-
 .tx-amount {
-  font-weight: bold;
-  font-size: 1.1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 .tx-amount.positive {
@@ -669,24 +827,23 @@
   color: var(--danger);
 }
 
-.tx-detail-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0;
-  background: none;
-  border: none;
-  font-size: 0.85rem;
-  font-weight: 500;
+.load-more-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(var(--primary-rgb), 0.08);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
   color: var(--primary);
+  font-weight: 600;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: opacity 0.2s;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  transition: all 0.2s;
 }
 
-.tx-detail-btn:hover {
-  opacity: 0.7;
+.load-more-btn:hover {
+  background: rgba(var(--primary-rgb), 0.15);
+  border-color: var(--primary);
 }
 
 /* Transaction Detail Modal */
@@ -953,83 +1110,66 @@
 
   .transactions {
     padding: 1rem;
-    background: transparent;
-    border: none;
-    box-shadow: none;
   }
 
   .transactions h3 {
-    font-size: 1.125rem;
-    margin-bottom: 1rem;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .transaction-item {
-    flex-direction: row;
-    padding: 0.75rem 0.5rem;
-    background: transparent;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
-    gap: 0.75rem;
-    align-items: flex-start;
+    padding: 0.75rem 0;
+    gap: 0.625rem;
   }
 
-  .transaction-item:hover {
-    background: transparent;
-    transform: none;
-    box-shadow: none;
+  .proofs-section {
+    padding: 1rem;
   }
 
-  .transaction-item:last-child {
-    border-bottom: none;
-  }
-
-  .tx-icon {
-    width: 32px;
-    height: 32px;
+  .proofs-header h3 {
     font-size: 1rem;
-    background: transparent;
-    box-shadow: none;
-    flex-shrink: 0;
   }
 
-  .tx-details {
-    flex: 1;
-    min-width: 0;
-    display: flex;
+  .proof-info {
     flex-direction: column;
+    align-items: flex-start;
     gap: 0.25rem;
   }
 
-  .tx-description {
-    font-size: 0.95rem;
-    margin-bottom: 0.125rem;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    line-height: 1.4;
-    word-break: break-word;
+  .proof-amount {
+    font-size: 0.9rem;
   }
 
-  .tx-date {
-    font-size: 0.8rem;
+  .proof-status {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
   }
 
-  .tx-conversion-details {
+  .proof-secret,
+  .proof-id {
     font-size: 0.75rem;
   }
 
-  .tx-amount-container {
-    align-items: flex-end;
+  .tx-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .tx-description {
+    font-size: 0.9rem;
+  }
+
+  .tx-date {
+    font-size: 0.75rem;
   }
 
   .tx-amount {
-    font-size: 1rem;
-    font-weight: 700;
-    white-space: nowrap;
+    font-size: 0.9rem;
   }
 
-  .tx-detail-btn {
-    font-size: 0.8rem;
+  .load-more-btn {
+    padding: 0.625rem;
+    font-size: 0.85rem;
   }
 
   .success-checkmark {
@@ -1209,7 +1349,7 @@
   padding: 1.75rem 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .receive-card-body .input-group input[type="number"] {
@@ -1235,26 +1375,184 @@
   margin-top: 0.25rem;
 }
 
-.receive-invoice .invoice-input {
+.receive-invoice .invoice-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-family: 'Courier New', monospace;
+  background: rgba(255, 255, 255, 0.4);
+  resize: none;
+  word-break: break-all;
+  transition: all 0.2s;
+}
+
+.receive-invoice .invoice-textarea.clickable {
+  cursor: pointer;
+}
+
+.receive-invoice .invoice-textarea.clickable:hover {
+  background: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary);
+}
+
+.receive-invoice .invoice-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+}
+
+.copy-success-message {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(var(--success-rgb), 0.1);
+  border: 1px solid rgba(var(--success-rgb), 0.3);
+  border-radius: 0.375rem;
+  color: var(--success);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.invoice-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.invoice-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1rem;
+  background: rgba(var(--primary-rgb), 0.05);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.invoice-info-item .info-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.invoice-info-item .info-value {
+  font-size: 1.1rem;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.invoice-info-item .status-waiting {
+  color: var(--accent-600);
   font-size: 0.95rem;
+}
+
+.invoice-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.copy-btn-standalone {
+  padding: 0.75rem 1.25rem;
+  background: rgba(var(--primary-rgb), 0.1);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.copy-btn-standalone:hover {
+  background: rgba(var(--primary-rgb), 0.2);
+  border-color: var(--primary);
 }
 
 .receive-invoice .qr-placeholder {
   margin-top: 1.25rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
 }
 
+.qr-code-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
 .receive-invoice .qr-image {
   width: clamp(180px, 60vw, 260px);
   height: auto;
+  display: block;
+}
+
+.qr-logo-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22%;
+  height: 22%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.qr-amount-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+}
+
+.invoice-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(var(--primary-rgb), 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.invoice-loading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
 }
 
 .receive-card-footer {
-  padding: 1.5rem 2rem 1.75rem;
-  border-top: 1px solid var(--border);
+  padding: 0.75rem 2rem 1.75rem;
+  border-top: none;
 }
 
 
@@ -1268,6 +1566,17 @@
 .receive-actions .primary-btn,
 .receive-actions .secondary-btn {
   width: 100%;
+  font-size: 1rem;
+}
+
+.receive-actions .primary-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  border: none;
+}
+
+.receive-actions .primary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
 .receive-actions .link-btn {
@@ -1281,19 +1590,138 @@
   padding: 1.25rem 0;
 }
 
+/* Send Page */
+.send-page {
+  padding: 2rem 1rem;
+  max-width: 760px;
+  margin: 0 auto;
+  min-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+}
+
+.send-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.send-card-header {
+  padding: 1.75rem 2rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.send-back-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.send-back-btn:hover {
+  text-decoration: underline;
+}
+
+.send-card-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.send-subtext {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.send-card-body {
+  padding: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.qr-scanner-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.qr-rescan {
+  margin-bottom: 0.5rem;
+}
+
+.qr-rescan .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.send-card-footer {
+  padding: 0.75rem 2rem 1.75rem;
+  border-top: none;
+}
+
+.send-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.send-actions .primary-btn,
+.send-actions .secondary-btn {
+  width: 100%;
+  font-size: 1rem;
+}
+
+.send-actions .primary-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  border: none;
+}
+
+.send-actions .primary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
 @media (max-width: 768px) {
-  .receive-page {
-    padding: 1.75rem 1.25rem;
+  .receive-page,
+  .send-page {
+    padding: 0;
     min-height: calc(100vh - 120px);
   }
 
-  .receive-card {
-    border-radius: 1.25rem;
+  .receive-card,
+  .send-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: none;
   }
 
   .receive-card-header,
   .receive-card-body,
-  .receive-card-footer {
+  .receive-card-footer,
+  .send-card-header,
+  .send-card-body,
+  .send-card-footer {
     padding: 1.5rem;
   }
 
@@ -1308,27 +1736,40 @@
   .receive-invoice .qr-image {
     width: clamp(180px, 70vw, 240px);
   }
+
+  .invoice-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-info-item {
+    padding: 0.875rem;
+  }
 }
 
 @media (max-width: 540px) {
-  .receive-page {
-    padding: 1.5rem 1rem;
+  .receive-page,
+  .send-page {
+    padding: 0;
     min-height: calc(100vh - 110px);
   }
 
-  .receive-card {
-    border-radius: 1rem;
+  .receive-card,
+  .send-card {
+    border-radius: 0;
   }
 
-  .receive-card-header h2 {
+  .receive-card-header h2,
+  .send-card-header h2 {
     font-size: 1.3rem;
   }
 
-  .receive-subtext {
+  .receive-subtext,
+  .send-subtext {
     font-size: 0.9rem;
   }
 
-  .receive-card-body {
+  .receive-card-body,
+  .send-card-body {
     gap: 1.25rem;
   }
 
@@ -1336,37 +1777,33 @@
     font-size: 1.15rem;
   }
 
-  .receive-actions {
+  .receive-actions,
+  .send-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
   .receive-actions .primary-btn,
-  .receive-actions .secondary-btn {
+  .receive-actions .secondary-btn,
+  .send-actions .primary-btn,
+  .send-actions .secondary-btn {
     width: 100%;
     justify-content: center;
     text-align: center;
   }
 
-  .receive-invoice .input-with-action {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
-  }
-
-  .receive-invoice .copy-icon-btn {
-    width: 100%;
-    padding: 0.65rem 0;
-  }
 }
 
 @media (max-width: 400px) {
   .receive-card-body,
-  .receive-card-footer {
+  .receive-card-footer,
+  .send-card-body,
+  .send-card-footer {
     padding: 1.25rem;
   }
 
-  .receive-card-header {
+  .receive-card-header,
+  .send-card-header {
     padding: 1.25rem 1.25rem 1rem;
   }
 

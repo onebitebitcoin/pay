@@ -26,7 +26,7 @@ function Home() {
             <Link to="/wallet" className="feature-card">
               <div className="feature-icon"><Icon name="shield" size={48} /></div>
               <h3>Cashu 지갑</h3>
-              <p>Cashu 기반의 프라이버시 중심 비트코인 지갑</p>
+              <p>Cashu 기반 프라이버시 중심 라이트닝 지갑</p>
             </Link>
           </div>
         </div>
