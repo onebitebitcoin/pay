@@ -26,7 +26,7 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 function Wallet() {
-  const { isConnected: isWebSocketConnected } = useWebSocket();
+  const { isConnected: isWebSocketConnected, send: sendWebSocketMessage } = useWebSocket();
   const [ecashBalance, setEcashBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const TX_STORAGE_KEY = 'cashu_tx_v1';
@@ -806,6 +806,10 @@ function Wallet() {
       const data = await resp.json();
       const req = data?.request || data?.payment_request || '';
       const quoteId = data?.quote || data?.quote_id || '';
+
+      if (quoteId) {
+        sendWebSocketMessage({ type: 'subscribe', quoteId });
+      }
 
       setInvoice(req);
       if (quoteId && Array.isArray(outputDatas) && outputDatas.length) {

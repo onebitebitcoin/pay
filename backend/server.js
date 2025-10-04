@@ -12,6 +12,7 @@ const lnaddr = require('./lightningaddr');
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+const quoteSubscriptions = new Map();
 const PORT = process.env.PORT || 5001;
 
 // WebSocket connection handling
@@ -22,6 +23,17 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
       console.log('Received WebSocket message:', data);
+
+      if (data.type === 'subscribe' && data.quoteId) {
+        // Remove any previous subscription for this client
+        for (const [key, value] of quoteSubscriptions.entries()) {
+          if (value === ws) {
+            quoteSubscriptions.delete(key);
+          }
+        }
+        quoteSubscriptions.set(data.quoteId, ws);
+        console.log(`Client subscribed to quoteId: ${data.quoteId}`);
+      }
     } catch (e) {
       console.error('Invalid WebSocket message:', e);
     }
@@ -29,21 +41,31 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('Client disconnected from WebSocket');
+    // Clean up subscriptions
+    for (const [key, value] of quoteSubscriptions.entries()) {
+      if (value === ws) {
+        quoteSubscriptions.delete(key);
+      }
+    }
   });
 
   ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connection established' }));
 });
 
-// Broadcast function to send messages to all connected clients
-function broadcastPaymentNotification(data) {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({
-        type: 'payment_received',
-        ...data
-      }));
-    }
-  });
+// Send a notification to a specific client subscribed to a quote
+function sendPaymentNotification(quoteId, data) {
+  const ws = quoteSubscriptions.get(quoteId);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'payment_received',
+      ...data
+    }));
+    // Once notified, remove the subscription
+    quoteSubscriptions.delete(quoteId);
+    console.log(`Sent payment notification for quote ${quoteId}`);
+  } else {
+    console.log(`No active subscription found for quote ${quoteId}`);
+  }
 }
 
 // Store active quotes being monitored and cache redeemed signatures briefly
@@ -101,7 +123,7 @@ async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys) {
             cacheRedeemedQuote(quoteId, redeemPayload);
 
             // Broadcast payment notification
-            broadcastPaymentNotification(redeemPayload);
+            sendPaymentNotification(quoteId, redeemPayload);
 
             console.log(`Payment auto-redeemed: ${totalAmount} sats for quote ${quoteId}`);
 
