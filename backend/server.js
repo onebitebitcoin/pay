@@ -131,7 +131,7 @@ async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys) {
 
 app.use(helmet());
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://pay.onebitebitcoin.com'],
   credentials: true
 }));
 app.use(express.json());
