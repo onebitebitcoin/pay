@@ -27,8 +27,8 @@ export const WebSocketProvider = ({ children }) => {
       return `ws://localhost:5001`;
     }
 
-    // Production: use same host
-    return `${protocol}//${host}`;
+    // Production: use same host, but on the /api path for the websocket
+    return `${protocol}//${host}/api/`;
   };
 
   const connect = useCallback(() => {
