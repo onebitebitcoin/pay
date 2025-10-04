@@ -36,3 +36,4 @@ Thumbs.db
 
 # Misc
 *.local
+backend/data/stores.sqlite3
