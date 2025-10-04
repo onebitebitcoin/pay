@@ -154,26 +154,10 @@ sed "s#__BACKEND_PORT__#${BACKEND_PORT}#g" | \
 sed "s#__TLS_CERT__#${TLS_CERT}#g" | \
 sed "s#__TLS_KEY__#${TLS_KEY}#g" | \
 sed "s#__USE_SSL__#${USE_SSL}#g" > "$NGINX_CONF"
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-    }
-
-    location /status/health {
-        proxy_pass http://127.0.0.1:__BACKEND_PORT__/health;
-        proxy_set_header Host $host;
-    }
-}
-
 map $http_upgrade $connection_upgrade {
     default upgrade;
     ''      close;
 }
-
 EOF_CONF
 
 if [ "$USE_SSL" = true ]; then
@@ -225,6 +209,44 @@ server {
     return 301 https://$host$request_uri;
 }
 EOF_SSL
+else
+  cat <<'EOF_HTTP' | sed "s#__SERVER_NAME__#${SERVER_NAME}#g" | \
+  sed "s#__DEPLOY_DIR__#${FRONTEND_DEPLOY_DIR}#g" | \
+  sed "s#__BACKEND_PORT__#${BACKEND_PORT}#g" | \
+  sed "s#__TLS_CERT__#${TLS_CERT}#g" | \
+  sed "s#__TLS_KEY__#${TLS_KEY}#g" >> "$NGINX_CONF"
+server {
+    listen 80;
+    server_name __SERVER_NAME__;
+
+    root __DEPLOY_DIR__;
+    index index.html;
+
+    client_max_body_size 20m;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /status/health {
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__/health;
+        proxy_set_header Host $host;
+    }
+}
+EOF_HTTP
 fi
 
 ln -sf "$NGINX_CONF" "/etc/nginx/sites-enabled/${NGINX_SITE_NAME}"
