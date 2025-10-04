@@ -7,6 +7,7 @@ import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deseria
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 const normalizeQrValue = (rawValue = '') => {
   if (!rawValue) return '';
@@ -25,6 +26,7 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 function Wallet() {
+  const { isConnected: isWebSocketConnected } = useWebSocket();
   const [ecashBalance, setEcashBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const TX_STORAGE_KEY = 'cashu_tx_v1';
@@ -1380,17 +1382,21 @@ function Wallet() {
       )}
 
       {/* Connection Status (minimal) */}
-      <div className="connection-status minimal">
+      <div className="connection-status minimal" style={{ alignItems: 'flex-start' }}>
         <div className="status-indicator">
           <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <small className="status-text">{isConnected ? '연결됨' : '연결 안됨'}</small>
+            <small className="status-text">{isConnected ? 'Mint 연결됨' : 'Mint 연결 안됨'}</small>
             {mintUrl && (
               <small style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>
                 {mintUrl}
               </small>
             )}
           </div>
+        </div>
+        <div className="status-indicator">
+          <span className={`status-dot ${isWebSocketConnected ? 'on' : 'off'}`}></span>
+          <small className="status-text">{isWebSocketConnected ? '웹 소켓 연결' : '웹 소켓 연결 끊김'}</small>
         </div>
         {!isConnected && (
           <button onClick={connectMint} className="connect-btn" disabled={loading}>
