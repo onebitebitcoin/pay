@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl } from '../config';
 // Cashu mode: no join/federation or gateway UI
-import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, saveProofs, exportProofsJson, importProofsFrom } from '../services/cashu';
-import { createBlindedOutputs, signaturesToProofs } from '../services/cashuProtocol';
+import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom } from '../services/cashu';
+import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
@@ -23,16 +24,10 @@ const normalizeQrValue = (rawValue = '') => {
   return compact;
 };
 
-// Prevent duplicate "Mint에 연결되었습니다" toasts in StrictMode/dev
-let MINT_CONNECTED_TOAST_SHOWN = false;
-
 function Wallet() {
-  const [balance, setBalance] = useState(0);
   const [ecashBalance, setEcashBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const TX_STORAGE_KEY = 'cashu_tx_v1';
-  const [lightningReady, setLightningReady] = useState(false);
-  const [showReceive, setShowReceive] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   // Cashu mode: no explicit join modal
@@ -42,15 +37,14 @@ function Wallet() {
   const [convertDirection, setConvertDirection] = useState('ln_to_ecash'); // 'ln_to_ecash' or 'ecash_to_ln'
   const [sendAddress, setSendAddress] = useState('');
   const [enableSendScanner, setEnableSendScanner] = useState(false);
+  const [invoiceQuote, setInvoiceQuote] = useState(null);
+  const [invoiceError, setInvoiceError] = useState('');
   const [invoice, setInvoice] = useState('');
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [checkingPayment, setCheckingPayment] = useState(false);
-  const [checkAttempts, setCheckAttempts] = useState(0);
-  const redeemTimerRef = useRef(null);
-  const redeemCtxRef = useRef(null); // { outputs, outputDatas, mintKeys, amount, quote }
-  const redeemInFlightRef = useRef(false);
   const fileInputRef = useRef(null);
+  const wasReceiveViewRef = useRef(false);
   const [receiveCompleted, setReceiveCompleted] = useState(false);
   const [receivedAmount, setReceivedAmount] = useState(0);
   const [showEcashInfo, setShowEcashInfo] = useState(false);
@@ -61,6 +55,77 @@ function Wallet() {
   const [showTxDetail, setShowTxDetail] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
 
+  const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
+  const pendingMintRef = useRef(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const receiveOriginRef = useRef('/wallet');
+  const isReceiveView = location.pathname === '/wallet/receive';
+
+  const clearPendingMint = useCallback(() => {
+    pendingMintRef.current = null;
+    try {
+      localStorage.removeItem(PENDING_MINT_STORAGE_KEY);
+    } catch (err) {
+      console.warn('Pending mint 삭제 실패:', err);
+    }
+  }, [PENDING_MINT_STORAGE_KEY]);
+
+  const savePendingMint = useCallback((quote, outputDatas, amount = 0) => {
+    if (!quote || !Array.isArray(outputDatas) || outputDatas.length === 0) return;
+    const record = {
+      quote,
+      outputDatas,
+      amount: amount || 0,
+      createdAt: Date.now(),
+    };
+    pendingMintRef.current = record;
+    try {
+      const serialized = serializeOutputDatas(outputDatas);
+      localStorage.setItem(
+        PENDING_MINT_STORAGE_KEY,
+        JSON.stringify({
+          quote,
+          amount: record.amount,
+          createdAt: record.createdAt,
+          outputDatas: serialized,
+        })
+      );
+    } catch (err) {
+      console.error('Pending mint 저장 실패:', err);
+    }
+  }, [PENDING_MINT_STORAGE_KEY]);
+
+  const ensurePendingMint = useCallback(async (quote) => {
+    if (!quote) return null;
+    const current = pendingMintRef.current;
+    if (current && current.quote === quote && Array.isArray(current.outputDatas) && current.outputDatas.length) {
+      return current;
+    }
+    try {
+      const raw = localStorage.getItem(PENDING_MINT_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.quote !== quote || !Array.isArray(parsed.outputDatas)) {
+        return null;
+      }
+      const restored = await deserializeOutputDatas(parsed.outputDatas);
+      if (!restored || restored.length === 0) return null;
+      const record = {
+        quote,
+        outputDatas: restored,
+        amount: parsed.amount || 0,
+        createdAt: parsed.createdAt || Date.now(),
+      };
+      pendingMintRef.current = record;
+      return record;
+    } catch (err) {
+      console.error('Pending mint 복원 실패:', err);
+      return null;
+    }
+  }, [PENDING_MINT_STORAGE_KEY]);
+
   // Storage warnings
   const [storageHealthy, setStorageHealthy] = useState(true);
   const [showBackupBanner, setShowBackupBanner] = useState(false);
@@ -69,22 +134,6 @@ function Wallet() {
   const [isConnected, setIsConnected] = useState(false);
   const [mintUrl, setMintUrl] = useState('');
   // Removed inline mint explainer (moved to About page)
-
-  useEffect(() => {
-    // Display default mint url (Cashu)
-    setMintUrl(DEFAULT_MINT_URL);
-    // Auto-connect by checking mint info
-    connectMint();
-    // Load transactions from storage
-    try {
-      const raw = localStorage.getItem(TX_STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(arr)) setTransactions(arr);
-    } catch {}
-    return () => {
-      try { stopAutoRedeem(); } catch {}
-    };
-  }, []);
 
   useEffect(() => {
     // Check storage health
@@ -97,6 +146,15 @@ function Wallet() {
       setStorageHealthy(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (isReceiveView) {
+      const state = location.state;
+      if (state && typeof state === 'object' && state.from) {
+        receiveOriginRef.current = state.from;
+      }
+    }
+  }, [isReceiveView, location.state]);
 
   useEffect(() => {
     // Show backup banner when there is balance and not dismissed
@@ -129,15 +187,370 @@ function Wallet() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [ecashBalance]);
 
-  const loadWalletData = async () => {
+  const loadWalletData = useCallback(async () => {
     try {
       setLoading(true);
       try { importProofsFrom(loadProofs()); } catch {}
       setEcashBalance(getBalanceSats());
-      setLightningReady(true);
     } catch (error) {
       console.error('지갑 데이터 로드 오류:', error);
-      setLightningReady(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const addToast = useCallback((message, type = 'success', timeout = 3500) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    if (timeout) {
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, timeout);
+    }
+  }, []);
+
+  const persistTransactions = useCallback((list) => {
+    try { localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(list || [])); } catch {}
+  }, [TX_STORAGE_KEY]);
+
+  const addTransaction = useCallback((tx) => {
+    setTransactions((prev) => {
+      const next = [tx, ...(Array.isArray(prev) ? prev : [])];
+      persistTransactions(next);
+      return next;
+    });
+  }, [persistTransactions]);
+
+  const hasQuoteRedeemed = useCallback((q) => {
+    try {
+      const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.includes(q);
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const markQuoteRedeemed = useCallback((q) => {
+    try {
+      const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
+      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      if (!arr.includes(q)) arr.push(q);
+      localStorage.setItem('cashu_redeemed_quotes', JSON.stringify(arr));
+    } catch {}
+  }, []);
+
+  const stopAutoRedeem = useCallback(() => {
+    // Kept for compatibility - just resets state
+    setCheckingPayment(false);
+  }, []);
+
+  const connectMint = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // Try main URL first
+      const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+      const backupUrl = settings.backupMintUrl;
+
+      let resp = await fetch(apiUrl('/api/cashu/info'));
+
+      // If main URL fails and backup URL exists, try backup
+      if (!resp.ok && backupUrl) {
+        console.log('Main Mint URL failed, trying backup:', backupUrl);
+
+        // Update config to use backup URL temporarily
+        const originalMintUrl = mintUrl;
+        setMintUrl(backupUrl);
+
+        // Update settings to use backup URL
+        const newSettings = {
+          ...settings,
+          mintUrl: backupUrl,
+          backupMintUrl: originalMintUrl
+        };
+        localStorage.setItem('app_settings', JSON.stringify(newSettings));
+
+        // Try backup URL
+        resp = await fetch(apiUrl('/api/cashu/info'));
+
+        if (!resp.ok) {
+          // Both failed, revert
+          setMintUrl(originalMintUrl);
+          localStorage.setItem('app_settings', JSON.stringify(settings));
+          throw new Error('메인 및 백업 Mint 연결 모두 실패');
+        }
+
+        addToast('백업 Mint에 연결되었습니다', 'info');
+      } else if (!resp.ok) {
+        throw new Error('Mint 정보 조회 실패');
+      }
+
+      setIsConnected(true);
+      await loadWalletData();
+    } catch (e) {
+      console.error(e);
+      alert(e.message || 'Mint 연결 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast, loadWalletData, mintUrl]);
+
+  const applyRedeemedSignatures = useCallback(async (quote, signatures, amountHint = 0) => {
+    if (!quote || !Array.isArray(signatures) || signatures.length === 0) {
+      return { ok: false, reason: 'missing_signatures' };
+    }
+
+    const pending = await ensurePendingMint(quote);
+    if (!pending || !Array.isArray(pending.outputDatas) || pending.outputDatas.length === 0) {
+      return { ok: false, reason: 'missing_output_datas' };
+    }
+
+    try {
+      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      if (!keysResp.ok) {
+        return { ok: false, reason: 'mint_keys_failed' };
+      }
+      const mintKeys = await keysResp.json();
+      const proofs = await signaturesToProofs(signatures, mintKeys, pending.outputDatas);
+      addProofs(proofs);
+      const credited = proofs.reduce((sum, p) => sum + Number(p?.amount || 0), 0);
+      setEcashBalance(getBalanceSats());
+      clearPendingMint();
+      return {
+        ok: true,
+        added: credited || amountHint || 0,
+      };
+    } catch (error) {
+      console.error('Redeemed signatures 적용 실패:', error);
+      return { ok: false, reason: 'apply_failed', error };
+    }
+  }, [clearPendingMint, ensurePendingMint]);
+
+  const processPaymentNotification = useCallback(async (detail) => {
+    const quote = detail?.quote;
+    const amount = parseInt(detail?.amount || 0, 10) || 0;
+    const timestamp = detail?.timestamp || new Date().toISOString();
+    const lastQuote = localStorage.getItem('cashu_last_quote');
+
+    if (quote === lastQuote) {
+      try { stopAutoRedeem(); } catch {}
+      setCheckingPayment(false);
+      setReceiveCompleted(true);
+    }
+
+    let signatures = Array.isArray(detail?.signatures) ? detail.signatures : [];
+
+    if ((!signatures || signatures.length === 0) && quote) {
+      try {
+        const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${encodeURIComponent(quote)}`));
+        if (resultResp.ok) {
+          const resJson = await resultResp.json();
+          if (Array.isArray(resJson?.signatures) && resJson.signatures.length) {
+            signatures = resJson.signatures;
+          }
+        }
+      } catch (err) {
+        console.error('결제 결과 조회 실패:', err);
+      }
+    }
+
+    let creditedAmount = 0;
+    if (quote && Array.isArray(signatures) && signatures.length) {
+      const applyResult = await applyRedeemedSignatures(quote, signatures, amount);
+      if (applyResult.ok && applyResult.added) {
+        creditedAmount = applyResult.added;
+        if (quote === lastQuote) {
+          markQuoteRedeemed(quote);
+        }
+      } else if (applyResult.reason === 'missing_output_datas') {
+        addToast('증명서 데이터가 없어 잔액 자동 반영에 실패했습니다. "미처리 결제 확인"으로 복구하세요.', 'error', 6000);
+      }
+    }
+
+    const creditedOrExpected = creditedAmount || amount;
+    if (quote === lastQuote) {
+      setReceivedAmount(creditedOrExpected);
+    }
+
+    if (creditedAmount > 0) {
+      addTransaction({
+        id: Date.now(),
+        type: 'receive',
+        amount: creditedAmount,
+        timestamp,
+        status: 'confirmed',
+        description: '라이트닝 수신'
+      });
+    } else if (!isReceiveView || quote !== lastQuote) {
+      addTransaction({
+        id: Date.now(),
+        type: 'receive',
+        amount,
+        timestamp,
+        status: 'pending',
+        description: '라이트닝 수신 (확인 필요)'
+      });
+    }
+
+    await loadWalletData();
+  }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
+
+  useEffect(() => {
+    // Load Mint URL from settings
+    try {
+      const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+      const mainUrl = settings.mintUrl || DEFAULT_MINT_URL;
+      setMintUrl(mainUrl);
+
+      // Auto-connect by checking mint info with fallback
+      connectMint();
+    } catch {
+      setMintUrl(DEFAULT_MINT_URL);
+      connectMint();
+    }
+
+    // Load transactions from storage
+    try {
+      const raw = localStorage.getItem(TX_STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(arr)) setTransactions(arr);
+    } catch {}
+
+    (async () => {
+      try {
+        const lastQuote = localStorage.getItem('cashu_last_quote');
+        if (lastQuote) {
+          await ensurePendingMint(lastQuote);
+        }
+      } catch (err) {
+        console.error('대기 중 인보이스 초기화 실패:', err);
+      }
+    })();
+
+    const handler = (event) => {
+      if (!event?.detail) return;
+      processPaymentNotification(event.detail).catch((err) => {
+        console.error('결제 알림 처리 오류:', err);
+      });
+    };
+
+    window.addEventListener('payment_received', handler);
+
+    return () => {
+      try { stopAutoRedeem(); } catch {}
+      window.removeEventListener('payment_received', handler);
+    };
+  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
+
+  // Check and recover pending quote
+  const checkPendingQuote = async () => {
+    try {
+      const lastQuote = localStorage.getItem('cashu_last_quote');
+      if (!lastQuote) {
+        addToast('확인할 대기 중인 인보이스가 없습니다', 'info');
+        return;
+      }
+
+      // Check if already redeemed
+      if (hasQuoteRedeemed(lastQuote)) {
+        addToast('이미 처리된 인보이스입니다', 'info');
+        return;
+      }
+
+      setLoading(true);
+      addToast('인보이스 상태 확인 중...', 'info', 2000);
+
+      // Check quote state
+      const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}`));
+      if (!checkResp.ok) throw new Error('Quote 상태 확인 실패');
+
+      const quoteData = await checkResp.json();
+      const state = (quoteData?.state || '').toUpperCase();
+
+      if (state !== 'PAID' && state !== 'ISSUED') {
+        addToast('아직 결제되지 않은 인보이스입니다', 'info');
+        return;
+      }
+
+      // Quote is paid, try to redeem existing signatures first
+      const cachedResultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${encodeURIComponent(lastQuote)}`));
+      if (cachedResultResp.ok) {
+        const cachedJson = await cachedResultResp.json();
+        if (Array.isArray(cachedJson?.signatures) && cachedJson.signatures.length) {
+          const applied = await applyRedeemedSignatures(lastQuote, cachedJson.signatures, parseInt(quoteData?.amount || 0, 10));
+          if (applied.ok && applied.added) {
+            markQuoteRedeemed(lastQuote);
+            setReceiveCompleted(true);
+            setReceivedAmount(applied.added);
+            addTransaction({
+              id: Date.now(),
+              type: 'receive',
+              amount: applied.added,
+              timestamp: new Date().toISOString(),
+              status: 'confirmed',
+              description: '라이트닝 수신 (자동 복구)'
+            });
+            addToast(`${formatAmount(applied.added)} sats를 성공적으로 복구했습니다!`, 'success');
+            await loadWalletData();
+            return;
+          }
+        }
+      }
+
+      // Fallback: request new outputs and redeem manually
+      const amount = parseInt(quoteData?.amount || localStorage.getItem('cashu_last_mint_amount') || '0', 10);
+      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      if (!keysResp.ok) throw new Error('Mint keys 조회 실패');
+      const mintKeys = await keysResp.json();
+      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
+
+      const redeemResp = await fetch(apiUrl('/api/cashu/mint/redeem'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quote: lastQuote, outputs })
+      });
+
+      if (!redeemResp.ok) {
+        const err = await redeemResp.json();
+        const errorMsg = typeof err?.error === 'string' ? err.error : JSON.stringify(err?.error || err);
+
+        // Check if already issued
+        if (errorMsg.includes('already issued') || errorMsg.includes('11000')) {
+          markQuoteRedeemed(lastQuote);
+          throw new Error('이 인보이스는 이미 처리되었습니다. 안타깝게도 signatures를 받지 못해 복구가 불가능합니다. Mint 관리자에게 문의하세요.');
+        }
+
+        throw new Error(errorMsg || 'Redeem 실패');
+      }
+
+      const redeemData = await redeemResp.json();
+      const signatures = redeemData?.signatures || redeemData?.promises || [];
+
+      if (Array.isArray(signatures) && signatures.length > 0) {
+        const proofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
+        addProofs(proofs);
+        const added = proofs.reduce((s, p) => s + Number(p?.amount || 0), 0);
+        setEcashBalance(getBalanceSats());
+        clearPendingMint();
+        markQuoteRedeemed(lastQuote);
+
+        addTransaction({
+          id: Date.now(),
+          type: 'receive',
+          amount: added,
+          timestamp: new Date().toISOString(),
+          status: 'confirmed',
+          description: '라이트닝 수신 (복구됨)'
+        });
+
+        addToast(`${formatAmount(added)} sats를 성공적으로 복구했습니다!`, 'success');
+      } else {
+        throw new Error('유효한 서명을 받지 못했습니다');
+      }
+    } catch (error) {
+      console.error('Quote 확인 오류:', error);
+      addToast(error?.message || 'Quote 확인에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -342,16 +755,6 @@ function Wallet() {
     }
   };
 
-  const addToast = useCallback((message, type = 'success', timeout = 3500) => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    if (timeout) {
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, timeout);
-    }
-  }, []);
-
   const handleSendQrScan = useCallback((rawValue) => {
     const normalized = normalizeQrValue(rawValue);
     if (!normalized) {
@@ -369,17 +772,6 @@ function Wallet() {
     addToast(message, 'error', 3500);
   }, [addToast]);
 
-  const persistTransactions = (list) => {
-    try { localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(list || [])); } catch {}
-  };
-  const addTransaction = (tx) => {
-    setTransactions((prev) => {
-      const next = [tx, ...(Array.isArray(prev) ? prev : [])];
-      persistTransactions(next);
-      return next;
-    });
-  };
-
   const generateInvoice = async () => {
     if (!receiveAmount || receiveAmount <= 0) {
       alert('올바른 금액을 입력하세요');
@@ -389,9 +781,20 @@ function Wallet() {
     try {
       setLoading(true);
       setReceiveCompleted(false);
+      setCheckingPayment(false);
+
+      // Get mint keys and create blinded outputs first
+      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      if (!keysResp.ok) throw new Error('Mint keys 조회 실패');
+      const mintKeys = await keysResp.json();
+      const amount = parseInt(receiveAmount, 10);
+      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
+
+      // Create quote with outputs - server will start monitoring automatically
       const resp = await fetch(apiUrl('/api/cashu/mint/quote'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: parseInt(receiveAmount, 10) })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, outputs })
       });
       if (!resp.ok) {
         let msg = '인보이스 생성 실패';
@@ -401,10 +804,17 @@ function Wallet() {
       const data = await resp.json();
       const req = data?.request || data?.payment_request || '';
       const quoteId = data?.quote || data?.quote_id || '';
+
       setInvoice(req);
+      if (quoteId && Array.isArray(outputDatas) && outputDatas.length) {
+        savePendingMint(quoteId, outputDatas, amount);
+      } else {
+        clearPendingMint();
+      }
       localStorage.setItem('cashu_last_quote', quoteId);
-      localStorage.setItem('cashu_last_mint_amount', String(parseInt(receiveAmount, 10)));
-      if (quoteId) startAutoRedeem(quoteId);
+      localStorage.setItem('cashu_last_mint_amount', String(amount));
+      setCheckingPayment(true);
+      addToast('결제를 기다리는 중입니다', 'info', 2000);
     } catch (error) {
       console.error('인보이스 생성 오류:', error);
       alert('인보이스 생성에 실패했습니다');
@@ -413,139 +823,38 @@ function Wallet() {
     }
   };
 
-  const hasQuoteRedeemed = (q) => {
-    try {
-      const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes(q);
-    } catch { return false; }
-  };
-
-  const markQuoteRedeemed = (q) => {
-    try {
-      const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
-      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-      if (!arr.includes(q)) arr.push(q);
-      localStorage.setItem('cashu_redeemed_quotes', JSON.stringify(arr));
-    } catch {}
-  };
-
-  const startAutoRedeem = (quote) => {
+  const exitReceiveFlow = useCallback(() => {
     try { stopAutoRedeem(); } catch {}
-    setCheckingPayment(true);
-    setCheckAttempts(0);
-    const MAX_ATTEMPTS = 60; // ~2 minutes at 2s interval
-    let attempts = 0;
-    redeemCtxRef.current = null;
-    if (hasQuoteRedeemed(quote)) {
-      setReceiveCompleted(true);
-      setCheckingPayment(false);
-      return;
-    }
-    redeemTimerRef.current = setInterval(async () => {
-      try {
-        if (redeemInFlightRef.current || receiveCompleted) return;
-        attempts += 1;
-        setCheckAttempts(attempts);
-        if (attempts >= MAX_ATTEMPTS) {
-          stopAutoRedeem();
-          addToast('결제가 아직 확인되지 않았습니다. 나중에 다시 확인해주세요.', 'info');
-          return;
-        }
-        // Check quote state to get actual paid/issued amount before building outputs
-        // If not paid yet, skip this cycle
-        try {
-          const cs = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`));
-          if (cs.ok) {
-            const st = await cs.json();
-            const s = (st?.state || '').toUpperCase();
-            if (s && s !== 'PAID' && s !== 'ISSUED') {
-              return; // unpaid/pending
-            }
-          }
-        } catch {}
-        redeemInFlightRef.current = true;
-        // Ensure we have mint keys and prebuilt blinded outputs once (for the correct amount)
-        if (!redeemCtxRef.current) {
-          const keysResp = await fetch(apiUrl('/api/cashu/keys'));
-          if (!keysResp.ok) throw new Error('Mint keys 조회 실패');
-          const mintKeys = await keysResp.json();
-          let amount = parseInt(localStorage.getItem('cashu_last_mint_amount') || '0', 10);
-          try {
-            const js = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quote)}`));
-            if (js.ok) {
-              const jd = await js.json();
-              amount = parseInt(jd?.amount_issued || jd?.amount || amount || 0, 10);
-            }
-          } catch {}
-          const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
-          redeemCtxRef.current = { outputs, outputDatas, mintKeys, amount, quote };
-        }
-        const { outputs, outputDatas, mintKeys } = redeemCtxRef.current;
-        const r = await fetch(apiUrl('/api/cashu/mint/redeem'), {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quote, outputs })
-        });
-        if (!r.ok) {
-          // Try to parse error, keep polling if just 'not paid yet'
-          try {
-            const err = await r.json();
-            const emsg = (typeof err?.error === 'string') ? err.error : JSON.stringify(err?.error || err);
-            if (emsg && /not\s*paid|unpaid|pending/i.test(emsg)) {
-              redeemInFlightRef.current = false;
-              return; // continue polling silently
-            }
-            if (/extra\s*fields|field\s*required|validation/i.test(emsg)) {
-              // likely request shape issue or invalid/expired quote; stop polling
-              stopAutoRedeem();
-              addToast(`결제 확인 실패: ${emsg}`, 'error');
-              return;
-            }
-            // Other validation errors: show once and stop
-            stopAutoRedeem();
-            addToast(`결제 확인 실패: ${emsg}`, 'error');
-          } catch {
-            // Unknown error; keep polling to be resilient
-          }
-          redeemInFlightRef.current = false;
-          return;
-        }
-        const rd = await r.json();
-        // Expect 'signatures' or 'promises'
-        const signatures = rd?.signatures || rd?.promises || [];
-        if (Array.isArray(signatures) && signatures.length) {
-          const proofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
-          stopAutoRedeem();
-          addProofs(proofs);
-          const added = proofs.reduce((s, p) => s + Number(p?.amount || 0), 0);
-          setEcashBalance(getBalanceSats());
-          setReceivedAmount(added);
-          setReceiveCompleted(true);
-          markQuoteRedeemed(quote);
-          addTransaction({
-            id: Date.now(),
-            type: 'receive',
-            amount: added,
-            timestamp: new Date().toISOString(),
-            status: 'confirmed',
-            description: '라이트닝 수신'
-          });
-        }
-        redeemInFlightRef.current = false;
-      } catch {
-        // swallow and retry
-        redeemInFlightRef.current = false;
-      }
-    }, 2000);
-  };
-
-  const stopAutoRedeem = () => {
-    if (redeemTimerRef.current) {
-      clearInterval(redeemTimerRef.current);
-      redeemTimerRef.current = null;
-    }
     setCheckingPayment(false);
-  };
+    setInvoice('');
+    setReceiveCompleted(false);
+    setReceivedAmount(0);
+    const target = receiveOriginRef.current || '/wallet';
+    navigate(target, { replace: true });
+  }, [navigate, stopAutoRedeem]);
+
+  const handleReceiveNavigation = useCallback(() => {
+    const origin = location.pathname || '/wallet';
+    const fallback = origin === '/wallet/receive' ? '/wallet' : origin;
+    receiveOriginRef.current = fallback;
+    try { stopAutoRedeem(); } catch {}
+    setInvoice('');
+    setReceiveCompleted(false);
+    setReceivedAmount(0);
+    setCheckingPayment(false);
+    navigate('/wallet/receive', { state: { from: fallback } });
+  }, [location.pathname, navigate, stopAutoRedeem]);
+
+  useEffect(() => {
+    if (!isReceiveView && wasReceiveViewRef.current) {
+      try { stopAutoRedeem(); } catch {}
+      setCheckingPayment(false);
+      setInvoice('');
+      setReceiveCompleted(false);
+      setReceivedAmount(0);
+    }
+    wasReceiveViewRef.current = isReceiveView;
+  }, [isReceiveView, stopAutoRedeem]);
 
   const isBolt11Invoice = (val) => {
     if (!val || typeof val !== 'string') return false;
@@ -566,6 +875,70 @@ function Wallet() {
     return s.replace(/\s+/g, '').toLowerCase();
   };
 
+  // Auto-fetch quote when invoice is entered
+  useEffect(() => {
+    const fetchInvoiceQuote = async () => {
+      if (!sendAddress || !isBolt11Invoice(sendAddress)) {
+        setInvoiceQuote(null);
+        setInvoiceError('');
+        return;
+      }
+
+      try {
+        setInvoiceError('');
+        const bolt11 = normalizeBolt11(sendAddress);
+
+        const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: bolt11, invoice: bolt11 })
+        });
+
+        if (!q.ok) {
+          let msg = '유효하지 않은 인보이스입니다';
+          try {
+            const err = await q.json();
+            if (err?.error) {
+              try {
+                const inner = JSON.parse(err.error);
+                if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
+                else msg = err.error;
+              } catch { msg = err.error; }
+            }
+          } catch {}
+          setInvoiceError(msg);
+          setInvoiceQuote(null);
+          return;
+        }
+
+        const qd = await q.json();
+        const invoiceAmount = Number(qd?.amount || 0);
+        const feeReserve = Number(qd?.fee_reserve || qd?.fee || 0);
+        const need = invoiceAmount + feeReserve;
+        const available = getBalanceSats();
+
+        if (available < need) {
+          setInvoiceError(`잔액 부족: ${formatAmount(need - available)} sats 부족`);
+        }
+
+        setInvoiceQuote({
+          quoteData: qd,
+          bolt11,
+          invoiceAmount,
+          feeReserve,
+          need,
+          available
+        });
+      } catch (error) {
+        console.error('견적 요청 오류:', error);
+        setInvoiceError(error?.message || '견적 요청 실패');
+        setInvoiceQuote(null);
+      }
+    };
+
+    fetchInvoiceQuote();
+  }, [sendAddress]);
+
   // Send confirmation state
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const sendCtxRef = useRef(null); // { bolt11, quoteData }
@@ -576,65 +949,145 @@ function Wallet() {
     }
     const hasInvoice = isBolt11Invoice(sendAddress);
     const hasAddress = isLightningAddress(sendAddress);
+
     if (!hasInvoice && !hasAddress) {
-      alert('라이트닝 인보이스(lnbc...) 또는 라이트닝 주소(user@domain)를 입력하세요');
+      setInvoiceError('라이트닝 인보이스(lnbc...) 또는 라이트닝 주소(user@domain)를 입력하세요');
       return;
     }
 
     try {
       setLoading(true);
-      // Resolve invoice if address provided
-      let bolt11 = hasInvoice ? normalizeBolt11(sendAddress) : '';
-      if (!bolt11 && hasAddress) {
+      let quoteData, bolt11, invoiceAmount, feeReserve, need;
+
+      // Use existing quote for invoice, or create new quote for address
+      if (hasInvoice && invoiceQuote) {
+        ({ quoteData, bolt11, invoiceAmount, feeReserve, need } = invoiceQuote);
+      } else if (hasAddress) {
         const amt = parseInt(sendAmount, 10);
         if (!amt || amt <= 0) throw new Error('금액이 필요합니다');
+
         const rq = await fetch(apiUrl('/api/lightningaddr/quote'), {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: sendAddress, amount: amt })
         });
+
         if (!rq.ok) {
           let msg = '주소 인보이스 발급 실패';
-          try { const err = await rq.json(); if (err?.error) msg = err.error; } catch {}
+          try {
+            const err = await rq.json();
+            if (err?.error) msg = err.error;
+          } catch {}
           throw new Error(msg);
         }
+
         const rqj = await rq.json();
         bolt11 = rqj?.request;
         if (!bolt11) throw new Error('인보이스 발급 실패');
+
+        const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: bolt11, invoice: bolt11 })
+        });
+
+        if (!q.ok) throw new Error('견적 요청 실패');
+
+        quoteData = await q.json();
+        invoiceAmount = Number(quoteData?.amount || 0);
+        feeReserve = Number(quoteData?.fee_reserve || quoteData?.fee || 0);
+        need = invoiceAmount + feeReserve;
+      } else {
+        throw new Error('인보이스 또는 주소를 입력하세요');
       }
-      // quote for bolt11
-      const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request: bolt11, invoice: bolt11 })
+
+      const available = getBalanceSats();
+      if (available < need) {
+        throw new Error(`잔액 부족: ${formatAmount(need - available)} sats 부족`);
+      }
+
+      // Execute send directly
+      const { ok, picked, total } = selectProofsForAmount(need);
+      if (!ok) throw new Error('eCash 잔액이 부족합니다');
+
+      let changeOutputs = undefined;
+      let changeOutputDatas = undefined;
+      const change = Math.max(0, Number(total) - Number(need));
+
+      if (change > 0) {
+        const kr = await fetch(apiUrl('/api/cashu/keys'));
+        if (!kr.ok) throw new Error('Mint keys 조회 실패');
+        const mintKeys = await kr.json();
+        const built = await createBlindedOutputs(change, mintKeys);
+        changeOutputs = built.outputs;
+        changeOutputDatas = built.outputDatas;
+      }
+
+      const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
+
+      const m = await fetch(apiUrl('/api/cashu/melt'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quote: quoteData?.quote || quoteData?.quote_id,
+          inputs: uniquePicked,
+          outputs: changeOutputs
+        })
       });
-      if (!q.ok) {
-        let msg = '견적 요청 실패';
+
+      if (!m.ok) {
+        let msg = '송금 실패';
         try {
-          const err = await q.json();
+          const err = await m.json();
           if (err?.error) {
             try {
               const inner = JSON.parse(err.error);
-              if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
+              if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
+                msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
+              } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
               else msg = err.error;
             } catch { msg = err.error; }
           }
         } catch {}
         throw new Error(msg);
       }
-      const qd = await q.json();
-      const invoiceAmount = Number(qd?.amount || 0);
-      const feeReserve = Number(qd?.fee_reserve || qd?.fee || 0);
-      const need = invoiceAmount + feeReserve;
-      const available = getBalanceSats();
 
-      sendCtxRef.current = { bolt11, quoteData: qd };
-      // Show confirmation modal
-      setShowSendConfirm(true);
-      // Attach computed details to stateful helpers
-      setPendingSendDetails({
-        invoiceAmount, feeReserve, need, available
+      const md = await m.json();
+      let changeProofs = [];
+      const signatures = md?.change || md?.signatures || md?.promises || [];
+
+      if (Array.isArray(signatures) && signatures.length && changeOutputDatas) {
+        const kr2 = await fetch(apiUrl('/api/cashu/keys'));
+        const mintKeys2 = kr2.ok ? await kr2.json() : null;
+        if (mintKeys2) {
+          changeProofs = await signaturesToProofs(signatures, mintKeys2, changeOutputDatas);
+        }
+      }
+
+      removeProofs(picked);
+      if (changeProofs.length) addProofs(changeProofs);
+      setEcashBalance(getBalanceSats());
+      await loadWalletData();
+
+      addTransaction({
+        id: Date.now(),
+        type: 'send',
+        amount: -invoiceAmount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: '라이트닝 송금'
       });
+
+      setSendAmount('');
+      setSendAddress('');
+      setShowSend(false);
+      setEnableSendScanner(false);
+      setInvoiceQuote(null);
+      setInvoiceError('');
+      addToast('라이트닝 송금이 완료되었습니다', 'success');
     } catch (error) {
       console.error('송금 오류:', error);
+      setInvoiceError(error?.message || '송금에 실패했습니다');
       addToast(error?.message || '송금에 실패했습니다', 'error');
     } finally {
       setLoading(false);
@@ -732,14 +1185,8 @@ function Wallet() {
     }
 
     const amount = parseInt(convertAmount);
-    const fee = Math.ceil(amount * ECASH_CONFIG.feeRate);
 
-    if (convertDirection === 'ln_to_ecash') {
-      if (amount > balance) {
-        alert('Lightning 잔액이 부족합니다');
-        return;
-      }
-    } else {
+    if (convertDirection === 'ecash_to_ln') {
       if (amount > ecashBalance) {
         alert('eCash 잔액이 부족합니다');
         return;
@@ -762,25 +1209,6 @@ function Wallet() {
     }
   };
 
-  const connectMint = async () => {
-    try {
-      setLoading(true);
-      const resp = await fetch(apiUrl('/api/cashu/info'));
-      if (!resp.ok) throw new Error('Mint 정보 조회 실패');
-      setIsConnected(true);
-      await loadWalletData();
-      if (!MINT_CONNECTED_TOAST_SHOWN) {
-        addToast('Mint에 연결되었습니다', 'info');
-        MINT_CONNECTED_TOAST_SHOWN = true;
-      }
-    } catch (e) {
-      console.error(e);
-      alert(e.message || 'Mint 연결 실패');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const formatAmount = (sats) => {
     return new Intl.NumberFormat('ko-KR').format(sats);
   };
@@ -797,126 +1225,22 @@ function Wallet() {
 
   return (
     <>
-    <div className="toast-container">
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
-      ))}
-    </div>
-    <div className="wallet">
-      <div className="wallet-header">
-        <h1><Icon name="shield" size={22} /> 한입 지갑</h1>
-        <p>Cashu 기반 프라이버시 중심 비트코인 지갑</p>
+      <div className="toast-container">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
+        ))}
       </div>
-
-      {/* Storage warning banners */}
-      {!storageHealthy && (
-        <div className="warning-banner danger">
-          <div>
-            <strong>저장소 접근 불가</strong> · 이 브라우저에서 eCash를 안전하게 보관할 수 없습니다. 다른 브라우저를 사용하거나, 즉시 백업 후 종료하세요.
-          </div>
-        </div>
-      )}
-      {storageHealthy && showBackupBanner && (
-        <div className="warning-banner warning">
-          <div>
-            <strong>중요</strong> · 브라우저 데이터 삭제 시 eCash 잔액이 사라집니다. 지금 백업 파일을 내려받아 안전하게 보관하세요.
-          </div>
-          <div className="warning-actions">
-            <button className="warning-btn primary" onClick={handleBackup}>백업</button>
-            <button className="warning-btn" onClick={() => { try { localStorage.setItem('cashu_backup_dismissed', '1'); } catch {}; setShowBackupBanner(false); }}>나중에</button>
-          </div>
-        </div>
-      )}
-
-      {/* Connection Status (minimal) */}
-      <div className="connection-status minimal">
-        <div className="status-indicator">
-          <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
-          <small className="status-text">{isConnected ? '연결됨' : '연결 안됨'}</small>
-        </div>
-        {!isConnected && (
-          <button onClick={connectMint} className="connect-btn" disabled={loading}>
-            Mint 연결
-          </button>
-        )}
-      </div>
-
-      {/* Mint explainer moved to About page for clarity */}
-
-
-      {/* Single Balance Card (eCash as primary) */}
-      <div className="balance-cards">
-        <div className="balance-card ecash-card">
-          <div className="balance-header">
-            <div className="balance-info">
-              <h3>
-                <Icon name="shield" size={20} /> 잔액
-              </h3>
-              <div className="balance-amount">
-                {formatAmount(ecashBalance)} <span className="unit">sats</span>
-              </div>
-            </div>
-            <div className="balance-manage">
-              <button className="icon-btn" onClick={handleBackup} title="백업">
-                <Icon name="download" size={18} />
+      {isReceiveView ? (
+        <div className="receive-page">
+          <div className="receive-card">
+            <div className="receive-card-header">
+              <button type="button" className="receive-back-btn" onClick={exitReceiveFlow}>
+                <Icon name="arrow-left" size={18} /> 지갑으로 돌아가기
               </button>
-              <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title="복구">
-                <Icon name="upload" size={18} />
-              </button>
-              <button
-                className="icon-btn"
-                onClick={() => setShowEcashInfo(!showEcashInfo)}
-                title="eCash 정보"
-              >
-                <Icon name="info" size={18} />
-              </button>
-              <input type="file" accept="application/json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleRestoreFile} />
+              <h2><Icon name="inbox" size={20} /> 라이트닝 받기</h2>
+              <p className="receive-subtext">받을 금액을 입력하고 인보이스를 생성해 결제를 받아보세요.</p>
             </div>
-          </div>
-          {showEcashInfo && (
-            <div className="ecash-info-box">
-              <h4><Icon name="shield" size={16} /> eCash란?</h4>
-              <p>eCash는 Cashu 프로토콜을 사용하는 디지털 현금입니다. Mint 서버가 발행하는 암호화된 토큰으로, 라이트닝 네트워크와 연동되어 빠르고 저렴한 결제가 가능합니다.</p>
-              <h4><Icon name="info" size={16} /> 주요 특징</h4>
-              <ul>
-                <li><strong>프라이버시:</strong> 거래 내역이 블록체인에 기록되지 않습니다</li>
-                <li><strong>즉시 결제:</strong> 라이트닝 네트워크를 통한 빠른 송수신</li>
-                <li><strong>낮은 수수료:</strong> 소액 결제에 최적화</li>
-                <li><strong>수탁형이 아님:</strong> 토큰은 브라우저에만 저장되며, 가상자산 신고 대상이 아닙니다</li>
-              </ul>
-            </div>
-          )}
-          <div className="balance-actions">
-            <button
-              onClick={() => setShowReceive(true)}
-              className="action-btn receive-btn"
-              disabled={!isConnected}
-            >
-              <Icon name="inbox" size={16} /> 받기
-            </button>
-            <button
-              onClick={() => {
-                setEnableSendScanner(true);
-                setShowSend(true);
-              }}
-              className="action-btn send-btn"
-              disabled={!isConnected || ecashBalance === 0}
-            >
-              <Icon name="send" size={16} /> 보내기
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Receive Modal */}
-      {showReceive && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>라이트닝 받기</h3>
-              <button onClick={() => { try { stopAutoRedeem(); } catch {} setReceiveCompleted(false); setReceivedAmount(0); setInvoice(''); setShowReceive(false); }} aria-label="닫기"><Icon name="close" size={20} /></button>
-            </div>
-            <div className="modal-body">
+            <div className="receive-card-body">
               {!receiveCompleted ? (
                 <>
                   <div className="input-group">
@@ -929,8 +1253,16 @@ function Wallet() {
                       min="1"
                     />
                   </div>
-                  {invoice && (
-                    <div className="invoice-section">
+                  {invoice ? (
+                    <div className="invoice-section receive-invoice">
+                      <div className="qr-placeholder">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                          alt="Lightning Invoice QR"
+                          className="qr-image"
+                        />
+                        <small>QR 코드로 스캔하여 결제해 주세요. 결제되면 자동으로 수신 처리됩니다.</small>
+                      </div>
                       <label>라이트닝 인보이스</label>
                       <div className="input-with-action">
                         <input
@@ -956,29 +1288,16 @@ function Wallet() {
                           <Icon name="copy" size={18} />
                         </button>
                       </div>
-                      {checkingPayment && (
-                        <div className="payment-checking">
-                          결제 확인 중... (시도 {checkAttempts}회)
-                          <button
-                            type="button"
-                            className="link-btn"
-                            onClick={stopAutoRedeem}
-                          >중지</button>
-                        </div>
-                      )}
-                      <div className="qr-placeholder">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                          alt="Lightning Invoice QR"
-                          className="qr-image"
-                        />
-                        <small>QR 코드로 스캔하여 결제해 주세요. 결제되면 자동으로 수신 처리됩니다.</small>
-                      </div>
+                    </div>
+                  ) : (
+                    <div className="receive-helper">
+                      <Icon name="info" size={16} />
+                      <span>금액을 입력해서 인보이스를 생성하세요.</span>
                     </div>
                   )}
                 </>
               ) : (
-                <div className="payment-success">
+                <div className="payment-success receive-success">
                   <div className="success-checkmark">
                     <svg className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
                       <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
@@ -989,38 +1308,166 @@ function Wallet() {
                   <p className="success-amount">
                     <span className="amount-value">{formatAmount(receivedAmount)}</span> sats
                   </p>
-                  <p className="success-message">
-                    라이트닝 결제를 성공적으로 받았습니다!
-                  </p>
-                  <button
-                    className="primary-btn"
-                    onClick={() => {
-                      setReceiveCompleted(false);
-                      setReceivedAmount(0);
-                      setInvoice('');
-                      setShowReceive(false);
-                    }}
-                    style={{marginTop: '1.5rem'}}
-                  >
-                    확인
-                  </button>
+                  <p className="success-message">라이트닝 결제를 성공적으로 받았습니다.</p>
                 </div>
               )}
-              <div className="modal-actions">
-                {!receiveCompleted && (
-                  <button 
-                    onClick={generateInvoice} 
-                    className="primary-btn"
-                    disabled={loading || !receiveAmount || !!invoice}
+            </div>
+            <div className="receive-card-footer">
+              {!receiveCompleted ? (
+                <div className="receive-actions">
+                  {!invoice && (
+                    <button
+                      onClick={generateInvoice}
+                      className="primary-btn"
+                      disabled={loading || !receiveAmount}
+                    >
+                      {loading ? '생성 중...' : '인보이스 생성'}
+                    </button>
+                  )}
+                  {invoice && (
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        try { stopAutoRedeem(); } catch {}
+                        setInvoice('');
+                        setCheckingPayment(false);
+                        setReceiveCompleted(false);
+                        setReceivedAmount(0);
+                      }}
+                    >
+                      다시 만들기
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={exitReceiveFlow}
                   >
-                    {loading ? '생성 중...' : '인보이스 생성'}
+                    지갑으로 돌아가기
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <button className="primary-btn" onClick={exitReceiveFlow}>확인</button>
+              )}
             </div>
           </div>
         </div>
+      ) : (
+        <div className="wallet">
+      <div className="wallet-header">
+        <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
+        <p>Cashu 기반 프라이버시 중심 비트코인 지갑</p>
+      </div>
+
+      {/* Storage warning banners */}
+      {!storageHealthy && (
+        <div className="warning-banner danger">
+          <div>
+            <strong>저장소 접근 불가</strong> · 이 브라우저에서 eCash를 안전하게 보관할 수 없습니다. 다른 브라우저를 사용하거나, 즉시 백업 후 종료하세요.
+          </div>
+        </div>
       )}
+      {storageHealthy && showBackupBanner && (
+        <div className="warning-banner warning">
+          <div className="warning-content">
+            <strong>중요</strong> · 브라우저 데이터 삭제 시 eCash 잔액이 사라집니다. 지금 백업 파일을 내려받아 안전하게 보관하세요.
+          </div>
+          <button className="warning-close-btn" onClick={() => { try { localStorage.setItem('cashu_backup_dismissed', '1'); } catch {}; setShowBackupBanner(false); }}>
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Connection Status (minimal) */}
+      <div className="connection-status minimal">
+        <div className="status-indicator">
+          <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <small className="status-text">{isConnected ? '연결됨' : '연결 안됨'}</small>
+            {mintUrl && (
+              <small style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace' }}>
+                {mintUrl}
+              </small>
+            )}
+          </div>
+        </div>
+        {!isConnected && (
+          <button onClick={connectMint} className="connect-btn" disabled={loading}>
+            Mint 연결
+          </button>
+        )}
+      </div>
+
+      {/* Mint explainer moved to About page for clarity */}
+
+
+      {/* Single Balance Card (eCash as primary) */}
+      <div className="balance-cards">
+        <div className="balance-card ecash-card">
+          <div className="balance-header">
+            <div className="balance-info">
+              <h3>
+                <Icon name="shield" size={20} /> 잔액
+              </h3>
+              <div className="balance-amount">
+                {formatAmount(ecashBalance)} <span className="unit">sats</span>
+              </div>
+            </div>
+            <div className="balance-manage">
+              <button className="icon-btn" onClick={checkPendingQuote} title="미처리 결제 확인" disabled={loading}>
+                <Icon name="repeat" size={18} />
+              </button>
+              <button className="icon-btn" onClick={handleBackup} title="백업">
+                <Icon name="download" size={18} />
+              </button>
+              <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title="복구">
+                <Icon name="upload" size={18} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => setShowEcashInfo(!showEcashInfo)}
+                title="eCash 정보"
+              >
+                <Icon name="info" size={18} />
+              </button>
+              <input type="file" accept="application/json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleRestoreFile} />
+            </div>
+          </div>
+          {showEcashInfo && (
+            <div className="ecash-info-box">
+              <h4><Icon name="shield" size={16} /> eCash란?</h4>
+              <p>eCash는 Cashu 프로토콜을 사용하는 디지털 현금입니다. Mint 서버가 발행하는 암호화된 토큰으로, 라이트닝 네트워크와 연동되어 빠르고 저렴한 결제가 가능합니다.</p>
+              <h4><Icon name="info" size={16} /> 주요 특징</h4>
+              <ul>
+                <li><strong>프라이버시:</strong> 거래 내역이 블록체인에 기록되지 않습니다</li>
+                <li><strong>즉시 결제:</strong> 라이트닝 네트워크를 통한 빠른 송수신</li>
+                <li><strong>낮은 수수료:</strong> 소액 결제에 최적화</li>
+                <li><strong>수탁형이 아님:</strong> 토큰은 브라우저에만 저장됩니다</li>
+              </ul>
+            </div>
+          )}
+          <div className="balance-actions">
+            <button
+              onClick={handleReceiveNavigation}
+              className="action-btn receive-btn"
+              disabled={!isConnected}
+            >
+              <Icon name="inbox" size={16} /> 받기
+            </button>
+            <button
+              onClick={() => {
+                setEnableSendScanner(true);
+                setShowSend(true);
+              }}
+              className="action-btn send-btn"
+              disabled={!isConnected || ecashBalance === 0}
+            >
+              <Icon name="send" size={16} /> 보내기
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Send Modal */}
       {showSend && (
@@ -1028,40 +1475,25 @@ function Wallet() {
           <div className="modal">
             <div className="modal-header">
               <h3>라이트닝 보내기</h3>
-              <button onClick={() => { setEnableSendScanner(false); setShowSend(false); }} aria-label="닫기"><Icon name="close" size={20} /></button>
+              <button onClick={() => { setEnableSendScanner(false); setShowSend(false); setInvoiceQuote(null); setInvoiceError(''); }} aria-label="닫기"><Icon name="close" size={20} /></button>
             </div>
             <div className="modal-body">
               {enableSendScanner && (
                 <QrScanner onScan={handleSendQrScan} onError={handleSendQrError} />
               )}
               <div className="input-group">
-                <label>보낼 금액 (sats)</label>
-                <input
-                  type="number"
-                  value={sendAmount}
-                  onChange={(e) => setSendAmount(e.target.value)}
-                  placeholder="인보이스에 금액이 포함된 경우 비활성화됩니다"
-                  min="1"
-                  max={ecashBalance}
-                  disabled={isBolt11Invoice(sendAddress)}
-                />
-                <small>
-                  사용 가능: {formatAmount(ecashBalance)} sats{isBolt11Invoice(sendAddress) ? ' · 인보이스 금액이 사용됩니다' : ''}
-                </small>
-              </div>
-              <div className="input-group">
                 <label>라이트닝 인보이스 또는 주소</label>
                 <textarea
                   value={sendAddress}
                   onChange={(e) => setSendAddress(e.target.value)}
-                  placeholder={isBolt11Invoice(sendAddress) ? 'lnbc...' : 'user@domain 또는 lnbc...'}
+                  placeholder="lnbc... 또는 user@domain"
                   rows="3"
                 />
                 <small>
                   {isBolt11Invoice(sendAddress)
-                    ? '인보이스가 감지되었습니다'
+                    ? '✓ 인보이스가 감지되었습니다'
                     : isLightningAddress(sendAddress)
-                      ? '라이트닝 주소가 감지되었습니다'
+                      ? '✓ 라이트닝 주소가 감지되었습니다'
                       : '라이트닝 인보이스(lnbc...) 또는 주소(user@domain)를 입력하세요'}
                 </small>
                 {!enableSendScanner && (
@@ -1076,12 +1508,42 @@ function Wallet() {
                   </div>
                 )}
               </div>
+              {!isBolt11Invoice(sendAddress) && (
+                <div className="input-group">
+                  <label>보낼 금액 (sats)</label>
+                  <input
+                    type="number"
+                    value={sendAmount}
+                    onChange={(e) => setSendAmount(e.target.value)}
+                    placeholder="금액 입력"
+                    min="1"
+                    max={ecashBalance}
+                  />
+                  <small>사용 가능: {formatAmount(ecashBalance)} sats</small>
+                </div>
+              )}
+              {invoiceQuote && (
+                <div className="conversion-info" style={{ marginTop: '1rem' }}>
+                  <div className="info-item"><Icon name="bolt" size={16} /> 송금 금액: {formatAmount(invoiceQuote.invoiceAmount)} sats</div>
+                  <div className="info-item"><Icon name="info" size={16} /> 수수료: {formatAmount(invoiceQuote.feeReserve)} sats</div>
+                  <div className="info-item"><Icon name="diamond" size={16} /> 총 필요: {formatAmount(invoiceQuote.need)} sats</div>
+                  <div className="info-item"><Icon name="shield" size={16} /> 보유 잔액: {formatAmount(invoiceQuote.available)} sats</div>
+                </div>
+              )}
+              {invoiceError && (
+                <div className="warning-banner danger" style={{ marginTop: '1rem' }}>
+                  {invoiceError}
+                </div>
+              )}
               <div className="modal-actions">
                  <button
                   onClick={prepareSend}
                   className="primary-btn"
                   disabled={
-                    loading || (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0))
+                    loading ||
+                    !!invoiceError ||
+                    (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
+                    (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
                   {loading ? '송금 중...' : '송금하기'}
@@ -1166,10 +1628,10 @@ function Wallet() {
                   onChange={(e) => setConvertAmount(e.target.value)}
                   placeholder="10000"
                   min="1"
-                  max={convertDirection === 'ln_to_ecash' ? balance : ecashBalance}
+                  max={ecashBalance}
                 />
                 <small>
-                  사용 가능: {formatAmount(convertDirection === 'ln_to_ecash' ? balance : ecashBalance)} sats
+                  사용 가능: {formatAmount(ecashBalance)} sats
                   {convertAmount && (
                     <>
                       <br />
@@ -1435,7 +1897,8 @@ function Wallet() {
         )}
       </div>
     </div>
-    
+      )}
+
     </>
   );
 }

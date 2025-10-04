@@ -117,7 +117,10 @@ function QrScanner({ onScan, onError, className = '' }) {
 
         detect();
       } catch (err) {
-        const message = err && err.message ? err.message : '카메라를 시작할 수 없습니다.';
+        let message = err && err.message ? err.message : '카메라를 시작할 수 없습니다.';
+        if (err.name === 'NotAllowedError') {
+          message = '카메라 권한이 거부되었습니다.';
+        }
         setErrorMessage(message);
         if (typeof onError === 'function') onError(err);
       }

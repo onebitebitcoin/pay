@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Layout.css';
 import Icon from './Icon';
@@ -9,8 +9,6 @@ const Layout = ({ children }) => {
   const [pinLocked, setPinLocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
-  const [showAdminMode, setShowAdminMode] = useState(false);
-  const pressTimerRef = useRef(null);
 
   const navigation = [
     { name: '지갑', path: '/', icon: 'shield' },
@@ -143,21 +141,27 @@ const Layout = ({ children }) => {
         <div className="header-content">
           <div className="brand">
             <h1 className="header-title">
-              <span className="bitcoin-icon"><Icon name="bitcoin" size={20} /></span>
+              <img src="/logo-192.png" alt="한입 로고" className="header-logo" />
               한입 결제
             </h1>
           </div>
           <nav className="topnav">
-            {navigation.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`topnav-link ${location.pathname === item.path ? 'active' : ''}`}
-              >
+            {navigation.map((item) => {
+              const isWalletPath = item.path === '/';
+              const active = isWalletPath
+                ? location.pathname === '/' || location.pathname.startsWith('/wallet')
+                : location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`topnav-link ${active ? 'active' : ''}`}
+                >
                 <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
                 <span className="nav-text">{item.name}</span>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </nav>
           <button
             className="topnav-toggle"
@@ -170,17 +174,23 @@ const Layout = ({ children }) => {
       </header>
       {navOpen && (
         <div className="topnav-drawer">
-          {navigation.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`topnav-drawer-link ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => setNavOpen(false)}
-            >
+          {navigation.map((item) => {
+            const isWalletPath = item.path === '/';
+            const active = isWalletPath
+              ? location.pathname === '/' || location.pathname.startsWith('/wallet')
+              : location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`topnav-drawer-link ${active ? 'active' : ''}`}
+                onClick={() => setNavOpen(false)}
+              >
               <span className="nav-icon"><Icon name={item.icon} size={18} /></span>
               <span className="nav-text">{item.name}</span>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
 

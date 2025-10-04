@@ -8,8 +8,9 @@ function Settings() {
     language: 'ko',
     currency: 'SATS',
     notifications: true,
-    darkMode: false,
+    darkMode: true,
     mintUrl: '',
+    backupMintUrl: '',
     autoBackup: false,
     pinEnabled: false
   });
@@ -19,6 +20,10 @@ function Settings() {
   const [pinConfirm, setPinConfirm] = useState('');
   const [currentPin, setCurrentPin] = useState('');
   const [pinStep, setPinStep] = useState('current'); // 'current', 'new', 'confirm'
+  const [testingMainUrl, setTestingMainUrl] = useState(false);
+  const [testingBackupUrl, setTestingBackupUrl] = useState(false);
+  const [mainUrlStatus, setMainUrlStatus] = useState(null);
+  const [backupUrlStatus, setBackupUrlStatus] = useState(null);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -28,8 +33,9 @@ function Settings() {
         language: 'ko',
         currency: 'SATS',
         notifications: true,
-        darkMode: false,
+        darkMode: true,
         mintUrl: DEFAULT_MINT_URL,
+        backupMintUrl: '',
         autoBackup: false,
         pinEnabled: false
       };
@@ -38,34 +44,34 @@ function Settings() {
         const merged = {
           ...defaultSettings,
           ...parsed,
-          mintUrl: parsed.mintUrl || DEFAULT_MINT_URL
+          mintUrl: parsed.mintUrl || DEFAULT_MINT_URL,
+          backupMintUrl: parsed.backupMintUrl || ''
         };
         setSettings(merged);
         document.documentElement.classList.toggle('dark', !!merged.darkMode);
       } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         const merged = {
           ...defaultSettings,
-          darkMode: prefersDark
+          darkMode: true
         };
         setSettings(merged);
-        document.documentElement.classList.toggle('dark', prefersDark);
+        document.documentElement.classList.toggle('dark', true);
         localStorage.setItem('app_settings', JSON.stringify(merged));
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       const fallback = {
         language: 'ko',
         currency: 'SATS',
         notifications: true,
-        darkMode: prefersDark,
+        darkMode: true,
         mintUrl: DEFAULT_MINT_URL,
+        backupMintUrl: '',
         autoBackup: false,
         pinEnabled: false
       };
       setSettings(fallback);
-      document.documentElement.classList.toggle('dark', prefersDark);
+      document.documentElement.classList.toggle('dark', true);
     }
   }, []);
 
@@ -152,6 +158,52 @@ function Settings() {
     }
   };
 
+  const testMintConnection = async (url, isBackup = false) => {
+    if (!url || !url.trim()) {
+      alert('URL을 입력해주세요');
+      return;
+    }
+
+    const setTesting = isBackup ? setTestingBackupUrl : setTestingMainUrl;
+    const setStatus = isBackup ? setBackupUrlStatus : setMainUrlStatus;
+
+    try {
+      setTesting(true);
+      setStatus(null);
+
+      // Normalize URL
+      const normalizedUrl = url.trim().replace(/\/$/, '');
+
+      // Test connection to Mint
+      const response = await fetch(`${normalizedUrl}/v1/info`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: 연결 실패`);
+      }
+
+      const data = await response.json();
+
+      // Verify it's a valid Cashu mint
+      if (!data.name && !data.version) {
+        throw new Error('유효한 Cashu Mint가 아닙니다');
+      }
+
+      setStatus({
+        success: true,
+        message: `연결 성공 (${data.name || 'Cashu Mint'})`,
+        data
+      });
+    } catch (error) {
+      console.error('Mint connection test failed:', error);
+      setStatus({
+        success: false,
+        message: error.message || '연결 실패'
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleResetWallet = () => {
     if (window.confirm('정말로 지갑을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
       if (window.confirm('모든 데이터가 삭제됩니다. 백업을 확인하셨나요?')) {
@@ -229,20 +281,6 @@ function Settings() {
             </select>
           </div>
 
-          <div className="setting-item">
-            <div className="setting-info">
-              <div className="setting-title">다크 모드</div>
-              <div className="setting-description">어두운 테마 사용</div>
-            </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={settings.darkMode}
-                onChange={(e) => handleSettingChange('darkMode', e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-          </div>
         </div>
 
         {/* Security Settings */}
@@ -277,21 +315,94 @@ function Settings() {
         <div className="settings-section">
           <h2>Cashu Mint 설정</h2>
 
-          <div className="setting-item">
+          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
             <div className="setting-info">
-              <div className="setting-title">Mint URL</div>
+              <div className="setting-title">메인 Mint URL</div>
               <div className="setting-description">
-                현재 사용 중인 Cashu Mint (변경 시 주의)
+                주로 사용할 Cashu Mint 서버 (변경 후 페이지 새로고침 필요)
               </div>
             </div>
-            <input
-              type="url"
-              placeholder={DEFAULT_MINT_URL}
-              value={settings.mintUrl}
-              onChange={(e) => handleSettingChange('mintUrl', e.target.value)}
-              className="setting-input"
-              disabled
-            />
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="url"
+                placeholder={DEFAULT_MINT_URL}
+                value={settings.mintUrl}
+                onChange={(e) => {
+                  handleSettingChange('mintUrl', e.target.value);
+                  setMainUrlStatus(null);
+                }}
+                className="setting-input"
+                style={{ flex: 1 }}
+              />
+              <button
+                onClick={() => testMintConnection(settings.mintUrl, false)}
+                className="setting-button"
+                disabled={testingMainUrl || !settings.mintUrl}
+              >
+                {testingMainUrl ? '테스트 중...' : '연결 테스트'}
+              </button>
+            </div>
+            {mainUrlStatus && (
+              <div style={{
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: mainUrlStatus.success ? '#d1fae5' : '#fee2e2',
+                color: mainUrlStatus.success ? '#065f46' : '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <Icon name={mainUrlStatus.success ? 'check' : 'close'} size={16} />
+                <span>{mainUrlStatus.message}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="setting-info">
+              <div className="setting-title">백업 Mint URL</div>
+              <div className="setting-description">
+                메인 서버 연결 실패 시 자동으로 사용할 백업 서버 (선택사항)
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="url"
+                placeholder="백업 Mint URL (선택사항)"
+                value={settings.backupMintUrl}
+                onChange={(e) => {
+                  handleSettingChange('backupMintUrl', e.target.value);
+                  setBackupUrlStatus(null);
+                }}
+                className="setting-input"
+                style={{ flex: 1 }}
+              />
+              <button
+                onClick={() => testMintConnection(settings.backupMintUrl, true)}
+                className="setting-button"
+                disabled={testingBackupUrl || !settings.backupMintUrl}
+              >
+                {testingBackupUrl ? '테스트 중...' : '연결 테스트'}
+              </button>
+            </div>
+            {backupUrlStatus && (
+              <div style={{
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: backupUrlStatus.success ? '#d1fae5' : '#fee2e2',
+                color: backupUrlStatus.success ? '#065f46' : '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <Icon name={backupUrlStatus.success ? 'check' : 'close'} size={16} />
+                <span>{backupUrlStatus.message}</span>
+              </div>
+            )}
           </div>
         </div>
 

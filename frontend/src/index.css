@@ -73,6 +73,7 @@ body {
   color: var(--text);
   line-height: 1.6;
   transition: background-color 0.3s, color 0.3s;
+  overflow-y: auto;
 }
 
 :root.dark body {

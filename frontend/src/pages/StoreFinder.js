@@ -15,6 +15,10 @@ function StoreFinder() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [sortByDistance, setSortByDistance] = useState(false);
+  const [manualMapControl, setManualMapControl] = useState(false);
   const createEmptyStore = () => ({
     name: '',
     category: '',
@@ -29,9 +33,12 @@ function StoreFinder() {
   const mapRef = useRef();
   const kakaoMapRef = useRef();
   const markersRef = useRef([]);
+  const infowindowsRef = useRef([]);
   const mapClickHandlerRef = useRef(null);
   const geocoderRef = useRef(null);
   const tempMarkerRef = useRef(null);
+  const userMarkerRef = useRef(null);
+  const currentInfowindowRef = useRef(null);
 
   useEffect(() => {
     fetchStores();
@@ -54,9 +61,83 @@ function StoreFinder() {
 
   useEffect(() => {
     filterStores();
-  }, [searchQuery, stores, selectedCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchQuery, stores, selectedCategory, sortByDistance, userLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const categories = ['전체', ...new Set(stores.map(s => s.category).filter(Boolean))];
+
+  // Calculate distance between two coordinates (Haversine formula)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in km
+  };
+
+  const getUserLocation = () => {
+    if (!navigator.geolocation) {
+      alert('이 브라우저는 위치 서비스를 지원하지 않습니다.');
+      return;
+    }
+
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+        setSortByDistance(true);
+
+        // Move map to user location
+        if (kakaoMapRef.current && window.kakao) {
+          const moveLatLon = new window.kakao.maps.LatLng(latitude, longitude);
+          kakaoMapRef.current.setCenter(moveLatLon);
+          kakaoMapRef.current.setLevel(5); // Level 5 shows approximately 1-2km radius
+
+          // Add user location marker
+          if (userMarkerRef.current) {
+            userMarkerRef.current.setMap(null);
+          }
+
+          const imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
+          const imageSize = new window.kakao.maps.Size(24, 35);
+          const markerImage = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
+
+          const marker = new window.kakao.maps.Marker({
+            position: moveLatLon,
+            image: markerImage,
+            title: '내 위치'
+          });
+
+          marker.setMap(kakaoMapRef.current);
+          userMarkerRef.current = marker;
+        }
+
+        setLoadingLocation(false);
+      },
+      (error) => {
+        console.error('위치 가져오기 실패:', error);
+        let errorMsg = '위치를 가져올 수 없습니다.';
+        if (error.code === 1) {
+          errorMsg = '위치 접근 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.';
+        } else if (error.code === 2) {
+          errorMsg = '위치를 확인할 수 없습니다.';
+        } else if (error.code === 3) {
+          errorMsg = '위치 요청 시간이 초과되었습니다.';
+        }
+        alert(errorMsg);
+        setLoadingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   const fetchStores = async () => {
     try {
@@ -241,9 +322,10 @@ function StoreFinder() {
   const updateMapMarkers = (storeData) => {
     if (!kakaoMapRef.current || !window.kakao) return;
 
-    // Clear existing markers
+    // Clear existing markers and infowindows
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
+    infowindowsRef.current = [];
 
     // Create custom marker image for Bitcoin stores
     const svgIcon = `
@@ -274,24 +356,69 @@ function StoreFinder() {
       // Create info window
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `
-          <div style="padding: 15px; width: 250px; text-align: center; color: var(--text);">
-            <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 16px;">${store.name}</h3>
-            <p style="margin: 0 0 5px 0; color: var(--primary); font-size: 14px; font-weight: 600;">${store.category}</p>
-            <p style="margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4;">${store.address}</p>
+          <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
+            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${store.name}</h3>
+            <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${store.category}</p>
+            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${store.address}</p>
+            <button
+              id="store-detail-btn-${store.id}"
+              style="
+                padding: 6px 12px;
+                background: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                transition: background 0.2s;
+              "
+              onmouseover="this.style.background='#1d4ed8'"
+              onmouseout="this.style.background='#2563eb'"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              자세히 보기
+            </button>
           </div>
         `
       });
 
       // Add click event to marker
       window.kakao.maps.event.addListener(marker, 'click', () => {
+        // Close previous infowindow
+        if (currentInfowindowRef.current) {
+          currentInfowindowRef.current.close();
+        }
+
         infowindow.open(kakaoMapRef.current, marker);
+        currentInfowindowRef.current = infowindow;
+
+        // Attach click event to detail button after infowindow is rendered
+        setTimeout(() => {
+          const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
+          if (detailBtn) {
+            detailBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openStoreDetail(store);
+            };
+          }
+        }, 100);
       });
 
       markersRef.current.push(marker);
+      infowindowsRef.current.push({ storeId: store.id, marker, infowindow });
     });
 
-    // Adjust map bounds to show all markers
-    if (storeData.length > 0) {
+    // Adjust map bounds to show all markers (skip if user location mode is active or manual control)
+    if (storeData.length > 0 && !sortByDistance && !manualMapControl) {
       const bounds = new window.kakao.maps.LatLngBounds();
       storeData.forEach(store => {
         bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
@@ -317,15 +444,52 @@ function StoreFinder() {
       );
     }
 
+    // Add distance and sort if user location is available
+    if (sortByDistance && userLocation) {
+      filtered = filtered.map(store => ({
+        ...store,
+        distance: calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng)
+      })).sort((a, b) => a.distance - b.distance);
+    }
+
+    // Reset manual control when filters change
+    setManualMapControl(false);
+
     setFilteredStores(filtered);
     updateMapMarkers(filtered);
   };
 
   const handleStoreClick = (store) => {
     if (kakaoMapRef.current && window.kakao) {
+      setManualMapControl(true); // Prevent auto bounds adjustment
+
       const moveLatLon = new window.kakao.maps.LatLng(store.lat, store.lng);
       kakaoMapRef.current.setCenter(moveLatLon);
       kakaoMapRef.current.setLevel(3); // Zoom in
+
+      // Find and open the corresponding infowindow
+      const storeMarkerData = infowindowsRef.current.find(item => item.storeId === store.id);
+      if (storeMarkerData) {
+        // Close previous infowindow
+        if (currentInfowindowRef.current) {
+          currentInfowindowRef.current.close();
+        }
+
+        storeMarkerData.infowindow.open(kakaoMapRef.current, storeMarkerData.marker);
+        currentInfowindowRef.current = storeMarkerData.infowindow;
+
+        // Attach click event to detail button
+        setTimeout(() => {
+          const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
+          if (detailBtn) {
+            detailBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openStoreDetail(store);
+            };
+          }
+        }, 100);
+      }
     }
   };
 
@@ -337,6 +501,16 @@ function StoreFinder() {
   const closeStoreDetail = () => {
     setShowDetailModal(false);
     setSelectedStore(null);
+  };
+
+  const copyToClipboard = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`${label}이(가) 클립보드에 복사되었습니다.`);
+    } catch (err) {
+      console.error('복사 실패:', err);
+      alert('복사에 실패했습니다.');
+    }
   };
 
   const handleDeleteStore = async (store) => {
@@ -396,6 +570,14 @@ function StoreFinder() {
           </div>
           <button
             type="button"
+            onClick={getUserLocation}
+            className={`location-btn ${sortByDistance ? 'active' : ''}`}
+            disabled={loadingLocation}
+          >
+            <Icon name="map" size={18} /> {loadingLocation ? '위치 확인 중...' : sortByDistance ? '내 주변 매장 ✓' : '내 주변 매장'}
+          </button>
+          <button
+            type="button"
             onClick={openAddModal}
             className="add-store-btn"
             disabled={adding}
@@ -411,7 +593,7 @@ function StoreFinder() {
 
         <div className="store-finder-sidebar">
           <h3 className="sidebar-title">
-            비트코인 매장 ({filteredStores.length}개)
+            비트코인 매장 ({filteredStores.length}개) {sortByDistance && userLocation && '· 거리순'}
           </h3>
           <div className="store-list">
             {filteredStores.map(store => (
@@ -420,42 +602,39 @@ function StoreFinder() {
                 className="store-card"
               >
                 <div className="store-card-content">
-                  <h4 className="store-name">{store.name}</h4>
-                  <p className="store-category">{store.category}</p>
+                  <div className="store-card-header">
+                    <h4 className="store-name">
+                      {store.name}
+                      {sortByDistance && store.distance !== undefined && (
+                        <span className="store-distance"> · {store.distance < 1 ? `${Math.round(store.distance * 1000)}m` : `${store.distance.toFixed(1)}km`}</span>
+                      )}
+                    </h4>
+                    <div className="store-card-actions">
+                      <button
+                        type="button"
+                        className="store-action-icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStoreClick(store);
+                        }}
+                        title="위치 보기"
+                      >
+                        <Icon name="map" size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        className="store-action-icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openStoreDetail(store);
+                        }}
+                        title="자세히"
+                      >
+                        <Icon name="info" size={18} />
+                      </button>
+                    </div>
+                  </div>
                   <p className="store-address">{store.address}</p>
-                </div>
-                <div className="store-card-actions">
-                  <button
-                    type="button"
-                    className="store-action-link"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStoreClick(store);
-                    }}
-                  >
-                    <Icon name="map" size={14} /> 위치 보기
-                  </button>
-                  <button
-                    type="button"
-                    className="store-action-link"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openStoreDetail(store);
-                    }}
-                  >
-                    <Icon name="info" size={14} /> 자세히
-                  </button>
-                  <button
-                    type="button"
-                    className="store-action-link danger"
-                    disabled={deleteLoadingId === store.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteStore(store);
-                    }}
-                  >
-                    <Icon name="trash" size={14} /> {deleteLoadingId === store.id ? '삭제 중...' : '삭제'}
-                  </button>
                 </div>
               </div>
             ))}
@@ -562,27 +741,51 @@ function StoreFinder() {
               <div className="store-detail-info">
                 <div className="store-detail-item">
                   <Icon name="map" size={18} />
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <strong>주소</strong>
                     <p>{selectedStore.address}</p>
                   </div>
+                  <button
+                    type="button"
+                    className="copy-btn"
+                    onClick={() => copyToClipboard(selectedStore.address, '주소')}
+                    title="주소 복사"
+                  >
+                    <Icon name="copy" size={16} />
+                  </button>
                 </div>
                 {selectedStore.phone && (
                   <div className="store-detail-item">
                     <Icon name="info" size={18} />
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <strong>전화번호</strong>
                       <p>{selectedStore.phone}</p>
                     </div>
+                    <button
+                      type="button"
+                      className="copy-btn"
+                      onClick={() => copyToClipboard(selectedStore.phone, '전화번호')}
+                      title="전화번호 복사"
+                    >
+                      <Icon name="copy" size={16} />
+                    </button>
                   </div>
                 )}
                 {selectedStore.hours && (
                   <div className="store-detail-item">
                     <Icon name="clock" size={18} />
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <strong>영업시간</strong>
                       <p>{selectedStore.hours}</p>
                     </div>
+                    <button
+                      type="button"
+                      className="copy-btn"
+                      onClick={() => copyToClipboard(selectedStore.hours, '영업시간')}
+                      title="영업시간 복사"
+                    >
+                      <Icon name="copy" size={16} />
+                    </button>
                   </div>
                 )}
                 {selectedStore.description && (
@@ -612,16 +815,6 @@ function StoreFinder() {
               onClick={() => handleDeleteStore(selectedStore)}
             >
               <Icon name="trash" size={16} /> {deleteLoadingId === selectedStore.id ? '삭제 중...' : '삭제'}
-            </button>
-            <button
-              type="button"
-              className="sf-btn primary"
-              onClick={() => {
-                handleStoreClick(selectedStore);
-                closeStoreDetail();
-              }}
-            >
-              <Icon name="map" size={16} /> 지도에서 보기
             </button>
             <button type="button" className="sf-btn" onClick={closeStoreDetail}>닫기</button>
           </div>

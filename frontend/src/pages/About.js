@@ -15,15 +15,11 @@ function About() {
         },
         {
           q: 'eCash는 수탁형 지갑인가요?',
-          a: '아니요, Cashu eCash는 전통적인 수탁형 지갑과 다릅니다. eCash 토큰은 귀하의 브라우저에만 저장되며, Mint 서버는 토큰을 보관하지 않습니다. Mint는 단지 토큰을 발행하고 상환하는 역할만 하며, 누가 어떤 토큰을 가지고 있는지 추적할 수 없습니다. 따라서 한국의 가상자산 신고 대상이 아닙니다.'
-        },
-        {
-          q: 'Cashu가 가상자산 신고 대상이 아닌 이유는?',
-          a: 'Cashu eCash는 수탁형 서비스가 아니기 때문에 특정금융정보법상 가상자산 신고 대상이 아닙니다. Mint는 토큰을 발행만 할 뿐 보유자를 파악할 수 없으며, 토큰은 사용자 브라우저에만 저장됩니다. 이는 물리적 현금과 유사한 모델로, Mint는 단순히 상환 가능한 영수증을 발행하는 역할만 합니다.'
+          a: '아니요, Cashu eCash는 전통적인 수탁형 지갑과 다릅니다. eCash 토큰은 귀하의 브라우저에만 저장되며, Mint 서버는 토큰을 보관하지 않습니다. Mint는 단지 토큰을 발행하고 상환하는 역할만 하며, 누가 어떤 토큰을 가지고 있는지 추적할 수 없습니다.'
         },
         {
           q: 'eCash의 주요 장점은 무엇인가요?',
-          a: '1) 프라이버시: Mint조차 누가 어떤 토큰을 사용하는지 알 수 없습니다. 2) 즉시 결제: 라이트닝 네트워크를 통한 즉각적인 송수신. 3) 낮은 수수료: 소액 결제에 최적화. 4) 오프라인 거래: 인터넷 없이도 토큰 교환 가능. 5) 규제 대상 아님: 수탁형이 아니므로 가상자산 신고 대상이 아닙니다.'
+          a: '1) 프라이버시: Mint조차 누가 어떤 토큰을 사용하는지 알 수 없습니다. 2) 즉시 결제: 라이트닝 네트워크를 통한 즉각적인 송수신. 3) 낮은 수수료: 소액 결제에 최적화. 4) 오프라인 거래: 인터넷 없이도 토큰 교환 가능.'
         }
       ]
     },
@@ -108,6 +104,10 @@ function About() {
         {
           q: '라이트닝 주소로 송금이 안 돼요',
           a: '라이트닝 주소 송금 시 금액을 반드시 입력해야 합니다. 주소 형식이 올바른지(user@domain) 확인하고, 상대방의 라이트닝 주소가 활성화되어 있는지 확인하세요.'
+        },
+        {
+          q: '추가 문의사항이 있어요',
+          a: '위 FAQ로 해결되지 않는 문제가 있다면 onebitebitcoin@proton.me 로 문의해주세요. 최대한 빠르게 답변드리겠습니다.'
         }
       ]
     }
@@ -138,10 +138,8 @@ function About() {
               <h2 style={{
                 marginBottom: '1.5rem',
                 fontSize: '1.75rem',
-                background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text'
+                color: 'var(--primary)',
+                fontWeight: '700'
               }}>
                 {category.category}
               </h2>
@@ -154,9 +152,9 @@ function About() {
                     <div
                       key={index}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.9)',
+                        background: 'var(--card-bg)',
                         backdropFilter: 'blur(10px)',
-                        border: '1px solid var(--border)',
+                        border: '2px solid var(--border)',
                         borderRadius: 'var(--radius)',
                         overflow: 'hidden',
                         transition: 'all 0.3s',
@@ -188,6 +186,8 @@ function About() {
                         <div
                           style={{
                             padding: '0 1.5rem 1.25rem 1.5rem',
+                            background: 'rgba(var(--primary-rgb), 0.03)',
+                            borderTop: '1px solid var(--border)',
                             color: 'var(--text)',
                             lineHeight: '1.8',
                             animation: 'fadeIn 0.3s ease-out'

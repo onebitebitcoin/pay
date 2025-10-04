@@ -1,15 +1,133 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const http = require('http');
+const WebSocket = require('ws');
 require('dotenv').config();
 
 const db = require('./db');
-const { makeLightningProvider } = require('./lightning');
 const cashu = require('./cashu');
 const lnaddr = require('./lightningaddr');
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 5001;
+
+// WebSocket connection handling
+wss.on('connection', (ws) => {
+  console.log('Client connected to WebSocket');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('Received WebSocket message:', data);
+    } catch (e) {
+      console.error('Invalid WebSocket message:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected from WebSocket');
+  });
+
+  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connection established' }));
+});
+
+// Broadcast function to send messages to all connected clients
+function broadcastPaymentNotification(data) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
+        type: 'payment_received',
+        ...data
+      }));
+    }
+  });
+}
+
+// Store active quotes being monitored and cache redeemed signatures briefly
+const activeQuotes = new Map();
+const redeemedQuotes = new Map();
+
+function cacheRedeemedQuote(quoteId, data) {
+  redeemedQuotes.set(quoteId, data);
+  setTimeout(() => {
+    if (redeemedQuotes.get(quoteId) === data) {
+      redeemedQuotes.delete(quoteId);
+    }
+  }, 10 * 60 * 1000); // keep for 10 minutes
+}
+
+// Monitor quote status and auto-redeem when paid
+async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys) {
+  const maxAttempts = 60; // 2 minutes at 2s interval
+  let attempts = 0;
+
+  const checkInterval = setInterval(async () => {
+    try {
+      attempts++;
+
+      // Check if quote still exists in active quotes
+      if (!activeQuotes.has(quoteId)) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      // Check quote state
+      const checkResp = await cashu.checkMintQuote({ quote: quoteId });
+      const state = (checkResp?.state || '').toUpperCase();
+
+      if (state === 'PAID' || state === 'ISSUED') {
+        // Quote is paid, proceed with redemption
+        try {
+          const redeemResult = await cashu.mintBolt11({ quote: quoteId, outputs });
+          const signatures = redeemResult?.signatures || redeemResult?.promises || [];
+
+          if (Array.isArray(signatures) && signatures.length > 0) {
+            const totalAmount = signatures.reduce((sum, sig) => {
+              return sum + (parseInt(sig?.amount, 10) || 0);
+            }, 0);
+
+            const mintedAt = new Date().toISOString();
+            const redeemPayload = {
+              quote: quoteId,
+              amount: totalAmount,
+              signatures,
+              keysetId: redeemResult?.keyset_id || redeemResult?.keysetId || null,
+              timestamp: mintedAt,
+            };
+
+            cacheRedeemedQuote(quoteId, redeemPayload);
+
+            // Broadcast payment notification
+            broadcastPaymentNotification(redeemPayload);
+
+            console.log(`Payment auto-redeemed: ${totalAmount} sats for quote ${quoteId}`);
+
+            // Remove from active quotes
+            activeQuotes.delete(quoteId);
+            clearInterval(checkInterval);
+          }
+        } catch (redeemError) {
+          console.error('Auto-redeem failed:', redeemError);
+          // Keep monitoring in case it was a temporary error
+        }
+      } else if (attempts >= maxAttempts) {
+        // Timeout - stop monitoring
+        console.log(`Quote ${quoteId} monitoring timeout after ${maxAttempts} attempts`);
+        activeQuotes.delete(quoteId);
+        clearInterval(checkInterval);
+      }
+    } catch (error) {
+      console.error('Quote monitoring error:', error);
+      // Continue monitoring despite errors
+    }
+  }, 2000); // Check every 2 seconds
+
+  // Store the interval ID so it can be cancelled if needed
+  activeQuotes.set(quoteId, { checkInterval, amount, createdAt: Date.now() });
+}
 
 app.use(helmet());
 app.use(cors({
@@ -258,24 +376,7 @@ app.get('/health', (req, res) => {
   res.json({ status: '정상', timestamp: new Date().toISOString() });
 });
 
-// Lightning routes (proxied via server to keep secrets safe)
-let lnProvider = null;
-try {
-  lnProvider = makeLightningProvider();
-  console.log('Lightning provider initialized');
-} catch (e) {
-  console.warn('Lightning provider not configured:', e.message);
-}
-
-app.get('/api/lightning/balance', async (req, res) => {
-  try {
-    if (!lnProvider) return res.status(503).json({ error: 'Lightning 미구성' });
-    const sats = await lnProvider.getBalance();
-    res.json({ balance: sats });
-  } catch (e) {
-    res.status(500).json({ error: e.message || '잔액 조회 실패' });
-  }
-});
+// Lightning routes removed - using Cashu only
 
 
 // Cashu Mint proxy (uses CASHU_MINT_URL). Minimal subset for LN mint/melt.
@@ -289,11 +390,30 @@ app.get('/api/cashu/keys', async (req, res) => {
 
 app.post('/api/cashu/mint/quote', async (req, res) => {
   try {
-    const { amount } = req.body || {};
+    const { amount, outputs } = req.body || {};
+    console.log('Quote request received:', { amount, hasOutputs: !!outputs, outputsLength: outputs?.length });
+
     if (!amount || amount <= 0) return res.status(400).json({ error: 'amount 필요' });
     const out = await cashu.mintQuoteBolt11({ amount: parseInt(amount, 10) });
+
+    // If client provides outputs, start server-side monitoring
+    const quoteId = out?.quote || out?.quote_id;
+    console.log('Quote created:', { quoteId, hasOutputs: !!outputs });
+
+    if (quoteId && outputs && Array.isArray(outputs) && outputs.length > 0) {
+      // Get mint keys for monitoring
+      const mintKeys = await cashu.getKeys();
+      monitorQuote(quoteId, parseInt(amount, 10), outputs, null, mintKeys);
+      console.log(`✓ Started monitoring quote: ${quoteId} with ${outputs.length} outputs`);
+    } else {
+      console.log(`✗ NOT monitoring quote ${quoteId} - missing outputs or invalid`);
+    }
+
     res.json(out);
-  } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
+  } catch (e) {
+    console.error('Quote creation error:', e);
+    res.status(e.status || 500).json({ error: e.data || e.message });
+  }
 });
 
 app.get('/api/cashu/mint/quote/check', async (req, res) => {
@@ -305,6 +425,18 @@ app.get('/api/cashu/mint/quote/check', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
 
+app.get('/api/cashu/mint/result', (req, res) => {
+  const quote = req.query.quote;
+  if (!quote) {
+    return res.status(400).json({ error: 'quote 필요' });
+  }
+  const data = redeemedQuotes.get(quote);
+  if (!data) {
+    return res.status(404).json({ error: '결제 결과를 찾을 수 없습니다' });
+  }
+  res.json(data);
+});
+
 app.post('/api/cashu/mint/redeem', async (req, res) => {
   try {
     const { quote, outputs } = req.body || {};
@@ -314,6 +446,10 @@ app.post('/api/cashu/mint/redeem', async (req, res) => {
     }
     // Forward full payload to support mints that require additional fields
     const out = await cashu.mintBolt11(req.body);
+
+    // Note: WebSocket notifications are now handled by server-side monitoring
+    // This endpoint is kept for backwards compatibility or manual redemption
+
     res.json(out);
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
@@ -355,29 +491,7 @@ app.post('/api/lightningaddr/quote', async (req, res) => {
   }
 });
 
-app.post('/api/lightning/invoice', async (req, res) => {
-  try {
-    if (!lnProvider) return res.status(503).json({ error: 'Lightning 미구성' });
-    const { amount, memo } = req.body || {};
-    if (!amount || amount <= 0) return res.status(400).json({ error: 'amount 필요' });
-    const result = await lnProvider.createInvoice({ amount: parseInt(amount, 10), memo });
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message || '인보이스 생성 실패' });
-  }
-});
-
-app.post('/api/lightning/pay', async (req, res) => {
-  try {
-    if (!lnProvider) return res.status(503).json({ error: 'Lightning 미구성' });
-    const { invoice } = req.body || {};
-    if (!invoice || typeof invoice !== 'string') return res.status(400).json({ error: 'invoice 필요' });
-    const result = await lnProvider.payInvoice({ invoice });
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message || '결제 실패' });
-  }
-});
+// Lightning invoice and payment routes removed - using Cashu only
 
 app.use((req, res) => {
   res.status(404).json({ error: '요청한 엔드포인트를 찾을 수 없습니다' });
@@ -388,8 +502,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '서버 내부 오류' });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`비트코인 매장 API 서버가 포트 ${PORT}에서 실행 중입니다`);
+  console.log(`WebSocket 서버가 포트 ${PORT}에서 실행 중입니다`);
   console.log(`사용 가능한 엔드포인트:`);
   console.log(`   GET /api/stores - 모든 매장 조회`);
   console.log(`   GET /api/stores/random - 랜덤 매장 조회`);
@@ -397,5 +512,6 @@ app.listen(PORT, () => {
   console.log(`   GET /api/stores/:id - 특정 매장 조회`);
   console.log(`   POST /api/stores - 매장 추가`);
   console.log(`   GET /health - 서버 상태 확인`);
+  console.log(`   WS  ws://localhost:${PORT} - WebSocket 연결`);
   console.log(`   DB 모드: ${db.mode}`);
 });
