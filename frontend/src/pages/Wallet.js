@@ -101,7 +101,7 @@ function Wallet() {
     try {
       localStorage.removeItem(PENDING_MINT_STORAGE_KEY);
     } catch (err) {
-      console.warn('Pending mint 삭제 실패:', err);
+      console.warn('Failed to delete pending mint:', err);
     }
   }, [PENDING_MINT_STORAGE_KEY]);
 
@@ -126,7 +126,7 @@ function Wallet() {
         })
       );
     } catch (err) {
-      console.error('Pending mint 저장 실패:', err);
+      console.error('Failed to save pending mint:', err);
     }
   }, [PENDING_MINT_STORAGE_KEY]);
 
@@ -154,7 +154,7 @@ function Wallet() {
       pendingMintRef.current = record;
       return record;
     } catch (err) {
-      console.error('Pending mint 복원 실패:', err);
+      console.error('Failed to restore pending mint:', err);
       return null;
     }
   }, [PENDING_MINT_STORAGE_KEY]);
@@ -265,7 +265,7 @@ function Wallet() {
 
       setEcashBalance(getBalanceSats());
     } catch (error) {
-      console.error('지갑 데이터 로드 오류:', error);
+      console.error('Failed to load wallet data:', error);
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -398,7 +398,7 @@ function Wallet() {
         added: credited || amountHint || 0,
       };
     } catch (error) {
-      console.error('Redeemed signatures 적용 실패:', error);
+      console.error('Failed to apply redeemed signatures:', error);
       return { ok: false, reason: 'apply_failed', error };
     }
   }, [clearPendingMint, ensurePendingMint]);
@@ -427,7 +427,7 @@ function Wallet() {
           }
         }
       } catch (err) {
-        console.error('결제 결과 조회 실패:', err);
+        console.error('Failed to check payment result:', err);
       }
     }
 
@@ -497,14 +497,14 @@ function Wallet() {
           await ensurePendingMint(lastQuote);
         }
       } catch (err) {
-        console.error('대기 중 인보이스 초기화 실패:', err);
+        console.error('Failed to initialize pending invoice:', err);
       }
     })();
 
     const handler = (event) => {
       if (!event?.detail) return;
       processPaymentNotification(event.detail).catch((err) => {
-        console.error('결제 알림 처리 오류:', err);
+        console.error('Failed to handle payment notification:', err);
       });
     };
 
@@ -703,7 +703,7 @@ function Wallet() {
         throw new Error(t('messages.noValidSignatures'));
       }
     } catch (error) {
-      console.error('Quote 확인 오류:', error);
+      console.error('Failed to check quote:', error);
       showInfoMessage(translateErrorMessage(error?.message) || t('messages.quoteCheckError'), 'error');
     } finally {
       setLoading(false);
@@ -974,7 +974,7 @@ function Wallet() {
       localStorage.setItem('cashu_last_mint_amount', String(amount));
       setCheckingPayment(true);
     } catch (error) {
-      console.error('인보이스 생성 오류:', error);
+      console.error('Failed to generate invoice:', error);
       alert(t('messages.invoiceGenerationFailed'));
     } finally {
       setLoading(false);
@@ -1179,8 +1179,8 @@ function Wallet() {
         });
         setFetchingQuote(false);
       } catch (error) {
-        console.error('견적 요청 오류:', error);
-        setInvoiceError(translateErrorMessage(error?.message) || '견적 요청 실패');
+        console.error('Failed to request quote:', error);
+        setInvoiceError(translateErrorMessage(error?.message) || t('messages.quoteRequestFailed'));
         setInvoiceQuote(null);
         setFetchingQuote(false);
       }
@@ -1336,7 +1336,7 @@ function Wallet() {
         amount: invoiceAmount,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
-        description: '라이트닝 보내기',
+        description: t('wallet.lightningSend'),
         memo: ''
       });
 
@@ -1356,7 +1356,7 @@ function Wallet() {
         }
       });
     } catch (error) {
-      console.error('송금 오류:', error);
+      console.error('Failed to send payment:', error);
       const translatedMsg = translateErrorMessage(error?.message) || '송금에 실패했습니다';
       setInvoiceError(translatedMsg);
       showInfoMessage(translatedMsg, 'error');
@@ -1441,7 +1441,7 @@ function Wallet() {
         amount: sentAmount,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
-        description: '라이트닝 보내기',
+        description: t('wallet.lightningSend'),
         memo: ''
       });
       setSendAmount('');
@@ -1460,7 +1460,7 @@ function Wallet() {
         }
       });
     } catch (error) {
-      console.error('송금 오류:', error);
+      console.error('Failed to send payment:', error);
       showInfoMessage(translateErrorMessage(error?.message) || t('messages.sendFailed'), 'error');
     } finally {
       setLoading(false);
@@ -1492,18 +1492,32 @@ function Wallet() {
       // Cashu 모드에서는 받기/보내기 플로우로 전환이 처리됩니다.
       alert(t('messages.cashuModeConversionNotAllowed'));
     } catch (error) {
-      console.error('전환 오류:', error);
+      console.error('Failed to convert funds:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const formatAmount = (sats) => {
-    return new Intl.NumberFormat('ko-KR').format(sats);
+    const localeMap = {
+      ko: 'ko-KR',
+      en: 'en-US',
+      ja: 'ja-JP'
+    };
+    const locale = localeMap[i18n.language] || 'en-US';
+    return new Intl.NumberFormat(locale).format(sats);
   };
 
   const formatDate = (timestamp) => {
-    return new Date(timestamp).toLocaleString('ko-KR', {
+    // Map i18n language to locale
+    const localeMap = {
+      ko: 'ko-KR',
+      en: 'en-US',
+      ja: 'ja-JP'
+    };
+    const locale = localeMap[i18n.language] || 'en-US';
+
+    return new Date(timestamp).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -2035,13 +2049,13 @@ function Wallet() {
                   max={ecashBalance}
                 />
                 <small>
-                  사용 가능: {formatAmount(ecashBalance)} sats
+                  {t('wallet.available')}: {formatAmount(ecashBalance)} sats
                   {convertAmount && (
                     <>
                       <br />
-                      수수료: {Math.ceil(convertAmount * ECASH_CONFIG.feeRate)} sats
+                      {t('wallet.fee')}: {Math.ceil(convertAmount * ECASH_CONFIG.feeRate)} sats
                       <br />
-                      실제 전환: {Math.max(0, convertAmount - Math.ceil(convertAmount * ECASH_CONFIG.feeRate))} sats
+                      {t('wallet.actualConversion')}: {Math.max(0, convertAmount - Math.ceil(convertAmount * ECASH_CONFIG.feeRate))} sats
                     </>
                   )}
                 </small>
@@ -2049,11 +2063,11 @@ function Wallet() {
               <div className="conversion-info">
                 <div className="info-item">
                   <Icon name="info" size={16} />
-                  <span>전환 수수료: {(ECASH_CONFIG.feeRate * 100).toFixed(1)}%</span>
+                  <span>{t('wallet.conversionFee')}: {(ECASH_CONFIG.feeRate * 100).toFixed(1)}%</span>
                 </div>
                 <div className="info-item">
                   <Icon name="clock" size={16} />
-                  <span>예상 시간: 2-3초</span>
+                  <span>{t('wallet.estimatedTime')}: {t('wallet.estimatedTimeValue')}</span>
                 </div>
               </div>
               <div className="modal-actions">
@@ -2211,14 +2225,14 @@ function Wallet() {
                       <div className="tx-detail-item">
                         <Icon name="diamond" size={18} />
                         <div>
-                          <strong>실제 전환 금액</strong>
+                          <strong>{t('wallet.actualConversionAmount')}</strong>
                           <p>{formatAmount(selectedTx.actualAmount)} sats</p>
                         </div>
                       </div>
                       <div className="tx-detail-item">
                         <Icon name="bolt" size={18} />
                         <div>
-                          <strong>수수료</strong>
+                          <strong>{t('wallet.fee')}</strong>
                           <p>{formatAmount(selectedTx.fee)} sats</p>
                         </div>
                       </div>
@@ -2325,7 +2339,7 @@ function Wallet() {
                       <div className="proof-amount-status">
                         <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
                         <div className={`proof-status ${isValid ? 'valid' : 'invalid'}`}>
-                          {isValid ? '사용 가능' : '사용 불가'}
+                          {isValid ? t('wallet.valid') : t('wallet.invalid')}
                         </div>
                       </div>
                     </div>

@@ -108,7 +108,14 @@
     "copied": "コピーしました",
     "recreate": "再作成",
     "receiveComplete": "受信完了！",
-    "receiveSuccess": "ライトニング決済を正常に受け取りました。"
+    "receiveSuccess": "ライトニング決済を正常に受け取りました.",
+    "conversionFee": "変換手数料",
+    "estimatedTime": "予想時間",
+    "estimatedTimeValue": "2-3秒",
+    "actualConversion": "実際の変換",
+    "actualConversionAmount": "実際の変換金額",
+    "valid": "利用可能",
+    "invalid": "利用不可"
   },
   "settings": {
     "title": "設定",
@@ -385,6 +392,7 @@
     "enterPassphrase": "パスフレーズを入力してください。",
     "enterValidAmount": "正しい金額を入力してください",
     "invoiceGenerationFailed": "インボイスの生成に失敗しました",
+    "quoteRequestFailed": "見積もりリクエストに失敗しました",
     "insufficientBalance": "eCash残高が不足しています",
     "maxConversionAmount": "最大{{amount}} satsまで変換可能です",
     "cashuModeConversionNotAllowed": "Cashuモードでは、変換モーダルは別途使用しません。受け取り/送信をご利用ください。",

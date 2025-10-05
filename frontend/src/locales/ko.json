@@ -108,7 +108,14 @@
     "copied": "복사되었습니다",
     "recreate": "다시 만들기",
     "receiveComplete": "수신 완료!",
-    "receiveSuccess": "라이트닝 결제를 성공적으로 받았습니다."
+    "receiveSuccess": "라이트닝 결제를 성공적으로 받았습니다.",
+    "conversionFee": "전환 수수료",
+    "estimatedTime": "예상 시간",
+    "estimatedTimeValue": "2-3초",
+    "actualConversion": "실제 전환",
+    "actualConversionAmount": "실제 전환 금액",
+    "valid": "사용 가능",
+    "invalid": "사용 불가"
   },
   "settings": {
     "title": "설정",
@@ -385,6 +392,7 @@
     "enterPassphrase": "패스프레이즈를 입력하세요.",
     "enterValidAmount": "올바른 금액을 입력하세요",
     "invoiceGenerationFailed": "인보이스 생성에 실패했습니다",
+    "quoteRequestFailed": "견적 요청 실패",
     "insufficientBalance": "eCash 잔액이 부족합니다",
     "maxConversionAmount": "최대 {{amount}} sats까지 전환 가능합니다",
     "cashuModeConversionNotAllowed": "Cashu 모드에서는 전환 모달은 별도로 사용하지 않습니다. 받기/보내기를 이용해 주세요.",

@@ -108,7 +108,14 @@
     "copied": "Copied",
     "recreate": "Recreate",
     "receiveComplete": "Received!",
-    "receiveSuccess": "Successfully received Lightning payment."
+    "receiveSuccess": "Successfully received Lightning payment.",
+    "conversionFee": "Conversion Fee",
+    "estimatedTime": "Estimated Time",
+    "estimatedTimeValue": "2-3 seconds",
+    "actualConversion": "Actual Conversion",
+    "actualConversionAmount": "Actual Conversion Amount",
+    "valid": "Available",
+    "invalid": "Unavailable"
   },
   "settings": {
     "title": "Settings",
@@ -385,6 +392,7 @@
     "enterPassphrase": "Please enter a passphrase.",
     "enterValidAmount": "Please enter a valid amount",
     "invoiceGenerationFailed": "Failed to generate invoice",
+    "quoteRequestFailed": "Quote request failed",
     "insufficientBalance": "Insufficient eCash balance",
     "maxConversionAmount": "Maximum {{amount}} sats can be converted",
     "cashuModeConversionNotAllowed": "In Cashu mode, conversion modal is not used separately. Please use receive/send.",
