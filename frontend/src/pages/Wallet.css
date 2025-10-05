@@ -1840,3 +1840,124 @@
     width: clamp(160px, 80vw, 220px);
   }
 }
+
+/* QR Code Modal */
+.qr-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.qr-modal-content {
+  background: #ffffff;
+  border-radius: 1rem;
+  max-width: 500px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+}
+
+.qr-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #333;
+  z-index: 1;
+}
+
+.qr-modal-close:hover {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+.qr-modal-body {
+  padding: 3rem 2rem 2rem;
+  text-align: center;
+}
+
+.qr-modal-body h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.75rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.qr-modal-code {
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 1rem;
+  display: inline-block;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.qr-modal-code img {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.qr-modal-hint {
+  margin: 1.5rem 0 0 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .qr-modal-body {
+    padding: 2.5rem 1.5rem 1.5rem;
+  }
+
+  .qr-modal-body h3 {
+    font-size: 1.5rem;
+  }
+
+  .qr-modal-code {
+    padding: 1.5rem;
+  }
+
+  .qr-modal-code img {
+    max-width: 300px;
+  }
+}

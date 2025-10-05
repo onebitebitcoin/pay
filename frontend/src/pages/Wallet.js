@@ -94,6 +94,7 @@ function Wallet() {
   const [selectedTx, setSelectedTx] = useState(null);
   const [invoiceCopied, setInvoiceCopied] = useState(false);
   const [qrLoaded, setQrLoaded] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
@@ -1701,7 +1702,7 @@ function Wallet() {
                     <>
                       <div className="invoice-section receive-invoice">
                         <div className="qr-placeholder">
-                          <div className="qr-code-wrapper">
+                          <div className="qr-code-wrapper" onClick={() => setShowQrModal(true)} style={{ cursor: 'pointer' }}>
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
                               alt="Lightning Invoice QR"
@@ -2370,6 +2371,27 @@ function Wallet() {
         )}
       </div>
     </div>
+      )}
+
+      {/* QR Code Modal */}
+      {showQrModal && invoice && (
+        <div className="qr-modal-overlay" onClick={() => setShowQrModal(false)}>
+          <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="qr-modal-close" onClick={() => setShowQrModal(false)} aria-label="Close">
+              <Icon name="close" size={24} />
+            </button>
+            <div className="qr-modal-body">
+              <h3>{formatAmount(receiveAmount)} sats</h3>
+              <div className="qr-modal-code">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                  alt="Lightning Invoice QR"
+                />
+              </div>
+              <p className="qr-modal-hint">QR 코드를 스캔하여 결제하세요</p>
+            </div>
+          </div>
+        </div>
       )}
 
     </>
