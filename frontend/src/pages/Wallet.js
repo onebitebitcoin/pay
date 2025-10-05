@@ -2208,7 +2208,11 @@ function Wallet() {
                   <h2 className={`tx-detail-amount ${selectedTx.amount > 0 ? 'positive' : 'negative'}`}>
                     {selectedTx.amount > 0 ? '+' : ''}{formatAmount(Math.abs(selectedTx.amount))} sats
                   </h2>
-                  <p className="tx-detail-type">{selectedTx.description}</p>
+                  <p className="tx-detail-type">
+                    {selectedTx.type === 'receive' ? t('wallet.receive') :
+                     selectedTx.type === 'send' ? t('wallet.send') :
+                     selectedTx.description}
+                  </p>
                 </div>
                 <div className="tx-detail-info">
                   <div className="tx-detail-item">
@@ -2273,7 +2277,7 @@ function Wallet() {
       <div className="transactions">
         <h3>{t('wallet.transactions')}</h3>
         {loading ? (
-          <div className="loading">거래 내역을 불러오는 중...</div>
+          <div className="loading">{t('wallet.loadingTransactions')}</div>
         ) : transactions.length === 0 ? (
           <div className="empty-state">{t('wallet.noTransactions')}</div>
         ) : (
@@ -2292,7 +2296,11 @@ function Wallet() {
                     />
                   </div>
                   <div className="tx-details">
-                    <div className="tx-description">{tx.description}</div>
+                    <div className="tx-description">
+                      {tx.type === 'receive' ? t('wallet.receive') :
+                       tx.type === 'send' ? t('wallet.send') :
+                       tx.description}
+                    </div>
                     {tx.memo && <div className="tx-memo">{tx.memo}</div>}
                     <div className="tx-date">{formatDate(tx.timestamp)}</div>
                   </div>

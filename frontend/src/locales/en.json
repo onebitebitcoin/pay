@@ -68,6 +68,7 @@
     "networkRequired": "Network connection (Mint {{mint}}{{websocket}}) required. Please refresh.",
     "transactions": "Transactions",
     "noTransactions": "No transactions",
+    "loadingTransactions": "Loading transactions...",
     "lightningReceive": "Lightning Receive",
     "lightningSend": "Lightning Send",
     "mintStatus": "Mint Connected",
