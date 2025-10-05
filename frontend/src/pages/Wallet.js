@@ -27,8 +27,24 @@ const normalizeQrValue = (rawValue = '') => {
 
 function Wallet() {
   const { isConnected: isWebSocketConnected, send: sendWebSocketMessage } = useWebSocket();
-  const [ecashBalance, setEcashBalance] = useState(0);
-  const [transactions, setTransactions] = useState([]);
+  // Initialize balance from localStorage immediately
+  const [ecashBalance, setEcashBalance] = useState(() => {
+    try {
+      return getBalanceSats();
+    } catch {
+      return 0;
+    }
+  });
+  // Initialize transactions from localStorage immediately
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const raw = localStorage.getItem('cashu_tx_v1');
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  });
   const TX_STORAGE_KEY = 'cashu_tx_v1';
   const [displayedTxCount, setDisplayedTxCount] = useState(10);
   const [showSend, setShowSend] = useState(false);
@@ -453,7 +469,7 @@ function Wallet() {
   }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
 
   useEffect(() => {
-    // Load Mint URL from settings
+    // Load Mint URL from settings and auto-connect
     try {
       const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
       const mainUrl = settings.mintUrl || DEFAULT_MINT_URL;
@@ -466,13 +482,7 @@ function Wallet() {
       connectMint();
     }
 
-    // Load transactions from storage
-    try {
-      const raw = localStorage.getItem(TX_STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(arr)) setTransactions(arr);
-    } catch {}
-
+    // Check for pending quote
     (async () => {
       try {
         const lastQuote = localStorage.getItem('cashu_last_quote');
@@ -498,6 +508,41 @@ function Wallet() {
       window.removeEventListener('payment_received', handler);
     };
   }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
+
+  // Handle page visibility change (app resuming from background)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && isReceiveView && checkingPayment) {
+        // App came back to foreground while waiting for payment
+        console.log('App resumed, checking payment status...');
+
+        try {
+          const lastQuote = localStorage.getItem('cashu_last_quote');
+          if (!lastQuote) return;
+
+          // Check if payment was completed on server
+          const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${lastQuote}`));
+          if (resultResp.ok) {
+            const data = await resultResp.json();
+            console.log('Payment completed while app was in background:', data);
+
+            // Process the payment notification
+            await processPaymentNotification(data);
+          } else {
+            // Payment not yet completed, WebSocket will handle it when connection resumes
+            console.log('Payment not yet completed');
+          }
+        } catch (error) {
+          console.error('Error checking payment status on resume:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isReceiveView, checkingPayment, processPaymentNotification]);
 
   // Manual sync proofs with Mint
   const handleSyncProofs = async () => {
