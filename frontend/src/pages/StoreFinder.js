@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import './StoreFinder.css';
 import Icon from '../components/Icon';
 import { apiUrl, loadKakaoSdk } from '../config';
 
 function StoreFinder() {
+  const { t } = useTranslation();
   const [stores, setStores] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredStores, setFilteredStores] = useState([]);
@@ -62,7 +64,7 @@ function StoreFinder() {
 
   const getUserLocation = () => {
     if (!navigator.geolocation) {
-      alert('이 브라우저는 위치 서비스를 지원하지 않습니다.');
+      alert(t('storeFinder.geolocationNotSupported'));
       return;
     }
 
@@ -91,7 +93,7 @@ function StoreFinder() {
           const marker = new window.kakao.maps.Marker({
             position: moveLatLon,
             image: markerImage,
-            title: '내 위치'
+            title: t('storeFinder.myLocation')
           });
 
           marker.setMap(kakaoMapRef.current);
@@ -102,13 +104,13 @@ function StoreFinder() {
       },
       (error) => {
         console.error('위치 가져오기 실패:', error);
-        let errorMsg = '위치를 가져올 수 없습니다.';
+        let errorMsg = t('storeFinder.geolocationError');
         if (error.code === 1) {
-          errorMsg = '위치 접근 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.';
+          errorMsg = t('storeFinder.geolocationDenied');
         } else if (error.code === 2) {
-          errorMsg = '위치를 확인할 수 없습니다.';
+          errorMsg = t('storeFinder.geolocationUnavailable');
         } else if (error.code === 3) {
-          errorMsg = '위치 요청 시간이 초과되었습니다.';
+          errorMsg = t('storeFinder.geolocationTimeout');
         }
         alert(errorMsg);
         setLoadingLocation(false);
@@ -327,20 +329,20 @@ function StoreFinder() {
     setSelectedStore(null);
   };
 
-  const copyToClipboard = async (text, label) => {
+  const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      alert(`${label}이(가) 클립보드에 복사되었습니다.`);
+      alert(t('common.copied'));
     } catch (err) {
       console.error('복사 실패:', err);
-      alert('복사에 실패했습니다.');
+      alert(t('common.copyFailed'));
     }
   };
 
   const handleDeleteStore = async (store) => {
     if (!store || !store.id) return;
     if (deleteLoadingId) return;
-    if (!window.confirm(`정말로 "${store.name}" 매장을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(t('storeFinder.deleteConfirm', { name: store.name }))) return;
 
     try {
       setDeleteLoadingId(store.id);
@@ -349,7 +351,7 @@ function StoreFinder() {
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || '매장 삭제에 실패했습니다');
+        throw new Error(err.error || t('storeFinder.deleteFailed'));
       }
       await fetchStores();
       if (selectedStore && selectedStore.id === store.id) {
@@ -357,7 +359,7 @@ function StoreFinder() {
       }
     } catch (error) {
       console.error('매장 삭제 오류:', error);
-      alert(error.message || '매장 삭제에 실패했습니다');
+      alert(error.message || t('storeFinder.deleteFailed'));
     } finally {
       setDeleteLoadingId(null);
     }
@@ -367,7 +369,7 @@ function StoreFinder() {
     <>
     <div className="store-finder">
       <div className="category-filter">
-        <label className="category-label" htmlFor="category-select">카테고리</label>
+        <label className="category-label" htmlFor="category-select">{t('storeFinder.category')}</label>
         <select
           id="category-select"
           className="category-select"
@@ -376,7 +378,7 @@ function StoreFinder() {
         >
           {categories.map((cat) => (
             <option key={cat} value={cat}>
-              {cat}
+              {cat === '전체' ? t('storeFinder.allCategories') : cat}
             </option>
           ))}
         </select>
@@ -386,7 +388,7 @@ function StoreFinder() {
           <div className="search-container">
             <input
               type="text"
-              placeholder="매장명, 카테고리, 주소로 검색..."
+              placeholder={t('storeFinder.search')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
@@ -398,7 +400,7 @@ function StoreFinder() {
             className={`location-btn ${sortByDistance ? 'active' : ''}`}
             disabled={loadingLocation}
           >
-            <Icon name="map" size={18} /> {loadingLocation ? '위치 확인 중...' : sortByDistance ? '내 주변 매장 ✓' : '내 주변 매장'}
+            <Icon name="map" size={18} /> {loadingLocation ? t('storeFinder.locating') : sortByDistance ? `${t('storeFinder.nearbyStores')} ✓` : t('storeFinder.nearbyStores')}
           </button>
         </div>
 
@@ -419,12 +421,10 @@ function StoreFinder() {
               >
                 <div className="store-card-content">
                   <div className="store-card-header">
-                    <h4 className="store-name">
-                      {store.name}
-                      {sortByDistance && store.distance !== undefined && (
-                        <span className="store-distance"> · {store.distance < 1 ? `${Math.round(store.distance * 1000)}m` : `${store.distance.toFixed(1)}km`}</span>
-                      )}
-                    </h4>
+                    <h4 className="store-name">{store.name}</h4>
+                    {sortByDistance && store.distance !== undefined && (
+                      <span className="store-distance">{store.distance < 1 ? `${Math.round(store.distance * 1000)}m` : `${store.distance.toFixed(1)}km`}</span>
+                    )}
                     <div className="store-card-actions">
                       <button
                         type="button"
@@ -433,7 +433,7 @@ function StoreFinder() {
                           e.stopPropagation();
                           handleStoreClick(store);
                         }}
-                        title="위치 보기"
+                        title={t('storeFinder.viewOnMap')}
                       >
                         <Icon name="map" size={18} />
                       </button>
@@ -444,7 +444,7 @@ function StoreFinder() {
                           e.stopPropagation();
                           openStoreDetail(store);
                         }}
-                        title="자세히"
+                        title={t('storeFinder.details')}
                       >
                         <Icon name="info" size={18} />
                       </button>
@@ -462,8 +462,8 @@ function StoreFinder() {
       <div className="sf-modal-overlay" onClick={closeStoreDetail}>
         <div className="sf-modal" onClick={(e) => e.stopPropagation()}>
           <div className="sf-modal-header">
-            <h3>매장 정보</h3>
-            <button className="sf-modal-close" onClick={closeStoreDetail} aria-label="닫기">
+            <h3>{t('storeFinder.storeInfo')}</h3>
+            <button className="sf-modal-close" onClick={closeStoreDetail} aria-label={t('common.close')}>
               <Icon name="close" size={20} />
             </button>
           </div>
@@ -477,14 +477,14 @@ function StoreFinder() {
                 <div className="store-detail-item">
                   <Icon name="map" size={18} />
                   <div style={{ flex: 1 }}>
-                    <strong>주소</strong>
+                    <strong>{t('storeFinder.address')}</strong>
                     <p>{selectedStore.address}</p>
                   </div>
                   <button
                     type="button"
                     className="copy-btn"
-                    onClick={() => copyToClipboard(selectedStore.address, '주소')}
-                    title="주소 복사"
+                    onClick={() => copyToClipboard(selectedStore.address)}
+                    title={t('common.copy')}
                   >
                     <Icon name="copy" size={16} />
                   </button>
@@ -493,14 +493,14 @@ function StoreFinder() {
                   <div className="store-detail-item">
                     <Icon name="info" size={18} />
                     <div style={{ flex: 1 }}>
-                      <strong>전화번호</strong>
+                      <strong>{t('storeFinder.phone')}</strong>
                       <p>{selectedStore.phone}</p>
                     </div>
                     <button
                       type="button"
                       className="copy-btn"
-                      onClick={() => copyToClipboard(selectedStore.phone, '전화번호')}
-                      title="전화번호 복사"
+                      onClick={() => copyToClipboard(selectedStore.phone)}
+                      title={t('common.copy')}
                     >
                       <Icon name="copy" size={16} />
                     </button>
@@ -510,14 +510,14 @@ function StoreFinder() {
                   <div className="store-detail-item">
                     <Icon name="clock" size={18} />
                     <div style={{ flex: 1 }}>
-                      <strong>영업시간</strong>
+                      <strong>{t('storeFinder.hours')}</strong>
                       <p>{selectedStore.hours}</p>
                     </div>
                     <button
                       type="button"
                       className="copy-btn"
-                      onClick={() => copyToClipboard(selectedStore.hours, '영업시간')}
-                      title="영업시간 복사"
+                      onClick={() => copyToClipboard(selectedStore.hours)}
+                      title={t('common.copy')}
                     >
                       <Icon name="copy" size={16} />
                     </button>
@@ -527,7 +527,7 @@ function StoreFinder() {
                   <div className="store-detail-item">
                     <Icon name="info" size={18} />
                     <div>
-                      <strong>설명</strong>
+                      <strong>{t('storeFinder.description')}</strong>
                       <p>{selectedStore.description}</p>
                     </div>
                   </div>
@@ -535,8 +535,8 @@ function StoreFinder() {
                 <div className="store-detail-item">
                   <Icon name="bitcoin" size={18} />
                   <div>
-                    <strong>비트코인 결제</strong>
-                    <p>이 매장에서는 비트코인 및 라이트닝 결제가 가능합니다.</p>
+                    <strong>{t('storeFinder.bitcoinPayment')}</strong>
+                    <p>{t('storeFinder.bitcoinPaymentDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -549,9 +549,9 @@ function StoreFinder() {
               disabled={deleteLoadingId === selectedStore.id}
               onClick={() => handleDeleteStore(selectedStore)}
             >
-              <Icon name="trash" size={16} /> {deleteLoadingId === selectedStore.id ? '삭제 중...' : '삭제'}
+              <Icon name="trash" size={16} /> {deleteLoadingId === selectedStore.id ? t('storeFinder.deleting') : t('common.delete')}
             </button>
-            <button type="button" className="sf-btn" onClick={closeStoreDetail}>닫기</button>
+            <button type="button" className="sf-btn" onClick={closeStoreDetail}>{t('common.close')}</button>
           </div>
         </div>
       </div>

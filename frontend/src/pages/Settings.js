@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL } from '../config';
 import './Settings.css';
 import Icon from '../components/Icon';
 
 function Settings() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
     language: 'ko',
@@ -81,6 +83,11 @@ function Settings() {
     };
     setSettings(newSettings);
     saveSettings(newSettings);
+
+    // Change language immediately when language setting changes
+    if (key === 'language') {
+      i18n.changeLanguage(value);
+    }
   };
 
   const openPinSetup = () => {
@@ -223,43 +230,43 @@ function Settings() {
   return (
     <div className="settings-page">
       <div className="page-header">
-        <h1><Icon name="settings" size={22} /> 설정</h1>
-        <p>앱 설정을 관리하세요</p>
+        <h1><Icon name="settings" size={22} /> {t('settings.title')}</h1>
+        <p>{t('settings.subtitle')}</p>
       </div>
 
       <div className="settings-sections">
         {/* General Settings */}
         <div className="settings-section">
-          <h2>일반 설정</h2>
+          <h2>{t('settings.general')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">언어</div>
-              <div className="setting-description">앱 인터페이스 언어 (향후 지원 예정)</div>
+              <div className="setting-title">{t('settings.language')}</div>
+              <div className="setting-description">{t('settings.languageDesc')}</div>
             </div>
             <select
               value={settings.language}
               onChange={(e) => handleSettingChange('language', e.target.value)}
               className="setting-select"
             >
-              <option value="ko">한국어</option>
-              <option value="en">English</option>
-              <option value="ja">日本語</option>
+              <option value="ko">{t('settings.korean')}</option>
+              <option value="en">{t('settings.english')}</option>
+              <option value="ja">{t('settings.japanese')}</option>
             </select>
           </div>
 
           <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">기본 단위</div>
-              <div className="setting-description">금액 표시 단위 (sats 권장)</div>
+              <div className="setting-title">{t('settings.currency')}</div>
+              <div className="setting-description">{t('settings.currencyDesc')}</div>
             </div>
             <select
               value={settings.currency}
               onChange={(e) => handleSettingChange('currency', e.target.value)}
               className="setting-select"
             >
-              <option value="SATS">사토시 (sats)</option>
-              <option value="BTC">비트코인 (BTC)</option>
+              <option value="SATS">{t('settings.sats')}</option>
+              <option value="BTC">{t('settings.btc')}</option>
             </select>
           </div>
 
@@ -267,26 +274,26 @@ function Settings() {
 
         {/* Security Settings */}
         <div className="settings-section">
-          <h2>보안 설정</h2>
+          <h2>{t('settings.security')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">PIN 잠금</div>
+              <div className="setting-title">{t('settings.pinLock')}</div>
               <div className="setting-description">
-                앱 실행 시 PIN 번호 요구 (권장)
+                {t('settings.pinLockDesc')}
               </div>
             </div>
             {!settings.pinEnabled ? (
               <button onClick={openPinSetup} className="setting-button">
-                PIN 설정
+                {t('settings.setupPin')}
               </button>
             ) : (
               <div style={{display: 'flex', gap: '0.5rem'}}>
                 <button onClick={openPinSetup} className="setting-button">
-                  PIN 변경
+                  {t('settings.changePin')}
                 </button>
                 <button onClick={disablePin} className="danger-button">
-                  해제
+                  {t('settings.disablePin')}
                 </button>
               </div>
             )}
@@ -295,13 +302,13 @@ function Settings() {
 
         {/* Cashu Mint Settings */}
         <div className="settings-section">
-          <h2>Cashu Mint 설정</h2>
+          <h2>{t('settings.mintSettings')}</h2>
 
           <div className="setting-item">
             <div className="setting-info" style={{ flex: 1 }}>
-              <div className="setting-title">Mint URL</div>
+              <div className="setting-title">{t('settings.mintUrl')}</div>
               <div className="setting-description">
-                사용할 Cashu Mint 서버 (변경 후 페이지 새로고침 필요)
+                {t('settings.mintUrlDesc')}
               </div>
               <input
                 type="url"
@@ -349,41 +356,40 @@ function Settings() {
 
         {/* Store Management */}
         <div className="settings-section">
-          <h2>매장 관리</h2>
+          <h2>{t('settings.storeManagement')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">비트코인 결제 가능 매장 등록</div>
+              <div className="setting-title">{t('settings.registerStore')}</div>
               <div className="setting-description">
-                비트코인/라이트닝 결제를 받는 매장을 지도에 등록할 수 있습니다
+                {t('settings.registerStoreDesc')}
               </div>
             </div>
             <button
               onClick={() => navigate('/settings/add-store')}
               className="setting-button"
             >
-              매장 등록하기
+              {t('settings.addStore')}
             </button>
           </div>
         </div>
 
         {/* Danger Zone */}
         <div className="settings-section danger-section">
-          <h2>위험 구역</h2>
+          <h2>{t('settings.dangerZone')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">지갑 초기화</div>
+              <div className="setting-title">{t('settings.resetWallet')}</div>
               <div className="setting-description">
-                모든 지갑 데이터를 삭제하고 처음부터 시작합니다.
-                <strong> 이 작업은 되돌릴 수 없습니다.</strong>
+                {t('settings.resetWalletDesc')}
               </div>
             </div>
             <button
               onClick={handleResetWallet}
               className="danger-button"
             >
-              지갑 초기화
+              {t('settings.resetWalletButton')}
             </button>
           </div>
         </div>
@@ -394,55 +400,55 @@ function Settings() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>PIN {settings.pinEnabled ? '변경' : '설정'}</h3>
-              <button onClick={() => setShowPinSetup(false)} aria-label="닫기">
+              <h3>{settings.pinEnabled ? t('settings.pinChange') : t('settings.pinSetup')}</h3>
+              <button onClick={() => setShowPinSetup(false)} aria-label={t('common.close')}>
                 <Icon name="close" size={20} />
               </button>
             </div>
             <div className="modal-body">
               {pinStep === 'current' && (
                 <div className="input-group">
-                  <label>현재 PIN</label>
+                  <label>{t('settings.currentPin')}</label>
                   <input
                     type="password"
                     value={currentPin}
                     onChange={(e) => setCurrentPin(e.target.value)}
-                    placeholder="현재 PIN을 입력하세요"
+                    placeholder={t('settings.enterCurrentPin')}
                     maxLength="6"
                   />
                 </div>
               )}
               {pinStep === 'new' && (
                 <div className="input-group">
-                  <label>새 PIN (4-6자리)</label>
+                  <label>{t('settings.newPin')}</label>
                   <input
                     type="password"
                     value={pinInput}
                     onChange={(e) => setPinInput(e.target.value)}
-                    placeholder="새 PIN을 입력하세요"
+                    placeholder={t('settings.enterNewPin')}
                     maxLength="6"
                   />
-                  <small>숫자 4-6자리를 입력하세요</small>
+                  <small>{t('settings.pinHint')}</small>
                 </div>
               )}
               {pinStep === 'confirm' && (
                 <div className="input-group">
-                  <label>PIN 확인</label>
+                  <label>{t('settings.confirmPin')}</label>
                   <input
                     type="password"
                     value={pinConfirm}
                     onChange={(e) => setPinConfirm(e.target.value)}
-                    placeholder="PIN을 다시 입력하세요"
+                    placeholder={t('settings.reenterPin')}
                     maxLength="6"
                   />
                 </div>
               )}
               <div className="modal-actions">
                 <button className="primary-btn" onClick={handlePinSubmit}>
-                  {pinStep === 'confirm' ? '완료' : '다음'}
+                  {pinStep === 'confirm' ? t('settings.done') : t('common.next')}
                 </button>
                 <button className="secondary-btn" onClick={() => setShowPinSetup(false)}>
-                  취소
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>

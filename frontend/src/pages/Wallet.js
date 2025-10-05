@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, refreshProofs } from '../services/cashu';
@@ -26,6 +27,7 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 function Wallet() {
+  const { t } = useTranslation();
   const { isConnected: isWebSocketConnected, send: sendWebSocketMessage } = useWebSocket();
   // Initialize balance from localStorage immediately
   const [ecashBalance, setEcashBalance] = useState(() => {
@@ -1517,7 +1519,7 @@ function Wallet() {
         <div className="send-page">
           <div className="send-card">
             <div className="send-card-header">
-              <h2><Icon name="send" size={20} /> 라이트닝 보내기</h2>
+              <h2><Icon name="send" size={20} /> {t('wallet.sendTitle')}</h2>
             </div>
             <div className="send-card-body">
               {!isConnected || !isWebSocketConnected ? (
@@ -1533,7 +1535,7 @@ function Wallet() {
                     className="link-btn"
                     onClick={() => setEnableSendScanner(false)}
                   >
-                    QR 스캐너 닫기
+                    {t('wallet.closeScanner')}
                   </button>
                 </div>
               ) : (
@@ -1544,12 +1546,12 @@ function Wallet() {
                     onClick={() => setEnableSendScanner(true)}
                     disabled={!isConnected || !isWebSocketConnected}
                   >
-                    <Icon name="camera" size={16} /> QR 코드 스캔
+                    <Icon name="camera" size={16} /> {t('wallet.scanQR')}
                   </button>
                 </div>
               )}
               <div className="input-group">
-                <label>라이트닝 인보이스 또는 주소</label>
+                <label>{t('wallet.lightningAddress')}</label>
                 <textarea
                   value={sendAddress}
                   onChange={(e) => setSendAddress(e.target.value)}
@@ -1567,7 +1569,7 @@ function Wallet() {
               </div>
               {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && (
                 <div className="input-group">
-                  <label>보낼 금액 (sats)</label>
+                  <label>{t('wallet.amountToSend')}</label>
                   <input
                     type="number"
                     value={sendAmount}
@@ -1582,9 +1584,9 @@ function Wallet() {
               )}
               {invoiceQuote && (
                 <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-                  <div>보낼 금액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
-                  <div>수수료: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
-                  <div>송금 후 잔액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
+                  <div>{t('wallet.sendAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
+                  <div>{t('wallet.fee')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
+                  <div>{t('wallet.afterBalance')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
                 </div>
               )}
               {invoiceError && (
@@ -1605,7 +1607,7 @@ function Wallet() {
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
-                  {loading ? '보내는 중...' : '보내기'}
+                  {loading ? t('wallet.sending') : t('wallet.send')}
                 </button>
                 <button
                   type="button"
@@ -1622,7 +1624,7 @@ function Wallet() {
         <div className="receive-page">
           <div className="receive-card">
             <div className="receive-card-header">
-              <h2><Icon name="inbox" size={20} /> 라이트닝 받기</h2>
+              <h2><Icon name="inbox" size={20} /> {t('wallet.receiveTitle')}</h2>
               <p className="receive-subtext">받을 금액을 입력하고 비트코인을 받아보세요</p>
             </div>
             <div className="receive-card-body">
@@ -1636,7 +1638,7 @@ function Wallet() {
                         </div>
                       ) : null}
                       <div className="input-group">
-                        <label>받을 금액 (sats)</label>
+                        <label>{t('wallet.amountToReceive')}</label>
                         <input
                           type="number"
                           value={receiveAmount}
@@ -1652,7 +1654,7 @@ function Wallet() {
                           className="primary-btn"
                           disabled={loading || !receiveAmount || !isConnected || !isWebSocketConnected}
                         >
-                          {loading ? '생성 중...' : '인보이스 생성'}
+                          {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
                         <button
                           type="button"
@@ -1758,7 +1760,7 @@ function Wallet() {
                     <p className="success-message">라이트닝 결제를 성공적으로 받았습니다.</p>
                   </div>
                   <div className="receive-actions">
-                    <button className="primary-btn" onClick={exitReceiveFlow}>확인</button>
+                    <button className="primary-btn" onClick={exitReceiveFlow}>{t('common.confirm')}</button>
                   </div>
                 </>
               )}
@@ -1845,14 +1847,14 @@ function Wallet() {
                   onClick={handleReceiveNavigation}
                   className="action-btn receive-btn"
                 >
-                  <Icon name="inbox" size={16} /> 받기
+                  <Icon name="inbox" size={16} /> {t('wallet.receive')}
                 </button>
                 <button
                   onClick={handleSendNavigation}
                   className="action-btn send-btn"
                   disabled={ecashBalance === 0}
                 >
-                  <Icon name="send" size={16} /> 보내기
+                  <Icon name="send" size={16} /> {t('wallet.send')}
                 </button>
               </>
             )}
@@ -1860,7 +1862,7 @@ function Wallet() {
           {isConnected && (
             <div className="mint-status-bottom">
               <span className={`status-dot ${isConnected ? 'on' : 'off'}`}></span>
-              <small className="status-text">Mint 연결됨</small>
+              <small className="status-text">{t('wallet.mintStatus')}</small>
             </div>
           )}
         </div>
@@ -1871,15 +1873,15 @@ function Wallet() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>라이트닝 보내기</h3>
-              <button onClick={() => { setEnableSendScanner(false); setShowSend(false); setInvoiceQuote(null); setInvoiceError(''); }} aria-label="닫기"><Icon name="close" size={20} /></button>
+              <h3>{t('wallet.lightningSend')}</h3>
+              <button onClick={() => { setEnableSendScanner(false); setShowSend(false); setInvoiceQuote(null); setInvoiceError(''); }} aria-label={t('common.close')}><Icon name="close" size={20} /></button>
             </div>
             <div className="modal-body">
               {enableSendScanner && (
                 <QrScanner onScan={handleSendQrScan} onError={handleSendQrError} />
               )}
               <div className="input-group">
-                <label>라이트닝 인보이스 또는 주소</label>
+                <label>{t('wallet.lightningAddress')}</label>
                 <textarea
                   value={sendAddress}
                   onChange={(e) => setSendAddress(e.target.value)}
@@ -1907,7 +1909,7 @@ function Wallet() {
               </div>
               {!isBolt11Invoice(sendAddress) && (
                 <div className="input-group">
-                  <label>보낼 금액 (sats)</label>
+                  <label>{t('wallet.amountToSend')}</label>
                   <input
                     type="number"
                     value={sendAmount}
@@ -1921,9 +1923,9 @@ function Wallet() {
               )}
               {invoiceQuote && (
                 <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-                  <div>보낼 금액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
-                  <div>수수료: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
-                  <div>송금 후 잔액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
+                  <div>{t('wallet.sendAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
+                  <div>{t('wallet.fee')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
+                  <div>{t('wallet.afterBalance')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
                 </div>
               )}
               {invoiceError && (
@@ -1944,7 +1946,7 @@ function Wallet() {
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
-                  {loading ? '송금 중...' : fetchingQuote ? '인보이스 검사 중...' : '송금하기'}
+                  {loading ? t('wallet.sending') : fetchingQuote ? t('common.loading') : t('wallet.send')}
                 </button>
               </div>
             </div>
@@ -1976,9 +1978,9 @@ function Wallet() {
                   )}
                   <div className="modal-actions" style={{marginTop:'1rem'}}>
                     <button className="primary-btn" onClick={confirmSend} disabled={loading || pendingSendDetails.available < pendingSendDetails.need}>
-                      {loading ? '송금 중...' : '확인'}
+                      {loading ? t('wallet.sending') : t('common.confirm')}
                     </button>
-                    <button className="secondary-btn" onClick={() => setShowSendConfirm(false)} disabled={loading}>취소</button>
+                    <button className="secondary-btn" onClick={() => setShowSendConfirm(false)} disabled={loading}>{t('common.cancel')}</button>
                   </div>
                 </>
               ) : (
@@ -2070,7 +2072,7 @@ function Wallet() {
           <div className="modal">
             <div className="modal-header">
               <h3>{passphraseAction === 'backup' ? '암호화 백업' : '암호화된 백업 복구'}</h3>
-              <button onClick={() => { setShowPassphraseModal(false); setPassphrase(''); setPassphraseConfirm(''); }} aria-label="닫기">
+              <button onClick={() => { setShowPassphraseModal(false); setPassphrase(''); setPassphraseConfirm(''); }} aria-label={t('common.close')}>
                 <Icon name="close" size={20} />
               </button>
             </div>
@@ -2111,7 +2113,7 @@ function Wallet() {
                       onClick={() => { setShowPassphraseModal(false); setPassphrase(''); setPassphraseConfirm(''); }}
                       disabled={loading}
                     >
-                      취소
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </>
@@ -2140,7 +2142,7 @@ function Wallet() {
                       onClick={() => { setShowPassphraseModal(false); setPassphrase(''); window._pendingRestoreData = null; }}
                       disabled={loading}
                     >
-                      취소
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </>
@@ -2155,8 +2157,8 @@ function Wallet() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>거래 상세 정보</h3>
-              <button onClick={() => { setShowTxDetail(false); setSelectedTx(null); }} aria-label="닫기">
+              <h3>{t('wallet.viewDetails')}</h3>
+              <button onClick={() => { setShowTxDetail(false); setSelectedTx(null); }} aria-label={t('common.close')}>
                 <Icon name="close" size={20} />
               </button>
             </div>
@@ -2230,7 +2232,7 @@ function Wallet() {
             </div>
             <div className="modal-actions">
               <button className="primary-btn" onClick={() => { setShowTxDetail(false); setSelectedTx(null); }}>
-                확인
+                {t('common.confirm')}
               </button>
             </div>
           </div>
@@ -2239,11 +2241,11 @@ function Wallet() {
 
       {/* Transaction History */}
       <div className="transactions">
-        <h3>거래 내역</h3>
+        <h3>{t('wallet.transactions')}</h3>
         {loading ? (
           <div className="loading">거래 내역을 불러오는 중...</div>
         ) : transactions.length === 0 ? (
-          <div className="empty-state">거래 내역이 없습니다</div>
+          <div className="empty-state">{t('wallet.noTransactions')}</div>
         ) : (
           <>
             <div className="transaction-list">

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import './Home.css';
 import Icon from '../components/Icon';
 
 function About() {
+  const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState(null);
 
   const faqs = [
@@ -123,10 +125,10 @@ function About() {
         <div className="hero-content">
           <h1 className="hero-title">
             <span className="bitcoin-icon"><Icon name="info" size={64} /></span>
-            자주 묻는 질문 (FAQ)
+            {t('about.title')}
           </h1>
           <p className="hero-subtitle">
-            Cashu eCash와 한입 지갑에 대해 궁금한 모든 것
+            {t('about.subtitle')}
           </p>
         </div>
       </div>

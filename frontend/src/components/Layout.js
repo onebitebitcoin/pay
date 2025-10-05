@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import './Layout.css';
 import Icon from './Icon';
 
 const Layout = ({ children }) => {
+  const { t } = useTranslation();
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const [pinLocked, setPinLocked] = useState(false);
@@ -11,10 +13,10 @@ const Layout = ({ children }) => {
   const [pinError, setPinError] = useState('');
 
   const navigation = [
-    { name: '지갑', path: '/', icon: 'bitcoin' },
-    { name: '매장 찾기', path: '/map', icon: 'map' },
-    { name: 'FAQ', path: '/about', icon: 'info' },
-    { name: '설정', path: '/settings', icon: 'settings' }
+    { name: t('nav.wallet'), path: '/', icon: 'bitcoin' },
+    { name: t('nav.map'), path: '/map', icon: 'map' },
+    { name: t('nav.faq'), path: '/about', icon: 'info' },
+    { name: t('nav.settings'), path: '/settings', icon: 'settings' }
   ];
 
   // Check PIN lock on mount
@@ -44,11 +46,11 @@ const Layout = ({ children }) => {
         setPinInput('');
         setPinError('');
       } else {
-        setPinError('PIN이 올바르지 않습니다');
+        setPinError(t('settings.enterCurrentPin'));
         setPinInput('');
       }
     } catch (e) {
-      setPinError('오류가 발생했습니다');
+      setPinError(t('common.error'));
     }
   };
 
@@ -62,8 +64,8 @@ const Layout = ({ children }) => {
             <div className="pin-lock-icon">
               <Icon name="shield" size={64} />
             </div>
-            <h2>한입만</h2>
-            <p>앱을 사용하려면 PIN을 입력하세요</p>
+            <h2>{t('wallet.title')}</h2>
+            <p>{t('settings.pinLockDesc')}</p>
             <form onSubmit={handlePinSubmit}>
               <div className="pin-input-group">
                 <input
@@ -73,7 +75,7 @@ const Layout = ({ children }) => {
                     setPinInput(e.target.value);
                     setPinError('');
                   }}
-                  placeholder="PIN 입력"
+                  placeholder={t('settings.enterCurrentPin')}
                   maxLength="6"
                   autoFocus
                   className={pinError ? 'error' : ''}
@@ -87,7 +89,7 @@ const Layout = ({ children }) => {
                 className="pin-submit-btn"
                 disabled={!pinInput}
               >
-                잠금 해제
+                {t('settings.disablePin')}
               </button>
             </form>
           </div>

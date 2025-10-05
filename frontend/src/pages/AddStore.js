@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiUrl, loadKakaoSdk } from '../config';
 import Icon from '../components/Icon';
 import './AddStore.css';
 
 function AddStore() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [submitLoading, setSubmitLoading] = useState(false);
   const createEmptyStore = () => ({
     name: '',
@@ -95,14 +97,14 @@ function AddStore() {
         setNewStore((prev) => ({ ...prev, lat, lng }));
         updateTempMarker(lat, lng);
       } else {
-        alert('주소를 찾을 수 없습니다. 다른 표현으로 시도해보세요.');
+        alert(t('addStore.addressNotFound'));
       }
     });
   };
 
   const openAddressSearch = () => {
     if (!window.daum) {
-      alert('주소 검색 스크립트가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      alert(t('addStore.addressSearchNotReady'));
       return;
     }
     const openPostcode = () => {
@@ -130,12 +132,12 @@ function AddStore() {
     const trimmedCategory = category.trim();
     const trimmedAddress = address.trim();
     if (!trimmedName || !trimmedCategory || !trimmedAddress) {
-      alert('이름, 카테고리, 주소를 입력하세요');
+      alert(t('addStore.requiredFields'));
       return;
     }
     if (lat == null || lng == null) {
       geocodeAddress();
-      alert('주소 기반 위치를 찾는 중입니다. 다시 저장을 눌러주세요.');
+      alert(t('addStore.geocoding'));
       return;
     }
     try {
@@ -157,13 +159,13 @@ function AddStore() {
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || '매장 등록 실패');
+        throw new Error(err.error || t('addStore.error'));
       }
-      alert('매장이 등록되었습니다');
+      alert(t('addStore.success'));
       navigate('/map');
     } catch (e) {
       console.error(e);
-      alert(e.message || '매장 등록 중 오류가 발생했습니다');
+      alert(e.message || t('addStore.submitError'));
     } finally {
       setSubmitLoading(false);
     }
@@ -175,7 +177,7 @@ function AddStore() {
         <button className="back-btn" onClick={() => navigate(-1)}>
           <Icon name="chevron-down" size={20} style={{ transform: 'rotate(90deg)' }} />
         </button>
-        <h1>매장 등록</h1>
+        <h1>{t('addStore.title')}</h1>
         <div style={{ width: '32px' }} />
       </div>
 
@@ -183,54 +185,54 @@ function AddStore() {
         <div className="map-section">
           <div ref={mapRef} className="add-store-map" />
           <div className="map-tip">
-            지도를 클릭하거나 주소를 입력하여 위치를 지정하세요
+            {t('addStore.mapTip')}
           </div>
         </div>
 
         <div className="form-section">
           <div className="form-grid">
             <label>
-              <span>매장 이름 <span className="required">*</span></span>
+              <span>{t('addStore.storeName')} <span className="required">*</span></span>
               <input
                 type="text"
                 value={newStore.name}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="예: 비트코인 카페"
+                placeholder={t('addStore.storeNamePlaceholder')}
               />
             </label>
 
             <label>
-              <span>카테고리 <span className="required">*</span></span>
+              <span>{t('addStore.category')} <span className="required">*</span></span>
               <input
                 type="text"
                 value={newStore.category}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, category: e.target.value }))}
-                placeholder="예: 카페, 음식점, 편의점"
+                placeholder={t('addStore.categoryPlaceholder')}
               />
             </label>
 
             <label>
-              <span>전화번호</span>
+              <span>{t('addStore.phone')}</span>
               <input
                 type="tel"
                 value={newStore.phone}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, phone: e.target.value }))}
-                placeholder="예: 02-123-4567"
+                placeholder={t('addStore.phonePlaceholder')}
               />
             </label>
 
             <label>
-              <span>영업시간</span>
+              <span>{t('addStore.hours')}</span>
               <input
                 type="text"
                 value={newStore.hours}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, hours: e.target.value }))}
-                placeholder="예: 매일 09:00~21:00"
+                placeholder={t('addStore.hoursPlaceholder')}
               />
             </label>
 
             <label className="col-span-2">
-              <span>주소 <span className="required">*</span></span>
+              <span>{t('addStore.address')} <span className="required">*</span></span>
               <div className="address-input-row">
                 <input
                   type="text"
@@ -238,31 +240,31 @@ function AddStore() {
                   onChange={(e) => setNewStore((prev) => ({ ...prev, address: e.target.value, lat: null, lng: null }))}
                   onBlur={geocodeAddress}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); geocodeAddress(); } }}
-                  placeholder="주소를 입력하세요"
+                  placeholder={t('addStore.addressPlaceholder')}
                 />
                 <button type="button" className="search-btn" onClick={openAddressSearch}>
-                  주소 검색
+                  {t('addStore.searchAddress')}
                 </button>
               </div>
             </label>
 
             <label className="col-span-2">
-              <span>매장 설명</span>
+              <span>{t('addStore.description')}</span>
               <textarea
                 rows={3}
                 value={newStore.description}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="예: 비트코인·라이트닝 결제가 가능한 스페셜티 커피 전문점입니다."
+                placeholder={t('addStore.descriptionPlaceholder')}
               />
             </label>
           </div>
 
           <div className="form-actions">
             <button className="cancel-btn" onClick={() => navigate(-1)}>
-              취소
+              {t('common.cancel')}
             </button>
             <button className="submit-btn" onClick={submitNewStore} disabled={submitLoading}>
-              {submitLoading ? '등록 중...' : '등록하기'}
+              {submitLoading ? t('addStore.submitting') : t('addStore.submit')}
             </button>
           </div>
         </div>

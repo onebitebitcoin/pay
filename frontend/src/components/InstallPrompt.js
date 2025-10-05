@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import './InstallPrompt.css';
 
 function InstallPrompt() {
+  const { t } = useTranslation();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
@@ -62,37 +64,37 @@ function InstallPrompt() {
   return (
     <div className="install-prompt-overlay">
       <div className="install-prompt">
-        <button className="install-close" onClick={handleDismiss} aria-label="닫기">
+        <button className="install-close" onClick={handleDismiss} aria-label={t('common.close')}>
           <Icon name="close" size={20} />
         </button>
 
         <div className="install-icon">
-          <img src="/logo-192.png" alt="한입만" />
+          <img src="/logo-192.png" alt={t('wallet.title')} />
         </div>
 
-        <h2>앱으로 다운받기</h2>
-        <p>홈 화면에 추가하고 더 빠르게 접속하세요!</p>
+        <h2>{t('install.title')}</h2>
+        <p>{t('install.subtitle')}</p>
 
         <div className="install-features">
           <div className="install-feature">
             <Icon name="bolt" size={18} />
-            <span>빠른 실행</span>
+            <span>{t('install.fastLaunch')}</span>
           </div>
           <div className="install-feature">
             <Icon name="shield" size={18} />
-            <span>오프라인 지원</span>
+            <span>{t('install.offlineSupport')}</span>
           </div>
           <div className="install-feature">
             <Icon name="diamond" size={18} />
-            <span>앱처럼 사용</span>
+            <span>{t('install.appLike')}</span>
           </div>
         </div>
 
         <button className="install-button" onClick={handleInstall}>
-          지금 설치하기
+          {t('install.installNow')}
         </button>
         <button className="install-later" onClick={handleDismiss}>
-          나중에
+          {t('install.later')}
         </button>
       </div>
     </div>
