@@ -5,6 +5,7 @@
   "dependencies": {
     "@cashu/cashu-ts": "github:cashubtc/cashu-ts",
     "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "axios": "^1.5.0",
     "i18next": "^25.5.3",
     "react": "^18.2.0",

@@ -9,6 +9,7 @@ function Settings() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
+    walletName: '',
     language: 'ko',
     currency: 'SATS',
     notifications: true,
@@ -35,6 +36,7 @@ function Settings() {
     try {
       const saved = localStorage.getItem('app_settings');
       const defaultSettings = {
+        walletName: '',
         language: 'ko',
         currency: 'SATS',
         notifications: true,
@@ -59,6 +61,7 @@ function Settings() {
     } catch (e) {
       console.error('Failed to load settings:', e);
       const fallback = {
+        walletName: '',
         language: 'ko',
         currency: 'SATS',
         notifications: true,
@@ -242,6 +245,20 @@ function Settings() {
         {/* General Settings */}
         <div className="settings-section">
           <h2>{t('settings.general')}</h2>
+
+          <div className="setting-item">
+            <div className="setting-info">
+              <div className="setting-title">{t('settings.walletName')}</div>
+              <div className="setting-description">{t('settings.walletNameDesc')}</div>
+            </div>
+            <input
+              type="text"
+              value={settings.walletName}
+              onChange={(e) => handleSettingChange('walletName', e.target.value)}
+              placeholder={t('settings.walletNamePlaceholder')}
+              className="setting-input"
+            />
+          </div>
 
           <div className="setting-item">
             <div className="setting-info">

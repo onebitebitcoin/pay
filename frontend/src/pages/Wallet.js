@@ -33,6 +33,17 @@ function Wallet() {
   useEffect(() => {
     document.title = t('pageTitle.wallet');
   }, [t, i18n.language]);
+
+  // Load wallet name from settings
+  useEffect(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+      setWalletName(settings.walletName || '');
+    } catch (e) {
+      console.error('Failed to load wallet name:', e);
+    }
+  }, []);
+
   // Initialize balance from localStorage immediately
   const [ecashBalance, setEcashBalance] = useState(() => {
     try {
@@ -53,6 +64,7 @@ function Wallet() {
   });
   const TX_STORAGE_KEY = 'cashu_tx_v1';
   const [displayedTxCount, setDisplayedTxCount] = useState(10);
+  const [walletName, setWalletName] = useState('');
   const [showSend, setShowSend] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   // Cashu mode: no explicit join modal
@@ -1600,14 +1612,16 @@ function Wallet() {
                   className="primary-btn"
                   disabled={
                     loading ||
+                    fetchingQuote ||
                     !isConnected ||
                     !isWebSocketConnected ||
                     !!invoiceError ||
+                    (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
                     (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
-                  {loading ? t('wallet.sending') : t('wallet.send')}
+                  {loading ? t('wallet.sending') : fetchingQuote ? t('common.checkingInvoice') : t('wallet.send')}
                 </button>
                 <button
                   type="button"
@@ -1775,7 +1789,8 @@ function Wallet() {
         <div className="wallet">
       <div className="wallet-header">
         <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
-        <p>{t('wallet.subtitle')}</p>
+        <p className="wallet-subtitle">{t('wallet.subtitle')}</p>
+        {walletName && <h2 className="wallet-name-title">{t('wallet.walletTitle', { name: walletName })}</h2>}
       </div>
 
       {/* Storage warning banners */}
@@ -1951,7 +1966,7 @@ function Wallet() {
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
-                  {loading ? t('wallet.sending') : fetchingQuote ? t('common.loading') : t('wallet.send')}
+                  {loading ? t('wallet.sending') : fetchingQuote ? t('common.checkingInvoice') : t('wallet.send')}
                 </button>
               </div>
             </div>

@@ -25,10 +25,17 @@
   font-size: 2rem;
 }
 
-.wallet-header p {
+.wallet-subtitle {
   color: var(--muted);
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.wallet-name-title {
+  color: var(--text);
+  margin: 0.75rem 0 0 0;
+  font-size: 1.75rem;
+  font-weight: 600;
 }
 
 /* Connection Status */
@@ -1080,6 +1087,10 @@
 
   .wallet-header h1 {
     font-size: 1.75rem;
+  }
+
+  .wallet-name-title {
+    font-size: 1.5rem;
   }
 
   .balance-amount {
