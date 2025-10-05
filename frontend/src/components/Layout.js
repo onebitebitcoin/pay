@@ -52,44 +52,6 @@ const Layout = ({ children }) => {
     }
   };
 
-  // A2HS (Add to Home Screen) banner
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstall, setShowInstall] = useState(false);
-  useEffect(() => {
-    const dismissed = localStorage.getItem('a2hs_dismissed') === '1';
-    const onBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      if (!dismissed && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        setShowInstall(true);
-      }
-    };
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-  }, []);
-
-  const installBanner = showInstall ? (
-    <div className="install-banner">
-      <span>한입만을 홈 화면에 추가해 빠르게 실행해보세요.</span>
-      <div className="actions">
-        <button
-          onClick={async () => {
-            try {
-              if (!deferredPrompt) return setShowInstall(false);
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              if (outcome !== 'accepted') {
-                // keep banner hidden once dismissed
-                localStorage.setItem('a2hs_dismissed', '1');
-              }
-            } catch {}
-            setShowInstall(false);
-          }}
-        >설치</button>
-        <button className="dismiss" onClick={() => { localStorage.setItem('a2hs_dismissed','1'); setShowInstall(false); }}>닫기</button>
-      </div>
-    </div>
-  ) : null;
 
   // PIN Lock Screen
   if (pinLocked) {
@@ -200,9 +162,6 @@ const Layout = ({ children }) => {
           {children}
         </main>
       </div>
-
-      {/* Install banner (A2HS) */}
-      {installBanner}
     </div>
   );
 };
