@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
-import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, refreshProofs } from '../services/cashu';
+import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
 import './Wallet.css';
 import Icon from '../components/Icon';
@@ -568,28 +568,6 @@ function Wallet() {
     } catch (error) {
       console.error('Sync error:', error);
       showInfoMessage(t('messages.syncFailed', { error: translateErrorMessage(error?.message) || t('messages.unknownError') }), 'error', 4000);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Refresh proofs (swap for new ones)
-  const handleRefreshProofs = async () => {
-    try {
-      setLoading(true);
-      showInfoMessage(t('messages.refreshingTokens'), 'info', 2000);
-
-      const refreshResult = await refreshProofs(API_BASE_URL, createBlindedOutputs, signaturesToProofs);
-
-      if (refreshResult.success) {
-        showInfoMessage(t('messages.tokensRefreshed', { amount: refreshResult.amount }), 'success', 4000);
-        setEcashBalance(getBalanceSats());
-      } else {
-        throw new Error(refreshResult.error || t('messages.redeemFailed'));
-      }
-    } catch (error) {
-      console.error('Refresh error:', error);
-      showInfoMessage(t('messages.refreshFailed', { error: translateErrorMessage(error?.message) || t('messages.unknownError') }), 'error', 4000);
     } finally {
       setLoading(false);
     }
@@ -1837,9 +1815,6 @@ function Wallet() {
               </div>
             </div>
             <div className="balance-manage">
-              <button className="icon-btn" onClick={handleRefreshProofs} title={t('wallet.refreshTokens')} disabled={loading}>
-                <Icon name="refresh" size={18} />
-              </button>
               <button className="icon-btn" onClick={checkPendingQuote} title={t('wallet.checkPending')} disabled={loading}>
                 <Icon name="repeat" size={18} />
               </button>
@@ -2339,19 +2314,8 @@ function Wallet() {
           <h3 onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer', flex: 1 }}>
             {t('wallet.ecashHoldings')} ({t('wallet.ecashCount', { count: loadProofs().length })})
           </h3>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button
-              className="icon-btn"
-              onClick={handleRefreshProofs}
-              title={t('wallet.refreshTokens')}
-              disabled={loading}
-              style={{ padding: '0.25rem' }}
-            >
-              <Icon name="refresh" size={16} />
-            </button>
-            <div onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer' }}>
-              <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
-            </div>
+          <div onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer' }}>
+            <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
           </div>
         </div>
         {showProofs && (
