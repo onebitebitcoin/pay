@@ -1522,7 +1522,7 @@ function Wallet() {
             <div className="send-card-body">
               {!isConnected || !isWebSocketConnected ? (
                 <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                  네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다.
+                  네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다. 새로고침하세요.
                 </div>
               ) : null}
               {enableSendScanner ? (
@@ -1632,7 +1632,7 @@ function Wallet() {
                     <>
                       {!isConnected || !isWebSocketConnected ? (
                         <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                          네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다.
+                          네트워크 연결이 끊겼습니다. Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket 연결'}이 필요합니다. 새로고침하세요.
                         </div>
                       ) : null}
                       <div className="input-group">
@@ -1837,7 +1837,7 @@ function Wallet() {
             )}
             {!isConnected || !isWebSocketConnected ? (
               <div className="network-warning">
-                네트워크 연결 (Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket'})이 필요합니다
+                네트워크 연결 (Mint {!isConnected && '연결'}{!isConnected && !isWebSocketConnected && ' 및 '}{!isWebSocketConnected && 'WebSocket'})이 필요합니다. 새로고침하세요.
               </div>
             ) : (
               <>
