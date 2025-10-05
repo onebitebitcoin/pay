@@ -70,7 +70,7 @@ const Layout = ({ children }) => {
 
   const installBanner = showInstall ? (
     <div className="install-banner">
-      <span>한입 결제를 홈 화면에 추가해 빠르게 실행해보세요.</span>
+      <span>한입만을 홈 화면에 추가해 빠르게 실행해보세요.</span>
       <div className="actions">
         <button
           onClick={async () => {
@@ -100,7 +100,7 @@ const Layout = ({ children }) => {
             <div className="pin-lock-icon">
               <Icon name="shield" size={64} />
             </div>
-            <h2>한입 결제</h2>
+            <h2>한입만</h2>
             <p>앱을 사용하려면 PIN을 입력하세요</p>
             <form onSubmit={handlePinSubmit}>
               <div className="pin-input-group">
@@ -142,7 +142,7 @@ const Layout = ({ children }) => {
           <div className="brand">
             <h1 className="header-title">
               <img src="/logo-192.png" alt="한입 로고" className="header-logo" />
-              한입 결제
+              한입만
             </h1>
           </div>
           <nav className="topnav">

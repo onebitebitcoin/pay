@@ -10,7 +10,7 @@ function Home() {
         <div className="hero-content">
           <h1 className="hero-title">
             <span className="bitcoin-icon"><Icon name="bitcoin" size={64} /></span>
-            한입 결제
+            한입만
           </h1>
           <p className="hero-subtitle">
             비트코인으로 결제할 수 있는 매장을 찾고, 라이트닝 지갑으로 즉시 결제하세요

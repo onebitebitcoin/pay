@@ -67,7 +67,7 @@ function InstallPrompt() {
         </button>
 
         <div className="install-icon">
-          <img src="/logo-192.png" alt="한입 비트코인" />
+          <img src="/logo-192.png" alt="한입만" />
         </div>
 
         <h2>앱으로 다운받기</h2>

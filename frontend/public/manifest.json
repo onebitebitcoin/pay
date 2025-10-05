@@ -1,6 +1,6 @@
 {
-  "short_name": "한입 비트코인",
-  "name": "한입 비트코인 - Cashu 지갑 & 매장찾기",
+  "short_name": "한입만",
+  "name": "한입만 - Cashu 지갑 & 매장찾기",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
