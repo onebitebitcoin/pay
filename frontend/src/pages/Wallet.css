@@ -52,7 +52,7 @@
   font-size: 0.875rem;
 }
 
-.connect-btn { background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 600; transition: background-color 0.2s; }
+.connect-btn { background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-weight: 600; transition: background-color 0.2s; forced-color-adjust: none; -webkit-text-fill-color: white; }
 .connect-btn:hover:not(:disabled) { background: var(--primary-600); }
 
 .connect-btn:disabled {
@@ -299,12 +299,12 @@
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  forced-color-adjust: none;
+  -webkit-text-fill-color: #fff;
 }
 
 .receive-btn {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  forced-color-adjust: none;
-  -webkit-text-fill-color: #fff;
 }
 
 .receive-btn:hover:not(:disabled) {
@@ -314,8 +314,6 @@
 
 .send-btn {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  forced-color-adjust: none;
-  -webkit-text-fill-color: #fff;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -586,6 +584,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s, border-color 0.2s;
+  forced-color-adjust: none;
 }
 
 .secondary-btn:hover {
@@ -599,7 +598,7 @@
   margin-top: 2rem;
 }
 
-.primary-btn { flex: 1; background: var(--primary); color: #fff; border: none; padding: 0.875rem 1.5rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+.primary-btn { flex: 1; background: var(--primary); color: #fff; border: none; padding: 0.875rem 1.5rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; forced-color-adjust: none; -webkit-text-fill-color: #fff; }
 .primary-btn:hover:not(:disabled) { background: var(--primary-600); }
 
 .primary-btn:disabled {
@@ -1580,6 +1579,8 @@
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
   border: none;
+  forced-color-adjust: none;
+  -webkit-text-fill-color: #fff;
 }
 
 .receive-actions .primary-btn:hover:not(:disabled) {
@@ -1702,6 +1703,8 @@
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: #fff;
   border: none;
+  forced-color-adjust: none;
+  -webkit-text-fill-color: #fff;
 }
 
 .send-actions .primary-btn:hover:not(:disabled) {
