@@ -358,6 +358,12 @@
     "digitalGold": "Digital Gold",
     "digitalGoldDesc": "Protect your assets from inflation"
   },
+  "paymentSuccess": {
+    "receiveComplete": "Payment Received!",
+    "sendComplete": "Payment Sent!",
+    "receiveMessage": "Successfully received Lightning payment!",
+    "sendMessage": "Lightning payment completed!"
+  },
   "install": {
     "title": "Download as App",
     "subtitle": "Add to home screen for faster access!",

@@ -1,8 +1,10 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import './PaymentSuccess.css';
 
 function PaymentSuccess() {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { amount, returnTo, type } = location.state || {};
@@ -11,7 +13,13 @@ function PaymentSuccess() {
   const isReceive = type === 'receive' || returnTo === '/wallet/receive';
 
   const formatAmount = (sats) => {
-    return new Intl.NumberFormat('ko-KR').format(sats);
+    const localeMap = {
+      ko: 'ko-KR',
+      en: 'en-US',
+      ja: 'ja-JP'
+    };
+    const locale = localeMap[i18n.language] || 'en-US';
+    return new Intl.NumberFormat(locale).format(sats);
   };
 
   const handleConfirm = () => {
@@ -37,7 +45,7 @@ function PaymentSuccess() {
         </div>
 
         <h2 className="success-title">
-          {isReceive ? '수신 완료!' : '송금 완료!'}
+          {isReceive ? t('paymentSuccess.receiveComplete') : t('paymentSuccess.sendComplete')}
         </h2>
 
         <p className="success-amount">
@@ -46,12 +54,12 @@ function PaymentSuccess() {
 
         <p className="success-message">
           {isReceive
-            ? '라이트닝 결제를 성공적으로 받았습니다!'
-            : '라이트닝 송금이 완료되었습니다!'}
+            ? t('paymentSuccess.receiveMessage')
+            : t('paymentSuccess.sendMessage')}
         </p>
 
         <button onClick={handleConfirm} className="confirm-btn">
-          확인
+          {t('common.confirm')}
         </button>
       </div>
     </div>

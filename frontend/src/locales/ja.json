@@ -358,6 +358,12 @@
     "digitalGold": "デジタルゴールド",
     "digitalGoldDesc": "インフレから資産を保護"
   },
+  "paymentSuccess": {
+    "receiveComplete": "受信完了！",
+    "sendComplete": "送信完了！",
+    "receiveMessage": "ライトニング決済を正常に受け取りました！",
+    "sendMessage": "ライトニング送金が完了しました！"
+  },
   "install": {
     "title": "アプリとしてダウンロード",
     "subtitle": "ホーム画面に追加して素早くアクセス！",

@@ -358,6 +358,12 @@
     "digitalGold": "디지털 골드",
     "digitalGoldDesc": "인플레이션으로부터 자산 보호"
   },
+  "paymentSuccess": {
+    "receiveComplete": "수신 완료!",
+    "sendComplete": "송금 완료!",
+    "receiveMessage": "라이트닝 결제를 성공적으로 받았습니다!",
+    "sendMessage": "라이트닝 송금이 완료되었습니다!"
+  },
   "install": {
     "title": "앱으로 다운받기",
     "subtitle": "홈 화면에 추가하고 더 빠르게 접속하세요!",
