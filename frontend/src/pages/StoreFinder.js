@@ -8,12 +8,36 @@ function StoreFinder() {
   const { t, i18n } = useTranslation();
   const [stores, setStores] = useState([]);
 
+  // Helper function to get localized store name
+  const getStoreName = (store) => {
+    if ((i18n.language === 'en' || i18n.language === 'ja') && store.name_en) {
+      return store.name_en;
+    }
+    return store.name;
+  };
+
+  // Helper function to get localized address
+  const getStoreAddress = (store) => {
+    if ((i18n.language === 'en' || i18n.language === 'ja') && store.address_en) {
+      return store.address_en;
+    }
+    return store.address;
+  };
+
+  // Helper function to get localized category
+  const getStoreCategory = (store) => {
+    if ((i18n.language === 'en' || i18n.language === 'ja') && store.category_en) {
+      return store.category_en;
+    }
+    return store.category;
+  };
+
   useEffect(() => {
     document.title = t('pageTitle.map');
   }, [t, i18n.language]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredStores, setFilteredStores] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('전체');
+  const [selectedCategory, setSelectedCategory] = useState(null);
   // const [loading, setLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
@@ -39,7 +63,7 @@ function StoreFinder() {
         if (!cancelled) initKakaoMap();
       })
       .catch((err) => {
-        console.error('카카오맵 SDK 로드 실패:', err);
+        console.error('Kakao Map SDK loading failed:', err);
       });
 
     return () => {
@@ -51,7 +75,7 @@ function StoreFinder() {
     filterStores();
   }, [searchQuery, stores, selectedCategory, sortByDistance, userLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const categories = ['전체', ...new Set(stores.map(s => s.category).filter(Boolean))];
+  const categories = [null, ...new Set(stores.map(s => s.category).filter(Boolean))];
 
   // Calculate distance between two coordinates (Haversine formula)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -107,7 +131,7 @@ function StoreFinder() {
         setLoadingLocation(false);
       },
       (error) => {
-        console.error('위치 가져오기 실패:', error);
+        console.error('Geolocation failed:', error);
         let errorMsg = t('storeFinder.geolocationError');
         if (error.code === 1) {
           errorMsg = t('storeFinder.geolocationDenied');
@@ -133,13 +157,13 @@ function StoreFinder() {
       const data = await response.json();
       setStores(data);
     } catch (error) {
-      console.error('매장 데이터 가져오기 오류:', error);
+      console.error('Failed to fetch stores:', error);
     }
   };
 
   const initKakaoMap = () => {
     if (!window.kakao || !window.kakao.maps) {
-      console.error('카카오맵 API가 로드되지 않았습니다');
+      console.error('Kakao Map API not loaded');
       return;
     }
 
@@ -180,21 +204,26 @@ function StoreFinder() {
     storeData.forEach(store => {
       const markerPosition = new window.kakao.maps.LatLng(store.lat, store.lng);
       
+      const storeName = getStoreName(store);
+      const storeAddress = getStoreAddress(store);
+
       const marker = new window.kakao.maps.Marker({
         position: markerPosition,
         image: markerImage,
-        title: store.name
+        title: storeName
       });
 
       marker.setMap(kakaoMapRef.current);
+
+      const storeCategory = getStoreCategory(store);
 
       // Create info window
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `
           <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
-            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${store.name}</h3>
-            <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${store.category}</p>
-            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${store.address}</p>
+            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${storeName}</h3>
+            <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${storeCategory}</p>
+            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${storeAddress}</p>
             <button
               id="store-detail-btn-${store.id}"
               style="
@@ -219,7 +248,7 @@ function StoreFinder() {
                 <line x1="12" y1="16" x2="12" y2="12"></line>
                 <line x1="12" y1="8" x2="12.01" y2="8"></line>
               </svg>
-              자세히 보기
+              ${t('storeFinder.viewDetails')}
             </button>
           </div>
         `
@@ -266,7 +295,7 @@ function StoreFinder() {
     let filtered = stores;
 
     // Category filter
-    if (selectedCategory !== '전체') {
+    if (selectedCategory !== null) {
       filtered = filtered.filter(store => store.category === selectedCategory);
     }
 
@@ -338,7 +367,7 @@ function StoreFinder() {
       await navigator.clipboard.writeText(text);
       alert(t('common.copied'));
     } catch (err) {
-      console.error('복사 실패:', err);
+      console.error('Copy failed:', err);
       alert(t('common.copyFailed'));
     }
   };
@@ -362,7 +391,7 @@ function StoreFinder() {
         closeStoreDetail();
       }
     } catch (error) {
-      console.error('매장 삭제 오류:', error);
+      console.error('Failed to delete store:', error);
       alert(error.message || t('storeFinder.deleteFailed'));
     } finally {
       setDeleteLoadingId(null);
@@ -382,7 +411,7 @@ function StoreFinder() {
         >
           {categories.map((cat) => (
             <option key={cat} value={cat}>
-              {cat === '전체' ? t('storeFinder.allCategories') : cat}
+              {cat === null ? t('storeFinder.allCategories') : cat}
             </option>
           ))}
         </select>
@@ -415,7 +444,7 @@ function StoreFinder() {
 
         <div className="store-finder-sidebar">
           <h3 className="sidebar-title">
-            비트코인 매장 ({filteredStores.length}개) {sortByDistance && userLocation && '· 거리순'}
+            {t('storeFinder.storesCount', { count: filteredStores.length })} {sortByDistance && userLocation && t('storeFinder.sortedByDistance')}
           </h3>
           <div className="store-list">
             {filteredStores.map(store => (
@@ -425,7 +454,7 @@ function StoreFinder() {
               >
                 <div className="store-card-content">
                   <div className="store-card-header">
-                    <h4 className="store-name">{store.name}</h4>
+                    <h4 className="store-name">{getStoreName(store)}</h4>
                     {sortByDistance && store.distance !== undefined && (
                       <span className="store-distance">{store.distance < 1 ? `${Math.round(store.distance * 1000)}m` : `${store.distance.toFixed(1)}km`}</span>
                     )}
@@ -454,7 +483,7 @@ function StoreFinder() {
                       </button>
                     </div>
                   </div>
-                  <p className="store-address">{store.address}</p>
+                  <p className="store-address">{getStoreAddress(store)}</p>
                 </div>
               </div>
             ))}
@@ -474,20 +503,20 @@ function StoreFinder() {
           <div className="sf-modal-body">
             <div className="store-detail-section">
               <div className="store-detail-header">
-                <h2 className="store-detail-name">{selectedStore.name}</h2>
-                <span className="store-detail-category">{selectedStore.category}</span>
+                <h2 className="store-detail-name">{getStoreName(selectedStore)}</h2>
+                <span className="store-detail-category">{getStoreCategory(selectedStore)}</span>
               </div>
               <div className="store-detail-info">
                 <div className="store-detail-item">
                   <Icon name="map" size={18} />
                   <div style={{ flex: 1 }}>
                     <strong>{t('storeFinder.address')}</strong>
-                    <p>{selectedStore.address}</p>
+                    <p>{getStoreAddress(selectedStore)}</p>
                   </div>
                   <button
                     type="button"
                     className="copy-btn"
-                    onClick={() => copyToClipboard(selectedStore.address)}
+                    onClick={() => copyToClipboard(getStoreAddress(selectedStore))}
                     title={t('common.copy')}
                   >
                     <Icon name="copy" size={16} />

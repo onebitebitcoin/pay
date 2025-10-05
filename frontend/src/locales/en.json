@@ -21,7 +21,9 @@
     "refresh": "Refresh",
     "copy": "Copy",
     "copied": "Copied to clipboard",
-    "copyFailed": "Failed to copy"
+    "copyFailed": "Failed to copy",
+    "openMenu": "Open menu",
+    "unlock": "Unlock"
   },
   "nav": {
     "wallet": "Wallet",
@@ -55,7 +57,7 @@
     "receivedAmount": "Received Amount",
     "sendAmount": "Send Amount",
     "fee": "Fee",
-    "feeReserve": "Fee Reserve",
+    "feeReserve": "Mint Fee Reserve",
     "totalRequired": "Total Required",
     "available": "Available eCash",
     "afterBalance": "Balance After Send",
@@ -84,7 +86,29 @@
     "refreshTokens": "Refresh Tokens (Swap)",
     "checkPending": "Check Pending Payments",
     "backup": "Backup",
-    "restore": "Restore"
+    "restore": "Restore",
+    "ecashHoldings": "eCash Holdings",
+    "ecashCount": "{{count}} items",
+    "noEcash": "No eCash holdings",
+    "invoiceAmount": "Invoice Amount",
+    "backToWallet": "Back to Wallet",
+    "receiveSubtext": "Enter the amount to receive Bitcoin",
+    "networkDisconnected": "Network disconnected. Mint {{mintStatus}}{{separator}}{{wsStatus}} required. Please refresh.",
+    "mintConnection": "connection",
+    "wsConnection": "WebSocket connection",
+    "andSeparator": " and ",
+    "invoicePlaceholder": "lnbc... or user@domain",
+    "invoiceDetected": "✓ Invoice detected",
+    "addressDetected": "✓ Lightning address detected",
+    "invoiceOrAddressHint": "Enter lnbc... or user@domain",
+    "amountPlaceholder": "Enter amount",
+    "availableBalance": "Available: {{amount}} sats",
+    "generatingInvoice": "Generating invoice...",
+    "tapToCopy": "Tap to copy",
+    "copied": "Copied",
+    "recreate": "Recreate",
+    "receiveComplete": "Received!",
+    "receiveSuccess": "Successfully received Lightning payment."
   },
   "settings": {
     "title": "Settings",
@@ -143,6 +167,9 @@
     "allStores": "All Stores",
     "category": "Category",
     "allCategories": "All",
+    "viewDetails": "View Details",
+    "storesCount": "Bitcoin Stores ({{count}})",
+    "sortedByDistance": "· By Distance",
     "distance": "{{distance}}",
     "viewOnMap": "View on Map",
     "details": "Details",
@@ -203,6 +230,125 @@
     "title": "FAQ",
     "subtitle": "Frequently Asked Questions"
   },
+  "faq": {
+    "categories": {
+      "basics": "Cashu & eCash Basics",
+      "usage": "Wallet Usage",
+      "fees": "Fees & Technology",
+      "security": "Security & Privacy",
+      "troubleshooting": "Troubleshooting"
+    },
+    "basics": {
+      "whatIsCashu": {
+        "q": "What is Cashu?",
+        "a": "Cashu is an eCash protocol based on the Bitcoin Lightning Network. It enables fast and affordable payments while protecting privacy using encrypted tokens (eCash) issued by a Mint server. By adopting the Chaumian ecash method, even the Mint cannot know who is using which tokens."
+      },
+      "isCustodial": {
+        "q": "Is eCash a custodial wallet?",
+        "a": "No, Cashu eCash is different from traditional custodial wallets. eCash tokens are stored only in your browser, and the Mint server does not hold the tokens. The Mint only issues and redeems tokens and cannot track who holds which tokens."
+      },
+      "advantages": {
+        "q": "What are the main advantages of eCash?",
+        "a": "1) Privacy: Even the Mint cannot know who is using which tokens. 2) Instant payments: Immediate sending and receiving via Lightning Network. 3) Low fees: Optimized for micropayments. 4) Offline transactions: Token exchange possible without internet."
+      }
+    },
+    "usage": {
+      "howToReceive": {
+        "q": "How do I receive Lightning payments?",
+        "a": "Click the \"Receive\" button on the wallet page, enter the amount, and generate an invoice. When the QR code appears, the other party can scan it to make payment. Once payment is complete, it's automatically converted to eCash and added to your balance."
+      },
+      "howToSend": {
+        "q": "How do I send Lightning payments?",
+        "a": "Click the \"Send\" button and paste a Lightning invoice (lnbc...). Lightning addresses (user@domain) also work by entering the amount, which will automatically generate an invoice. A fee reserve is included, and any remaining amount is returned as eCash."
+      },
+      "whyBackup": {
+        "q": "Why is backup important?",
+        "a": "eCash tokens are stored only in your browser's local storage. If you delete browser data or clear cache, your balance will be permanently lost. Make sure to download the backup file (JSON) and keep it safe. With a backup file, you can restore at any time."
+      },
+      "multiDevice": {
+        "q": "Can I use it on multiple devices?",
+        "a": "Yes, you can restore by transferring the backup file to another device. However, using the same tokens simultaneously on multiple devices can cause double-spending issues, so it's recommended to use only one device at a time."
+      }
+    },
+    "fees": {
+      "howFees": {
+        "q": "How do fees work?",
+        "a": "Lightning transfers include a routing fee reserve. If more is reserved than the actual fee, the remaining amount is automatically returned as eCash change. The Mint pays the fee on your behalf, and in most cases, you'll receive the difference back as the reserve exceeds the actual cost."
+      },
+      "trustMint": {
+        "q": "Can I trust the Mint?",
+        "a": "The Mint's role is to redeem Bitcoin for eCash tokens. It's important to choose a trustworthy Mint, and if needed, you can move (swap) tokens to another Mint. The app currently uses a default Mint, with support for multiple Mints planned for the future."
+      },
+      "lostTokens": {
+        "q": "What if tokens are stolen or lost?",
+        "a": "eCash tokens are similar to physical cash. Without a backup file, they cannot be recovered, so make sure to keep them safe. We recommend storing backup files on encrypted USB drives or cloud storage."
+      },
+      "blindSignature": {
+        "q": "What is a Blind Signature?",
+        "a": "It's a core technology of Chaumian eCash—a cryptographic technique that prevents the Mint from knowing the token's content when signing it. This ensures complete privacy as even the Mint cannot track who is using which tokens."
+      }
+    },
+    "security": {
+      "tracked": {
+        "q": "Can my transactions be tracked?",
+        "a": "No, thanks to Cashu's blind signature technology, even the Mint cannot know which tokens are being used by whom. Transaction history is not recorded on the blockchain, providing complete privacy. However, the Mint can only see the amount at the time of issuance/redemption."
+      },
+      "privacy": {
+        "q": "How is personal information protected?",
+        "a": "All eCash tokens are stored only in the browser's local storage and are not transmitted to the server. The Mint cannot identify token owners, and the app does not collect any personal information."
+      },
+      "mintHacked": {
+        "q": "What happens if the Mint is hacked?",
+        "a": "If the Mint's private key is compromised, attackers can issue unlimited tokens. However, your tokens are safely stored in your browser, and you can immediately move them to another Mint or withdraw via Lightning. Choosing a trustworthy Mint is important."
+      },
+      "browserExtensions": {
+        "q": "Are browser extensions safe?",
+        "a": "Suspicious browser extensions can access local storage and steal tokens. Only install trusted extensions, and keep significant amounts safe in backup files."
+      }
+    },
+    "troubleshooting": {
+      "balanceGone": {
+        "q": "My received balance disappeared",
+        "a": "Clearing browser storage permanently deletes eCash tokens. If you have a backup file, you can restore it using the \"Restore\" button. Without a backup, recovery is impossible, so make sure to back up regularly."
+      },
+      "noBalance": {
+        "q": "Balance not showing after invoice payment",
+        "a": "Payment confirmation can take up to 2 minutes. Try refreshing the page or wait a moment. If it still doesn't resolve, you can manually recover by finding the quote ID in the backend logs."
+      },
+      "failedButDeducted": {
+        "q": "Transfer failed but balance was deducted",
+        "a": "When a transfer fails, the used tokens should remain and not be burned. If your balance was deducted, try refreshing the browser. If the problem persists, restore from backup file."
+      },
+      "addressNotWorking": {
+        "q": "Can't send to Lightning address",
+        "a": "When sending to a Lightning address, you must enter an amount. Check that the address format is correct (user@domain) and that the recipient's Lightning address is active."
+      },
+      "moreQuestions": {
+        "q": "I have more questions",
+        "a": "If your issue isn't resolved by the FAQ above, please contact onebitebitcoin@proton.me. We'll respond as quickly as possible."
+      }
+    }
+  },
+  "home": {
+    "title": "Hanibman",
+    "subtitle": "Find stores that accept Bitcoin payments and pay instantly with Lightning wallet",
+    "findStore": "Find Stores",
+    "findStoreDesc": "Discover Bitcoin-accepting stores using Kakao Map",
+    "cashuWallet": "Cashu Wallet",
+    "cashuWalletDesc": "Privacy-focused Lightning wallet based on Cashu",
+    "bitcoinStoresCount": "Bitcoin Stores",
+    "totalVolume": "Total Volume (sats)",
+    "privacyProtection": "Privacy Protection",
+    "whyBitcoin": "Why Bitcoin?",
+    "privacy": "Privacy",
+    "privacyDesc": "Complete privacy protection with Cashu eCash",
+    "instantPayment": "Instant Payment",
+    "instantPaymentDesc": "Immediate payments via Lightning Network",
+    "global": "Global",
+    "globalDesc": "Borderless global payment system",
+    "digitalGold": "Digital Gold",
+    "digitalGoldDesc": "Protect your assets from inflation"
+  },
   "install": {
     "title": "Download as App",
     "subtitle": "Add to home screen for faster access!",
@@ -246,6 +392,64 @@
     "autoReflectFailed": "Failed to automatically reflect balance due to missing proof data. Please use \"Check Pending Payments\" to recover.",
     "insufficientBalanceSimple": "Insufficient balance",
     "insufficientBalanceDetails": "Insufficient balance: {{amount}} sats short",
-    "tokenAlreadyUsed": "Token already used. It may have been used on another device or balance is not synchronized. Please refresh the page and try again."
+    "tokenAlreadyUsed": "Token already used. It may have been used on another device or balance is not synchronized. Please refresh the page and try again.",
+    "syncingTokens": "Syncing tokens...",
+    "removedUsedTokens": "Removed {{count}} used tokens",
+    "allTokensValid": "All tokens are valid",
+    "syncFailed": "Sync failed: {{error}}",
+    "unknownError": "Unknown error",
+    "refreshingTokens": "Refreshing tokens...",
+    "tokensRefreshed": "Refreshed {{amount}} sats worth of tokens",
+    "refreshFailed": "Refresh failed: {{error}}",
+    "noPendingInvoice": "No pending invoice to check",
+    "alreadyProcessed": "Invoice already processed",
+    "checkingInvoiceStatus": "Checking invoice status...",
+    "quoteCheckFailed": "Failed to check quote status",
+    "invoiceNotPaid": "Invoice not yet paid",
+    "recoveredSuccess": "Successfully recovered {{amount}} sats!",
+    "mintKeysFailed": "Failed to retrieve mint keys",
+    "alreadyIssuedNoRecovery": "This invoice has already been processed. Unfortunately, signatures were not received and recovery is not possible. Please contact the Mint administrator.",
+    "redeemFailed": "Redeem failed",
+    "noValidSignatures": "No valid signatures received",
+    "quoteCheckError": "Failed to check quote",
+    "backupDownloaded": "Encrypted backup file downloaded",
+    "backupFailed": "Backup failed: {{error}}",
+    "restoreComplete": "Restore complete: {{added}} added, {{total}} total",
+    "restoreInvalidFile": "Restore failed: Invalid file",
+    "noDataToRestore": "No data to restore.",
+    "restoreWrongPassphrase": "Restore failed: Incorrect passphrase or corrupted file",
+    "connectedToBackupMint": "Connected to backup Mint",
+    "mintInfoFailed": "Failed to retrieve Mint information",
+    "mainBackupMintFailed": "Both main and backup Mint connections failed",
+    "connectionFailedHttp": "HTTP {{status}}: Connection failed",
+    "notValidMint": "Not a valid Cashu Mint",
+    "connectionSuccessMint": "Connection successful ({{name}})",
+    "connectionFailedGeneric": "Connection failed",
+    "qrCodeInvalid": "No valid value found in QR code",
+    "qrCodeLoaded": "QR code loaded",
+    "sendFailed": "Send failed",
+    "statusConfirmed": "Confirmed",
+    "statusPending": "Pending",
+    "qrScanUnavailable": "QR scan feature is unavailable",
+    "invoiceGenerationError": "Invoice generation failed",
+    "alreadyPaidInvoice": "Invoice already paid",
+    "expiredInvoice": "Invoice has expired",
+    "invalidInvoice": "Invalid invoice",
+    "paymentFailed": "Payment failed",
+    "noRouteFound": "Payment route not found",
+    "requestTimeout": "Request timed out",
+    "networkError": "Network connection error occurred",
+    "quoteRequestError": "Quote request failed",
+    "invoiceRequired": "Please enter Lightning invoice (lnbc...) or Lightning address (user@domain)",
+    "amountRequired": "Amount is required",
+    "addressInvoiceError": "Failed to issue address invoice",
+    "invoiceIssueFailed": "Invoice issuance failed",
+    "quoteError": "Quote request failed",
+    "invoiceOrAddressRequired": "Invoice or address required",
+    "mintKeysFetchError": "Failed to fetch Mint keys",
+    "duplicateInputs": "Duplicate inputs detected. Please refresh and try again.",
+    "lightningReceive": "Lightning Receive",
+    "lightningSend": "Lightning Send",
+    "quoteDataMissing": "Quote data missing"
   }
 }

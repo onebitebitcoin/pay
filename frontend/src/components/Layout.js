@@ -5,7 +5,7 @@ import './Layout.css';
 import Icon from './Icon';
 
 const Layout = ({ children }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const [pinLocked, setPinLocked] = useState(false);
@@ -89,7 +89,7 @@ const Layout = ({ children }) => {
                 className="pin-submit-btn"
                 disabled={!pinInput}
               >
-                {t('settings.disablePin')}
+                {t('common.unlock')}
               </button>
             </form>
           </div>
@@ -106,7 +106,7 @@ const Layout = ({ children }) => {
           <div className="brand">
             <h1 className="header-title">
               <img src="/logo-192.png" alt="한입 로고" className="header-logo" />
-              한입만
+              {i18n.language === 'ko' ? '한입만' : 'Hanibman'}
             </h1>
           </div>
           <nav className="topnav">
@@ -129,7 +129,7 @@ const Layout = ({ children }) => {
           </nav>
           <button
             className="topnav-toggle"
-            aria-label="메뉴 열기"
+            aria-label={t('common.openMenu')}
             onClick={() => setNavOpen((v) => !v)}
           >
             <Icon name="menu" size={22} />

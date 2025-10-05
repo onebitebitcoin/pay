@@ -171,26 +171,26 @@ function Settings() {
       const response = await fetch(`${normalizedUrl}/v1/info`);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: 연결 실패`);
+        throw new Error(t('messages.connectionFailedHttp', { status: response.status }));
       }
 
       const data = await response.json();
 
       // Verify it's a valid Cashu mint
       if (!data.name && !data.version) {
-        throw new Error('유효한 Cashu Mint가 아닙니다');
+        throw new Error(t('messages.notValidMint'));
       }
 
       setMainUrlStatus({
         success: true,
-        message: `연결 성공 (${data.name || 'Cashu Mint'})`,
+        message: t('messages.connectionSuccessMint', { name: data.name || 'Cashu Mint' }),
         data
       });
     } catch (error) {
       console.error('Mint connection test failed:', error);
       setMainUrlStatus({
         success: false,
-        message: error.message || '연결 실패'
+        message: error.message || t('messages.connectionFailedGeneric')
       });
     } finally {
       setTestingMainUrl(false);
@@ -314,17 +314,31 @@ function Settings() {
               <div className="setting-description">
                 {t('settings.mintUrlDesc')}
               </div>
-              <input
-                type="url"
-                placeholder={DEFAULT_MINT_URL}
-                value={settings.mintUrl}
-                onChange={(e) => {
-                  handleSettingChange('mintUrl', e.target.value);
-                  setMainUrlStatus(null);
-                }}
-                className="setting-input"
-                style={{ marginTop: '0.5rem', width: '100%' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <input
+                  type="url"
+                  placeholder={DEFAULT_MINT_URL}
+                  value={settings.mintUrl}
+                  onChange={(e) => {
+                    handleSettingChange('mintUrl', e.target.value);
+                    setMainUrlStatus(null);
+                  }}
+                  className="setting-input"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  onClick={() => testMintConnection(settings.mintUrl)}
+                  className="icon-btn"
+                  disabled={testingMainUrl || !settings.mintUrl}
+                  title={testingMainUrl ? t('settings.testing') : t('settings.testConnection')}
+                >
+                  {testingMainUrl ? (
+                    <Icon name="loader" size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    <Icon name="check-circle" size={20} />
+                  )}
+                </button>
+              </div>
               {mainUrlStatus && (
                 <div style={{
                   marginTop: '0.5rem',
@@ -342,19 +356,6 @@ function Settings() {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => testMintConnection(settings.mintUrl)}
-              className="icon-btn"
-              disabled={testingMainUrl || !settings.mintUrl}
-              title={testingMainUrl ? '테스트 중...' : '연결 테스트'}
-              style={{ alignSelf: 'flex-start' }}
-            >
-              {testingMainUrl ? (
-                <Icon name="refresh" size={20} style={{ animation: 'spin 1s linear infinite' }} />
-              ) : (
-                <Icon name={mainUrlStatus?.success ? 'check' : 'shield'} size={20} />
-              )}
-            </button>
           </div>
         </div>
 

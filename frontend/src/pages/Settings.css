@@ -137,21 +137,22 @@
 }
 
 .setting-button {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-  color: white;
-  border: none;
+  background: rgba(var(--primary-rgb), 0.15);
+  color: var(--text);
+  border: 1px solid rgba(var(--primary-rgb), 0.3);
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .setting-button:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  background: rgba(var(--primary-rgb), 0.25);
+  border-color: rgba(var(--primary-rgb), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
 }
 
 /* Toggle Switch */

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiUrl, loadKakaoSdk } from '../config';
-import Icon from '../components/Icon';
 import './AddStore.css';
 
 function AddStore() {
@@ -24,72 +23,26 @@ function AddStore() {
     lng: null,
   });
   const [newStore, setNewStore] = useState(createEmptyStore);
-  const mapRef = useRef();
-  const kakaoMapRef = useRef();
   const geocoderRef = useRef(null);
-  const tempMarkerRef = useRef(null);
-  const mapClickHandlerRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     loadKakaoSdk()
       .then(() => {
-        if (!cancelled) initKakaoMap();
+        if (!cancelled && window.kakao && window.kakao.maps && window.kakao.maps.services) {
+          window.kakao.maps.load(() => {
+            geocoderRef.current = new window.kakao.maps.services.Geocoder();
+          });
+        }
       })
       .catch((err) => {
-        console.error('카카오맵 SDK 로드 실패:', err);
+        console.error('Kakao Map SDK loading failed:', err);
       });
 
     return () => {
       cancelled = true;
     };
   }, []);
-
-  const initKakaoMap = () => {
-    if (!window.kakao || !window.kakao.maps) {
-      console.error('카카오맵 API가 로드되지 않았습니다');
-      return;
-    }
-
-    window.kakao.maps.load(() => {
-      const container = mapRef.current;
-      const options = {
-        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // Seoul
-        level: 6
-      };
-
-      kakaoMapRef.current = new window.kakao.maps.Map(container, options);
-
-      if (window.kakao.maps.services) {
-        geocoderRef.current = new window.kakao.maps.services.Geocoder();
-      }
-
-      // Enable map click to set coordinates
-      const handler = (mouseEvent) => {
-        const latlng = mouseEvent.latLng;
-        setNewStore((prev) => ({
-          ...prev,
-          lat: latlng.getLat(),
-          lng: latlng.getLng(),
-        }));
-        updateTempMarker(latlng.getLat(), latlng.getLng());
-      };
-      window.kakao.maps.event.addListener(kakaoMapRef.current, 'click', handler);
-      mapClickHandlerRef.current = handler;
-    });
-  };
-
-  const updateTempMarker = (lat, lng) => {
-    if (!kakaoMapRef.current || !window.kakao) return;
-    const pos = new window.kakao.maps.LatLng(lat, lng);
-    if (!tempMarkerRef.current) {
-      tempMarkerRef.current = new window.kakao.maps.Marker({ position: pos });
-    } else {
-      tempMarkerRef.current.setPosition(pos);
-    }
-    tempMarkerRef.current.setMap(kakaoMapRef.current);
-    kakaoMapRef.current.setCenter(pos);
-  };
 
   const geocodeAddress = () => {
     if (!geocoderRef.current || !newStore.address) return;
@@ -99,7 +52,6 @@ function AddStore() {
         const lat = parseFloat(y);
         const lng = parseFloat(x);
         setNewStore((prev) => ({ ...prev, lat, lng }));
-        updateTempMarker(lat, lng);
       } else {
         alert(t('messages.addressNotFound'));
       }
@@ -178,21 +130,11 @@ function AddStore() {
   return (
     <div className="add-store-page">
       <div className="add-store-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <Icon name="chevron-down" size={20} style={{ transform: 'rotate(90deg)' }} />
-        </button>
         <h1>{t('addStore.title')}</h1>
-        <div style={{ width: '32px' }} />
+        <p className="subtitle">{t('addStore.subtitle')}</p>
       </div>
 
       <div className="add-store-content">
-        <div className="map-section">
-          <div ref={mapRef} className="add-store-map" />
-          <div className="map-tip">
-            {t('addStore.mapTip')}
-          </div>
-        </div>
-
         <div className="form-section">
           <div className="form-grid">
             <label>

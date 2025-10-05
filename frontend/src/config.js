@@ -58,7 +58,7 @@ let kakaoLoaderPromise = null;
 
 export const loadKakaoSdk = () => {
   if (typeof window === 'undefined') {
-    return Promise.reject(new Error('브라우저 환경이 아닙니다'));
+    return Promise.reject(new Error('Not in browser environment'));
   }
 
   if (window.kakao && window.kakao.maps) {
@@ -66,7 +66,7 @@ export const loadKakaoSdk = () => {
   }
 
   if (!KAKAO_APP_KEY) {
-    return Promise.reject(new Error('카카오 앱 키가 설정되지 않았습니다'));
+    return Promise.reject(new Error('Kakao app key is not configured'));
   }
 
   if (!kakaoLoaderPromise) {
@@ -78,12 +78,12 @@ export const loadKakaoSdk = () => {
         if (window.kakao && window.kakao.maps) {
           resolve(window.kakao);
         } else {
-          reject(new Error('카카오 SDK 로드 후 window.kakao가 없습니다'));
+          reject(new Error('Kakao SDK loaded but window.kakao is not available'));
         }
       };
 
       const handleError = () => {
-        reject(new Error('카카오 SDK 스크립트를 불러오지 못했습니다'));
+        reject(new Error('Failed to load Kakao SDK script'));
       };
 
       if (existing) {

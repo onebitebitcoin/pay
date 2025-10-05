@@ -5,7 +5,10 @@
     "category": "카페",
     "address": "서울특별시 강남구 테헤란로 123",
     "lat": 37.4979,
-    "lng": 127.0276
+    "lng": 127.0276,
+    "name_en": "Gangnam Bitcoin Cafe",
+    "address_en": "123 Teheran-ro, Gangnam-gu, Seoul",
+    "category_en": "Cafe"
   },
   {
     "id": 2,
@@ -13,7 +16,10 @@
     "category": "음식점",
     "address": "서울특별시 마포구 홍익로 456",
     "lat": 37.5565,
-    "lng": 126.924
+    "lng": 126.924,
+    "name_en": "Hongdae Crypto Burger",
+    "address_en": "456 Hongik-ro, Mapo-gu, Seoul",
+    "category_en": "Restaurant"
   },
   {
     "id": 3,
@@ -21,7 +27,10 @@
     "category": "전자제품",
     "address": "서울특별시 중구 명동길 789",
     "lat": 37.5636,
-    "lng": 126.9834
+    "lng": 126.9834,
+    "name_en": "Myeongdong Digital Electronics",
+    "address_en": "789 Myeongdong-gil, Jung-gu, Seoul",
+    "category_en": "Electronics"
   },
   {
     "id": 4,
@@ -29,7 +38,10 @@
     "category": "서점",
     "address": "서울특별시 용산구 이태원로 321",
     "lat": 37.5347,
-    "lng": 126.9947
+    "lng": 126.9947,
+    "name_en": "Itaewon Blockchain Bookstore",
+    "address_en": "321 Itaewon-ro, Yongsan-gu, Seoul",
+    "category_en": "Bookstore"
   },
   {
     "id": 5,
@@ -37,7 +49,10 @@
     "category": "음식점",
     "address": "서울특별시 강남구 강남대로 654",
     "lat": 37.498,
-    "lng": 127.0276
+    "lng": 127.0276,
+    "name_en": "Gangnam Satoshi Sushi",
+    "address_en": "654 Gangnam-daero, Gangnam-gu, Seoul",
+    "category_en": "Restaurant"
   },
   {
     "id": 6,
@@ -45,7 +60,10 @@
     "category": "호텔",
     "address": "서울특별시 중구 세종대로 987",
     "lat": 37.5665,
-    "lng": 126.978
+    "lng": 126.978,
+    "name_en": "Jung-gu Bit Hotel",
+    "address_en": "987 Sejong-daero, Jung-gu, Seoul",
+    "category_en": "Hotel"
   },
   {
     "id": 7,
@@ -53,7 +71,10 @@
     "category": "편의점",
     "address": "서울특별시 서대문구 신촌로 147",
     "lat": 37.5589,
-    "lng": 126.9368
+    "lng": 126.9368,
+    "name_en": "Sinchon Coin Mart",
+    "address_en": "147 Sinchon-ro, Seodaemun-gu, Seoul",
+    "category_en": "Convenience Store"
   },
   {
     "id": 8,
@@ -61,7 +82,10 @@
     "category": "델리",
     "address": "서울특별시 강남구 압구정로 258",
     "lat": 37.5206,
-    "lng": 127.023
+    "lng": 127.023,
+    "name_en": "Apgujeong Digital Deli",
+    "address_en": "258 Apgujeong-ro, Gangnam-gu, Seoul",
+    "category_en": "Deli"
   },
   {
     "id": 9,
@@ -69,7 +93,10 @@
     "category": "피자",
     "address": "서울특별시 영등포구 여의도동 369",
     "lat": 37.5219,
-    "lng": 126.9245
+    "lng": 126.9245,
+    "name_en": "Yeouido Coin Pizza",
+    "address_en": "369 Yeoui-dong, Yeongdeungpo-gu, Seoul",
+    "category_en": "Pizza"
   },
   {
     "id": 10,
@@ -77,7 +104,10 @@
     "category": "미용실",
     "address": "서울특별시 송파구 잠실동 741",
     "lat": 37.5133,
-    "lng": 127.1
+    "lng": 127.1,
+    "name_en": "Jamsil Blockchain Hair Salon",
+    "address_en": "741 Jamsil-dong, Songpa-gu, Seoul",
+    "category_en": "Hair Salon"
   },
   {
     "id": 11,
@@ -85,7 +115,10 @@
     "category": "헬스장",
     "address": "서울특별시 마포구 마포대로 852",
     "lat": 37.5663,
-    "lng": 126.9019
+    "lng": 126.9019,
+    "name_en": "Mapo Digital Gym",
+    "address_en": "852 Mapo-daero, Mapo-gu, Seoul",
+    "category_en": "Gym"
   },
   {
     "id": 12,
@@ -93,7 +126,10 @@
     "category": "자동차정비",
     "address": "서울특별시 서초구 서초대로 963",
     "lat": 37.4837,
-    "lng": 127.0324
+    "lng": 127.0324,
+    "name_en": "Seocho Coin Auto Repair",
+    "address_en": "963 Seocho-daero, Seocho-gu, Seoul",
+    "category_en": "Auto Repair"
   },
   {
     "id": 13,
@@ -101,7 +137,10 @@
     "category": "세탁소",
     "address": "서울특별시 동작구 동작대로 159",
     "lat": 37.5124,
-    "lng": 126.9393
+    "lng": 126.9393,
+    "name_en": "Dongjak Bitcoin Laundry",
+    "address_en": "159 Dongjak-daero, Dongjak-gu, Seoul",
+    "category_en": "Laundry"
   },
   {
     "id": 14,
@@ -109,7 +148,10 @@
     "category": "약국",
     "address": "서울특별시 성동구 왕십리로 357",
     "lat": 37.5506,
-    "lng": 127.0409
+    "lng": 127.0409,
+    "name_en": "Seongdong Digital Pharmacy",
+    "address_en": "357 Wangsimni-ro, Seongdong-gu, Seoul",
+    "category_en": "Pharmacy"
   },
   {
     "id": 15,
@@ -117,7 +159,10 @@
     "category": "철물점",
     "address": "서울특별시 노원구 노원로 486",
     "lat": 37.6544,
-    "lng": 127.0568
+    "lng": 127.0568,
+    "name_en": "Nowon Blockchain Hardware Store",
+    "address_en": "486 Nowon-ro, Nowon-gu, Seoul",
+    "category_en": "Hardware Store"
   },
   {
     "id": 16,
@@ -125,7 +170,10 @@
     "category": "카페",
     "address": "경기 화성시 동학산1길 5-5",
     "lat": 37.2239581367378,
-    "lng": 127.075036561338
+    "lng": 127.075036561338,
+    "name_en": "Seokwoo-dong Cafe",
+    "address_en": "5-5 Donghaksan 1-gil, Hwaseong-si, Gyeonggi-do",
+    "category_en": "Cafe"
   },
   {
     "id": 17,
@@ -133,6 +181,9 @@
     "category": "베이커리",
     "address": "경기 화성시 영통로61번길 6",
     "lat": 37.2354960118487,
-    "lng": 127.061148742326
+    "lng": 127.061148742326,
+    "name_en": "Paris Baguette Sinyeongtong Hyundai",
+    "address_en": "6 Yeongtong-ro 61beon-gil, Hwaseong-si, Gyeonggi-do",
+    "category_en": "Bakery"
   }
 ]

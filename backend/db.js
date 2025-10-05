@@ -55,6 +55,9 @@ try {
   ensureColumn('phone', 'TEXT');
   ensureColumn('hours', 'TEXT');
   ensureColumn('description', 'TEXT');
+  ensureColumn('name_en', 'TEXT');
+  ensureColumn('address_en', 'TEXT');
+  ensureColumn('category_en', 'TEXT');
 
   const count = sql.prepare('SELECT COUNT(*) AS c FROM stores').get().c;
   if (count === 0) {
@@ -103,7 +106,7 @@ module.exports = {
   list() {
     if (mode === 'sqlite') {
       return sql
-        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description FROM stores ORDER BY id ASC')
+        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores ORDER BY id ASC')
         .all();
     }
     return readJsonStores();
@@ -111,7 +114,7 @@ module.exports = {
   random(count = 8) {
     if (mode === 'sqlite') {
       return sql
-        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description FROM stores ORDER BY RANDOM() LIMIT ?')
+        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores ORDER BY RANDOM() LIMIT ?')
         .all(count);
     }
     const stores = readJsonStores();
@@ -124,33 +127,36 @@ module.exports = {
       const like = `%${q.toLowerCase()}%`;
       return sql
         .prepare(
-          'SELECT id, name, category, address, lat, lng, phone, hours, description FROM stores WHERE LOWER(name) LIKE ? OR LOWER(category) LIKE ? OR LOWER(address) LIKE ? ORDER BY id ASC'
+          'SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores WHERE LOWER(name) LIKE ? OR LOWER(category) LIKE ? OR LOWER(address) LIKE ? OR LOWER(name_en) LIKE ? OR LOWER(address_en) LIKE ? OR LOWER(category_en) LIKE ? ORDER BY id ASC'
         )
-        .all(like, like, like);
+        .all(like, like, like, like, like, like);
     }
     const searchQuery = q.toLowerCase();
     return readJsonStores().filter(
       (s) =>
         s.name.toLowerCase().includes(searchQuery) ||
         s.category.toLowerCase().includes(searchQuery) ||
-        s.address.toLowerCase().includes(searchQuery)
+        s.address.toLowerCase().includes(searchQuery) ||
+        (s.name_en && s.name_en.toLowerCase().includes(searchQuery)) ||
+        (s.address_en && s.address_en.toLowerCase().includes(searchQuery)) ||
+        (s.category_en && s.category_en.toLowerCase().includes(searchQuery))
     );
   },
   get(id) {
     if (mode === 'sqlite') {
       return sql
-        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description FROM stores WHERE id = ?')
+        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores WHERE id = ?')
         .get(id);
     }
     return readJsonStores().find((s) => s.id === id);
   },
-  add({ name, category, address, lat, lng, phone = null, hours = null, description = null }) {
+  add({ name, category, address, lat, lng, phone = null, hours = null, description = null, name_en = null, address_en = null, category_en = null }) {
     if (mode === 'sqlite') {
       const info = sql
         .prepare(
-          'INSERT INTO stores (name, category, address, lat, lng, phone, hours, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO stores (name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )
-        .run(name, category, address, lat, lng, phone, hours, description);
+        .run(name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en);
       return this.get(info.lastInsertRowid);
     }
     const stores = readJsonStores();
@@ -165,6 +171,9 @@ module.exports = {
       phone: phone || null,
       hours: hours || null,
       description: description || null,
+      name_en: name_en || null,
+      address_en: address_en || null,
+      category_en: category_en || null,
     };
     stores.push(newStore);
     writeJsonStores(stores);

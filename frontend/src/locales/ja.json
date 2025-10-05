@@ -21,7 +21,9 @@
     "refresh": "更新",
     "copy": "コピー",
     "copied": "クリップボードにコピーしました",
-    "copyFailed": "コピーに失敗しました"
+    "copyFailed": "コピーに失敗しました",
+    "openMenu": "メニューを開く",
+    "unlock": "ロック解除"
   },
   "nav": {
     "wallet": "ウォレット",
@@ -55,7 +57,7 @@
     "receivedAmount": "受け取った金額",
     "sendAmount": "送る金額",
     "fee": "手数料",
-    "feeReserve": "手数料予備",
+    "feeReserve": "Mint手数料予備",
     "totalRequired": "必要合計",
     "available": "利用可能なeCash",
     "afterBalance": "送信後の残高",
@@ -84,7 +86,29 @@
     "refreshTokens": "トークン更新 (Swap)",
     "checkPending": "未処理支払い確認",
     "backup": "バックアップ",
-    "restore": "復元"
+    "restore": "復元",
+    "ecashHoldings": "eCash保有状況",
+    "ecashCount": "{{count}}個",
+    "noEcash": "保有しているeCashがありません",
+    "invoiceAmount": "インボイス金額",
+    "backToWallet": "ウォレットに戻る",
+    "receiveSubtext": "受け取る金額を入力してビットコインを受け取りましょう",
+    "networkDisconnected": "ネットワーク接続が切断されました。Mint {{mintStatus}}{{separator}}{{wsStatus}}が必要です。更新してください。",
+    "mintConnection": "接続",
+    "wsConnection": "WebSocket接続",
+    "andSeparator": " および ",
+    "invoicePlaceholder": "lnbc... または user@domain",
+    "invoiceDetected": "✓ インボイス検出",
+    "addressDetected": "✓ ライトニングアドレス検出",
+    "invoiceOrAddressHint": "lnbc... または user@domain を入力",
+    "amountPlaceholder": "金額を入力",
+    "availableBalance": "利用可能: {{amount}} sats",
+    "generatingInvoice": "インボイスを生成中...",
+    "tapToCopy": "タップしてコピー",
+    "copied": "コピーしました",
+    "recreate": "再作成",
+    "receiveComplete": "受信完了！",
+    "receiveSuccess": "ライトニング決済を正常に受け取りました。"
   },
   "settings": {
     "title": "設定",
@@ -143,6 +167,9 @@
     "allStores": "すべての店舗",
     "category": "カテゴリー",
     "allCategories": "すべて",
+    "viewDetails": "詳細を見る",
+    "storesCount": "ビットコイン店舗 ({{count}}件)",
+    "sortedByDistance": "· 距離順",
     "distance": "{{distance}}",
     "viewOnMap": "地図で見る",
     "details": "詳細",
@@ -203,6 +230,125 @@
     "title": "FAQ",
     "subtitle": "よくある質問"
   },
+  "faq": {
+    "categories": {
+      "basics": "Cashu & eCash 基本",
+      "usage": "ウォレットの使い方",
+      "fees": "手数料 & 技術",
+      "security": "セキュリティ & プライバシー",
+      "troubleshooting": "トラブルシューティング"
+    },
+    "basics": {
+      "whatIsCashu": {
+        "q": "Cashuとは何ですか？",
+        "a": "Cashuはビットコインライトニングネットワークに基づくeCashプロトコルです。Mintサーバーが発行する暗号化されたトークン（eCash）を使用してプライバシーを保護しながら、高速で安価な決済が可能です。Chaumian ecash方式を採用しており、Mintでさえ誰がどのトークンを使用しているか知ることができません。"
+      },
+      "isCustodial": {
+        "q": "eCashはカストディアルウォレットですか？",
+        "a": "いいえ、Cashu eCashは従来のカストディアルウォレットとは異なります。eCashトークンはあなたのブラウザにのみ保存され、Mintサーバーはトークンを保管しません。Mintは単にトークンを発行し償還する役割のみを果たし、誰がどのトークンを持っているか追跡できません。"
+      },
+      "advantages": {
+        "q": "eCashの主な利点は何ですか？",
+        "a": "1) プライバシー：Mintでさえ誰がどのトークンを使用しているか知ることができません。2) 即座の決済：ライトニングネットワークを通じた即時の送受信。3) 低い手数料：少額決済に最適化。4) オフライン取引：インターネットなしでもトークン交換が可能。"
+      }
+    },
+    "usage": {
+      "howToReceive": {
+        "q": "ライトニング決済を受け取る方法は？",
+        "a": "ウォレットページで「受け取る」ボタンをクリックし、金額を入力してインボイスを生成してください。QRコードが表示されたら、相手がスキャンして決済できます。決済が完了すると自動的にeCashに変換され、残高に追加されます。"
+      },
+      "howToSend": {
+        "q": "ライトニング決済を送る方法は？",
+        "a": "「送る」ボタンをクリックして、ライトニングインボイス（lnbc...）を貼り付けてください。ライトニングアドレス（user@domain）も金額と共に入力すれば自動的にインボイスを生成します。手数料予備金が含まれ、余った金額はeCashとして返還されます。"
+      },
+      "whyBackup": {
+        "q": "バックアップはなぜ重要ですか？",
+        "a": "eCashトークンはブラウザのローカルストレージにのみ保存されます。ブラウザデータを削除したりキャッシュをクリアすると残高が永久に失われます。必ずバックアップファイル（JSON）をダウンロードして安全な場所に保管してください。バックアップファイルがあればいつでも復元できます。"
+      },
+      "multiDevice": {
+        "q": "複数のデバイスで使用できますか？",
+        "a": "はい、バックアップファイルを他のデバイスに移して復元すれば使えます。ただし、同じトークンを複数のデバイスで同時に使用すると二重支払いによって問題が発生する可能性があるため、一度に一つのデバイスでのみ使用することをお勧めします。"
+      }
+    },
+    "fees": {
+      "howFees": {
+        "q": "手数料はどうなりますか？",
+        "a": "ライトニング送金時にルーティング手数料予備金が含まれます。実際の手数料より多く予備されている場合、余った金額はeCashのお釣りとして自動返還されます。Mintが手数料を代わりに支払い、ほとんどの場合予備金より少なく済むため余った金額を受け取ることになります。"
+      },
+      "trustMint": {
+        "q": "Mintは信頼できますか？",
+        "a": "MintはeCashトークンに対してビットコインを償還する役割を果たします。信頼できるMintを選択することが重要であり、必要に応じて他のMintにトークンを移動（スワップ）できます。現在のアプリはデフォルトMintを使用しており、今後複数のMintサポートが追加される予定です。"
+      },
+      "lostTokens": {
+        "q": "トークンが盗まれたり紛失したら？",
+        "a": "eCashトークンは物理的な現金と似ています。バックアップファイルがなければ復元できないため、必ず安全に保管してください。バックアップファイルを暗号化されたUSBやクラウドに保存することをお勧めします。"
+      },
+      "blindSignature": {
+        "q": "ブラインド署名（Blind Signature）とは？",
+        "a": "Chaumian eCashの核心技術で、Mintがトークンに署名する際、トークンの内容を知ることができないようにする暗号学的技法です。これにより、Mintでさえ誰がどのトークンを使用しているか追跡できず、完全なプライバシーが保証されます。"
+      }
+    },
+    "security": {
+      "tracked": {
+        "q": "取引履歴は追跡されますか？",
+        "a": "いいえ、Cashuのブラインド署名技術のおかげで、Mintでさえどのトークンを誰が使用しているか知ることができません。ブロックチェーンにも取引履歴が記録されないため、完全なプライバシーを提供します。ただし、Mintは発行/償還時点の金額のみ知ることができます。"
+      },
+      "privacy": {
+        "q": "個人情報はどのように保護されますか？",
+        "a": "すべてのeCashトークンはブラウザのローカルストレージにのみ保存され、サーバーに送信されません。Mintはトークンの所有者を特定できず、アプリはいかなる個人情報も収集しません。"
+      },
+      "mintHacked": {
+        "q": "Mintがハッキングされたらどうなりますか？",
+        "a": "Mintの秘密鍵が流出すると、攻撃者が無制限にトークンを発行できます。しかし、あなたのトークン自体はブラウザに安全に保存されており、すぐに他のMintに移動したりライトニングで引き出せば大丈夫です。信頼できるMintを選択することが重要です。"
+      },
+      "browserExtensions": {
+        "q": "ブラウザ拡張機能は安全ですか？",
+        "a": "疑わしいブラウザ拡張機能はローカルストレージにアクセスしてトークンを盗む可能性があります。信頼できる拡張機能のみをインストールし、重要な金額はバックアップファイルで安全に保管してください。"
+      }
+    },
+    "troubleshooting": {
+      "balanceGone": {
+        "q": "受け取った残高が消えました",
+        "a": "ブラウザストレージをクリアするとeCashトークンが永久削除されます。バックアップファイルがあれば「復元」ボタンで復元できます。バックアップがなければ復元不可能なので、必ず定期的にバックアップしてください。"
+      },
+      "noBalance": {
+        "q": "インボイス決済後に残高が入りません",
+        "a": "決済確認には最大2分かかる場合があります。ページを更新するか少し待ってみてください。それでも解決しない場合は、バックエンドログを確認してquote IDを見つけて手動で復元できます。"
+      },
+      "failedButDeducted": {
+        "q": "送金が失敗したのに残高が差し引かれました",
+        "a": "送金失敗時、使用されたトークンは焼却されずに残っているはずです。もし残高が差し引かれていたらブラウザを更新してみてください。問題が続く場合はバックアップファイルで復元してください。"
+      },
+      "addressNotWorking": {
+        "q": "ライトニングアドレスで送金できません",
+        "a": "ライトニングアドレス送金時は金額を必ず入力する必要があります。アドレス形式が正しいか（user@domain）確認し、相手のライトニングアドレスが有効化されているか確認してください。"
+      },
+      "moreQuestions": {
+        "q": "追加のお問い合わせがあります",
+        "a": "上記のFAQで解決しない問題がある場合は、onebitebitcoin@proton.me までお問い合わせください。できるだけ早く回答いたします。"
+      }
+    }
+  },
+  "home": {
+    "title": "ハニブマン",
+    "subtitle": "ビットコイン決済可能な店舗を探し、ライトニングウォレットで即座に決済しましょう",
+    "findStore": "店舗を探す",
+    "findStoreDesc": "カカオマップでビットコイン決済可能な店舗を見つけましょう",
+    "cashuWallet": "Cashuウォレット",
+    "cashuWalletDesc": "Cashuベースのプライバシー重視ライトニングウォレット",
+    "bitcoinStoresCount": "ビットコイン店舗",
+    "totalVolume": "総取引量 (sats)",
+    "privacyProtection": "プライバシー保護",
+    "whyBitcoin": "なぜビットコインなのか？",
+    "privacy": "プライバシー",
+    "privacyDesc": "Cashu eCashで完全なプライバシー保護",
+    "instantPayment": "即座の決済",
+    "instantPaymentDesc": "ライトニングネットワークで即座に決済可能",
+    "global": "グローバル",
+    "globalDesc": "国境のないグローバル決済システム",
+    "digitalGold": "デジタルゴールド",
+    "digitalGoldDesc": "インフレから資産を保護"
+  },
   "install": {
     "title": "アプリとしてダウンロード",
     "subtitle": "ホーム画面に追加して素早くアクセス！",
@@ -246,6 +392,64 @@
     "autoReflectFailed": "証明書データがないため残高の自動反映に失敗しました。「未処理支払い確認」で復元してください。",
     "insufficientBalanceSimple": "残高が不足しています",
     "insufficientBalanceDetails": "残高不足：{{amount}} sats 不足",
-    "tokenAlreadyUsed": "既に使用済みのトークンです。他のデバイスで既に使用されたか、残高が同期されていない可能性があります。ページを更新してから再試行してください。"
+    "tokenAlreadyUsed": "既に使用済みのトークンです。他のデバイスで既に使用されたか、残高が同期されていない可能性があります。ページを更新してから再試行してください。",
+    "syncingTokens": "トークンを同期中...",
+    "removedUsedTokens": "{{count}}個の使用済みトークンを削除しました",
+    "allTokensValid": "すべてのトークンが有効です",
+    "syncFailed": "同期失敗: {{error}}",
+    "unknownError": "不明なエラー",
+    "refreshingTokens": "トークンを更新中...",
+    "tokensRefreshed": "{{amount}} sats分のトークンを更新しました",
+    "refreshFailed": "更新失敗: {{error}}",
+    "noPendingInvoice": "確認する保留中のインボイスがありません",
+    "alreadyProcessed": "既に処理済みのインボイスです",
+    "checkingInvoiceStatus": "インボイスステータスを確認中...",
+    "quoteCheckFailed": "Quote状態の確認に失敗しました",
+    "invoiceNotPaid": "まだ支払われていないインボイスです",
+    "recoveredSuccess": "{{amount}} satsを正常に復元しました！",
+    "mintKeysFailed": "Mintキーの取得に失敗しました",
+    "alreadyIssuedNoRecovery": "このインボイスは既に処理されています。残念ながらsignaturesを受信できず、復元できません。Mint管理者にお問い合わせください。",
+    "redeemFailed": "Redeem失敗",
+    "noValidSignatures": "有効な署名を受信できませんでした",
+    "quoteCheckError": "Quoteの確認に失敗しました",
+    "backupDownloaded": "暗号化されたバックアップファイルをダウンロードしました",
+    "backupFailed": "バックアップ失敗: {{error}}",
+    "restoreComplete": "復元完了: {{added}}件追加、合計{{total}}件",
+    "restoreInvalidFile": "復元失敗: 無効なファイルです",
+    "noDataToRestore": "復元するデータがありません。",
+    "restoreWrongPassphrase": "復元失敗: パスフレーズが正しくないか、ファイルが破損しています",
+    "connectedToBackupMint": "バックアップMintに接続しました",
+    "mintInfoFailed": "Mint情報の取得に失敗しました",
+    "mainBackupMintFailed": "メインおよびバックアップMintの接続が両方とも失敗しました",
+    "connectionFailedHttp": "HTTP {{status}}: 接続失敗",
+    "notValidMint": "有効なCashu Mintではありません",
+    "connectionSuccessMint": "接続成功 ({{name}})",
+    "connectionFailedGeneric": "接続失敗",
+    "qrCodeInvalid": "QRコードから有効な値が見つかりませんでした",
+    "qrCodeLoaded": "QRコードを読み込みました",
+    "sendFailed": "送金に失敗しました",
+    "statusConfirmed": "完了",
+    "statusPending": "保留中",
+    "qrScanUnavailable": "QRスキャン機能が利用できません",
+    "invoiceGenerationError": "インボイス生成失敗",
+    "alreadyPaidInvoice": "既に支払い済みのインボイスです",
+    "expiredInvoice": "期限切れのインボイスです",
+    "invalidInvoice": "無効なインボイスです",
+    "paymentFailed": "決済に失敗しました",
+    "noRouteFound": "決済ルートが見つかりません",
+    "requestTimeout": "リクエストがタイムアウトしました",
+    "networkError": "ネットワーク接続エラーが発生しました",
+    "quoteRequestError": "見積もりリクエスト失敗",
+    "invoiceRequired": "ライトニングインボイス（lnbc...）またはライトニングアドレス（user@domain）を入力してください",
+    "amountRequired": "金額が必要です",
+    "addressInvoiceError": "アドレスインボイス発行失敗",
+    "invoiceIssueFailed": "インボイス発行失敗",
+    "quoteError": "見積もりリクエスト失敗",
+    "invoiceOrAddressRequired": "インボイスまたはアドレスを入力してください",
+    "mintKeysFetchError": "Mintキーの取得に失敗しました",
+    "duplicateInputs": "重複した証明書（inputs）が含まれています。更新してから再試行してください。",
+    "lightningReceive": "ライトニング受信",
+    "lightningSend": "ライトニング送信",
+    "quoteDataMissing": "見積もりデータがありません"
   }
 }
