@@ -103,6 +103,15 @@ async function swap({ inputs, outputs }) {
   });
 }
 
+async function checkProofsState({ proofs }) {
+  // Check if proofs are spent using /v1/checkstate
+  // Returns { states: [{ Y: string, state: 'SPENT' | 'UNSPENT' | 'PENDING' }] }
+  return reqJSON(`${mintUrl()}/v1/checkstate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: { Ys: proofs.map(p => p.Y || p.C) }
+  });
+}
+
 module.exports = {
   getInfo,
   getKeys,
@@ -112,4 +121,5 @@ module.exports = {
   meltBolt11,
   swap,
   checkMintQuote,
+  checkProofsState,
 };

@@ -501,6 +501,37 @@ app.post('/api/cashu/melt', async (req, res) => {
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
 
+// Check proof states (spent/unspent)
+app.post('/api/cashu/check', async (req, res) => {
+  try {
+    const { proofs } = req.body || {};
+    if (!proofs || !Array.isArray(proofs) || proofs.length === 0) {
+      return res.status(400).json({ error: 'proofs 배열 필요' });
+    }
+    const result = await cashu.checkProofsState({ proofs });
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.data || e.message });
+  }
+});
+
+// Swap proofs for fresh ones
+app.post('/api/cashu/swap', async (req, res) => {
+  try {
+    const { inputs, outputs } = req.body || {};
+    if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
+      return res.status(400).json({ error: 'inputs 배열 필요' });
+    }
+    if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
+      return res.status(400).json({ error: 'outputs 배열 필요' });
+    }
+    const result = await cashu.swap({ inputs, outputs });
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.data || e.message });
+  }
+});
+
 // Resolve Lightning address (LNURL-Pay) to bolt11 for a given amount (sats)
 app.post('/api/lightningaddr/quote', async (req, res) => {
   try {

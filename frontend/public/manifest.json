@@ -1,12 +1,13 @@
 {
-  "short_name": "한입 결제",
-  "name": "한입 결제 - Cashu 지갑 & 매장찾기",
+  "short_name": "한입 비트코인",
+  "name": "한입 비트코인 - Cashu 지갑 & 매장찾기",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#f59e0b",
-  "description": "비트코인 결제 가능한 매장을 찾고 지도에서 확인하세요",
+  "background_color": "#0f172a",
+  "theme_color": "#60a5fa",
+  "description": "비트코인 라이트닝 결제와 Cashu eCash 지갑",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/favicon.ico",
@@ -16,12 +17,26 @@
     {
       "src": "/logo-192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
     },
     {
       "src": "/logo-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ]
 }

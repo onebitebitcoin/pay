@@ -11,7 +11,7 @@ const Layout = ({ children }) => {
   const [pinError, setPinError] = useState('');
 
   const navigation = [
-    { name: '지갑', path: '/', icon: 'shield' },
+    { name: '지갑', path: '/', icon: 'bitcoin' },
     { name: '매장 찾기', path: '/map', icon: 'map' },
     { name: 'FAQ', path: '/about', icon: 'info' },
     { name: '설정', path: '/settings', icon: 'settings' }

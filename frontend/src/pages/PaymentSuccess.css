@@ -13,53 +13,57 @@
 }
 
 .payment-success-modal {
-  background-color: white;
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
   border-radius: 16px;
   padding: 48px;
   max-width: 480px;
   width: 90%;
   text-align: center;
   animation: scaleIn 0.3s ease-out;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
 }
 
 .success-icon {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background-color: #10b981;
+  background-color: var(--success);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 24px;
+  color: white;
 }
 
 .success-title {
   font-size: 28px;
   font-weight: 700;
-  color: #10b981;
+  color: var(--success);
   margin-bottom: 16px;
 }
 
 .success-amount {
   font-size: 48px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text);
   margin: 24px 0;
 }
 
 .amount-unit {
   font-size: 24px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .success-message {
   font-size: 16px;
-  color: #6b7280;
+  color: var(--muted);
   margin-bottom: 32px;
 }
 
 .confirm-btn {
-  background-color: #6b7280;
+  background-color: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -71,7 +75,7 @@
 }
 
 .confirm-btn:hover {
-  background-color: #4b5563;
+  background-color: var(--primary-600);
 }
 
 @keyframes fadeIn {
@@ -94,14 +98,6 @@
   }
 }
 
-/* Dark mode support */
-:root.dark .payment-success-modal {
-  background-color: #1f2937;
-}
-
-:root.dark .success-amount {
-  color: #f9fafb;
-}
 
 /* Mobile Responsiveness */
 @media (max-width: 480px) {

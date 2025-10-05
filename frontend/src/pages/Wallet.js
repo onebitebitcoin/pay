@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl } from '../config';
+import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
-import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom } from '../services/cashu';
+import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, refreshProofs } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
 import './Wallet.css';
 import Icon from '../components/Icon';
@@ -203,18 +203,6 @@ function Wallet() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [ecashBalance]);
 
-  const loadWalletData = useCallback(async (showLoading = false) => {
-    try {
-      if (showLoading) setLoading(true);
-      try { importProofsFrom(loadProofs()); } catch {}
-      setEcashBalance(getBalanceSats());
-    } catch (error) {
-      console.error('지갑 데이터 로드 오류:', error);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, []);
-
   const addToast = useCallback((message, type = 'success', timeout = 3500) => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -235,13 +223,52 @@ function Wallet() {
     }
   }, []);
 
+  const loadWalletData = useCallback(async (showLoading = false, syncWithMint = false) => {
+    try {
+      if (showLoading) setLoading(true);
+      try { importProofsFrom(loadProofs()); } catch {}
+
+      // Sync proofs with Mint server if requested
+      if (syncWithMint) {
+        try {
+          const syncResult = await syncProofsWithMint(API_BASE_URL);
+          if (syncResult.removed > 0) {
+            showInfoMessage(`${syncResult.removed}개의 사용된 토큰을 제거했습니다`, 'info', 3000);
+          }
+        } catch (syncErr) {
+          console.error('Proof sync failed:', syncErr);
+        }
+      }
+
+      setEcashBalance(getBalanceSats());
+    } catch (error) {
+      console.error('지갑 데이터 로드 오류:', error);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [showInfoMessage]);
+
   const persistTransactions = useCallback((list) => {
     try { localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(list || [])); } catch {}
   }, [TX_STORAGE_KEY]);
 
   const addTransaction = useCallback((tx) => {
     setTransactions((prev) => {
-      const next = [tx, ...(Array.isArray(prev) ? prev : [])];
+      const prevArray = Array.isArray(prev) ? prev : [];
+
+      // Check for duplicate transactions (within 5 seconds, same type and amount)
+      const isDuplicate = prevArray.some(existing =>
+        existing.type === tx.type &&
+        existing.amount === tx.amount &&
+        Math.abs(new Date(existing.timestamp).getTime() - new Date(tx.timestamp).getTime()) < 5000
+      );
+
+      if (isDuplicate) {
+        console.log('Duplicate transaction detected, skipping:', tx);
+        return prev;
+      }
+
+      const next = [tx, ...prevArray];
       persistTransactions(next);
       return next;
     });
@@ -313,7 +340,7 @@ function Wallet() {
       }
 
       setIsConnected(true);
-      await loadWalletData();
+      await loadWalletData(false, true); // Sync with Mint on connect
     } catch (e) {
       console.error(e);
       alert(e.message || 'Mint 연결 실패');
@@ -339,7 +366,7 @@ function Wallet() {
       }
       const mintKeys = await keysResp.json();
       const proofs = await signaturesToProofs(signatures, mintKeys, pending.outputDatas);
-      addProofs(proofs);
+      addProofs(proofs, mintUrl);
       const credited = proofs.reduce((sum, p) => sum + Number(p?.amount || 0), 0);
       setEcashBalance(getBalanceSats());
       clearPendingMint();
@@ -399,6 +426,7 @@ function Wallet() {
       setReceivedAmount(creditedOrExpected);
     }
 
+    // Always add transaction for received payment
     if (creditedAmount > 0) {
       addTransaction({
         id: Date.now(),
@@ -409,7 +437,7 @@ function Wallet() {
         description: '라이트닝 받기',
         memo: detail?.memo || ''
       });
-    } else if (!isReceiveView || quote !== lastQuote) {
+    } else {
       addTransaction({
         id: Date.now(),
         type: 'receive',
@@ -470,6 +498,50 @@ function Wallet() {
       window.removeEventListener('payment_received', handler);
     };
   }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
+
+  // Manual sync proofs with Mint
+  const handleSyncProofs = async () => {
+    try {
+      setLoading(true);
+      showInfoMessage('토큰 동기화 중...', 'info', 2000);
+
+      const syncResult = await syncProofsWithMint(API_BASE_URL);
+
+      if (syncResult.removed > 0) {
+        showInfoMessage(`${syncResult.removed}개의 사용된 토큰을 제거했습니다`, 'success', 4000);
+        setEcashBalance(getBalanceSats());
+      } else {
+        showInfoMessage('모든 토큰이 유효합니다', 'success', 3000);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      showInfoMessage('동기화 실패: ' + (error?.message || '알 수 없는 오류'), 'error', 4000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh proofs (swap for new ones)
+  const handleRefreshProofs = async () => {
+    try {
+      setLoading(true);
+      showInfoMessage('토큰을 새로고침하는 중...', 'info', 2000);
+
+      const refreshResult = await refreshProofs(API_BASE_URL, createBlindedOutputs, signaturesToProofs);
+
+      if (refreshResult.success) {
+        showInfoMessage(`${refreshResult.amount} sats의 토큰을 새로고침했습니다`, 'success', 4000);
+        setEcashBalance(getBalanceSats());
+      } else {
+        throw new Error(refreshResult.error || '새로고침 실패');
+      }
+    } catch (error) {
+      console.error('Refresh error:', error);
+      showInfoMessage('새로고침 실패: ' + (error?.message || '알 수 없는 오류'), 'error', 4000);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Check and recover pending quote
   const checkPendingQuote = async () => {
@@ -558,7 +630,7 @@ function Wallet() {
 
       if (Array.isArray(signatures) && signatures.length > 0) {
         const proofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
-        addProofs(proofs);
+        addProofs(proofs, mintUrl);
         const added = proofs.reduce((s, p) => s + Number(p?.amount || 0), 0);
         setEcashBalance(getBalanceSats());
         clearPendingMint();
@@ -1141,8 +1213,8 @@ function Wallet() {
         }
       }
 
-      removeProofs(picked);
-      if (changeProofs.length) addProofs(changeProofs);
+      removeProofs(picked, mintUrl);
+      if (changeProofs.length) addProofs(changeProofs, mintUrl);
       setEcashBalance(getBalanceSats());
       await loadWalletData();
 
@@ -1162,7 +1234,15 @@ function Wallet() {
       setEnableSendScanner(false);
       setInvoiceQuote(null);
       setInvoiceError('');
-      showInfoMessage('라이트닝 송금이 완료되었습니다', 'success');
+
+      // Navigate to success page
+      navigate('/wallet/payment-success', {
+        state: {
+          amount: invoiceAmount,
+          returnTo: '/wallet/send',
+          type: 'send'
+        }
+      });
     } catch (error) {
       console.error('송금 오류:', error);
       setInvoiceError(error?.message || '송금에 실패했습니다');
@@ -1236,14 +1316,16 @@ function Wallet() {
           changeProofs = await signaturesToProofs(signatures, mintKeys2, changeOutputDatas);
         }
       }
-      removeProofs(picked);
-      if (changeProofs.length) addProofs(changeProofs);
+      removeProofs(picked, mintUrl);
+      if (changeProofs.length) addProofs(changeProofs, mintUrl);
       setEcashBalance(getBalanceSats());
       await loadWalletData();
+      const sentAmount = pendingSendDetails?.invoiceAmount || 0;
+
       addTransaction({
         id: Date.now(),
         type: 'send',
-        amount: pendingSendDetails?.invoiceAmount || 0,
+        amount: sentAmount,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
         description: '라이트닝 보내기',
@@ -1255,7 +1337,15 @@ function Wallet() {
       setEnableSendScanner(false);
       setShowSendConfirm(false);
       setPendingSendDetails(null);
-      showInfoMessage('라이트닝 송금이 완료되었습니다', 'success');
+
+      // Navigate to success page
+      navigate('/wallet/payment-success', {
+        state: {
+          amount: sentAmount,
+          returnTo: '/wallet/send',
+          type: 'send'
+        }
+      });
     } catch (error) {
       console.error('송금 오류:', error);
       showInfoMessage(error?.message || '송금에 실패했습니다', 'error');
@@ -1605,9 +1695,7 @@ function Wallet() {
           <div className="balance-header">
             <div className="balance-info">
               <h3>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm1-11.414V7h-2v3.586l-2.293-2.293-1.414 1.414L11 13.414V17h2v-3.586l3.707-3.707-1.414-1.414L13 10.586z"/>
-                </svg>
+                <Icon name="bitcoin" size={20} />
                 잔액
               </h3>
               <div className="balance-amount">
@@ -1615,6 +1703,9 @@ function Wallet() {
               </div>
             </div>
             <div className="balance-manage">
+              <button className="icon-btn" onClick={handleRefreshProofs} title="토큰 새로고침 (Swap)" disabled={loading}>
+                <Icon name="refresh" size={18} />
+              </button>
               <button className="icon-btn" onClick={checkPendingQuote} title="미처리 결제 확인" disabled={loading}>
                 <Icon name="repeat" size={18} />
               </button>
@@ -2086,9 +2177,24 @@ function Wallet() {
 
       {/* eCash Proofs Section */}
       <div className="proofs-section">
-        <div className="proofs-header" onClick={() => setShowProofs(!showProofs)}>
-          <h3>eCash 보유 현황 ({loadProofs().length}개)</h3>
-          <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
+        <div className="proofs-header">
+          <h3 onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer', flex: 1 }}>
+            eCash 보유 현황 ({loadProofs().length}개)
+          </h3>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              className="icon-btn"
+              onClick={handleRefreshProofs}
+              title="토큰 새로고침 (Swap)"
+              disabled={loading}
+              style={{ padding: '0.25rem' }}
+            >
+              <Icon name="refresh" size={16} />
+            </button>
+            <div onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer' }}>
+              <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
+            </div>
+          </div>
         </div>
         {showProofs && (
           <div className="proofs-list">
@@ -2097,6 +2203,9 @@ function Wallet() {
             ) : (
               loadProofs().map((proof, index) => {
                 const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
+                const mintUrl = proof?.mintUrl || 'Unknown Mint';
+                const displayMintUrl = mintUrl.length > 40 ? mintUrl.substring(0, 37) + '...' : mintUrl;
+
                 return (
                   <div key={proof?.secret || index} className="proof-item">
                     <div className="proof-info">
@@ -2106,6 +2215,9 @@ function Wallet() {
                           {isValid ? '사용 가능' : '사용 불가'}
                         </div>
                       </div>
+                    </div>
+                    <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                      Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>
                     </div>
                     <div className="proof-secret">
                       Secret: <span className="monospace">{(proof?.secret || '').substring(0, 16)}...</span>

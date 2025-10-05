@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DEFAULT_MINT_URL } from '../config';
 import './Settings.css';
 import Icon from '../components/Icon';
 
 function Settings() {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState({
     language: 'ko',
     currency: 'SATS',
     notifications: true,
-    darkMode: true,
     mintUrl: '',
     backupMintUrl: '',
     autoBackup: false,
@@ -21,9 +22,7 @@ function Settings() {
   const [currentPin, setCurrentPin] = useState('');
   const [pinStep, setPinStep] = useState('current'); // 'current', 'new', 'confirm'
   const [testingMainUrl, setTestingMainUrl] = useState(false);
-  const [testingBackupUrl, setTestingBackupUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
-  const [backupUrlStatus, setBackupUrlStatus] = useState(null);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -33,7 +32,6 @@ function Settings() {
         language: 'ko',
         currency: 'SATS',
         notifications: true,
-        darkMode: true,
         mintUrl: DEFAULT_MINT_URL,
         backupMintUrl: '',
         autoBackup: false,
@@ -48,15 +46,9 @@ function Settings() {
           backupMintUrl: parsed.backupMintUrl || ''
         };
         setSettings(merged);
-        document.documentElement.classList.toggle('dark', !!merged.darkMode);
       } else {
-        const merged = {
-          ...defaultSettings,
-          darkMode: true
-        };
-        setSettings(merged);
-        document.documentElement.classList.toggle('dark', true);
-        localStorage.setItem('app_settings', JSON.stringify(merged));
+        setSettings(defaultSettings);
+        localStorage.setItem('app_settings', JSON.stringify(defaultSettings));
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -64,14 +56,12 @@ function Settings() {
         language: 'ko',
         currency: 'SATS',
         notifications: true,
-        darkMode: true,
         mintUrl: DEFAULT_MINT_URL,
         backupMintUrl: '',
         autoBackup: false,
         pinEnabled: false
       };
       setSettings(fallback);
-      document.documentElement.classList.toggle('dark', true);
     }
   }, []);
 
@@ -91,11 +81,6 @@ function Settings() {
     };
     setSettings(newSettings);
     saveSettings(newSettings);
-
-    // Apply dark mode immediately
-    if (key === 'darkMode') {
-      document.documentElement.classList.toggle('dark', value);
-    }
   };
 
   const openPinSetup = () => {
@@ -158,18 +143,15 @@ function Settings() {
     }
   };
 
-  const testMintConnection = async (url, isBackup = false) => {
+  const testMintConnection = async (url) => {
     if (!url || !url.trim()) {
       alert('URL을 입력해주세요');
       return;
     }
 
-    const setTesting = isBackup ? setTestingBackupUrl : setTestingMainUrl;
-    const setStatus = isBackup ? setBackupUrlStatus : setMainUrlStatus;
-
     try {
-      setTesting(true);
-      setStatus(null);
+      setTestingMainUrl(true);
+      setMainUrlStatus(null);
 
       // Normalize URL
       const normalizedUrl = url.trim().replace(/\/$/, '');
@@ -188,19 +170,19 @@ function Settings() {
         throw new Error('유효한 Cashu Mint가 아닙니다');
       }
 
-      setStatus({
+      setMainUrlStatus({
         success: true,
         message: `연결 성공 (${data.name || 'Cashu Mint'})`,
         data
       });
     } catch (error) {
       console.error('Mint connection test failed:', error);
-      setStatus({
+      setMainUrlStatus({
         success: false,
         message: error.message || '연결 실패'
       });
     } finally {
-      setTesting(false);
+      setTestingMainUrl(false);
     }
   };
 
@@ -315,14 +297,12 @@ function Settings() {
         <div className="settings-section">
           <h2>Cashu Mint 설정</h2>
 
-          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className="setting-info">
-              <div className="setting-title">메인 Mint URL</div>
+          <div className="setting-item">
+            <div className="setting-info" style={{ flex: 1 }}>
+              <div className="setting-title">Mint URL</div>
               <div className="setting-description">
-                주로 사용할 Cashu Mint 서버 (변경 후 페이지 새로고침 필요)
+                사용할 Cashu Mint 서버 (변경 후 페이지 새로고침 필요)
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input
                 type="url"
                 placeholder={DEFAULT_MINT_URL}
@@ -332,77 +312,58 @@ function Settings() {
                   setMainUrlStatus(null);
                 }}
                 className="setting-input"
-                style={{ flex: 1 }}
+                style={{ marginTop: '0.5rem', width: '100%' }}
               />
-              <button
-                onClick={() => testMintConnection(settings.mintUrl, false)}
-                className="setting-button"
-                disabled={testingMainUrl || !settings.mintUrl}
-              >
-                {testingMainUrl ? '테스트 중...' : '연결 테스트'}
-              </button>
+              {mainUrlStatus && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  backgroundColor: mainUrlStatus.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  color: mainUrlStatus.success ? 'var(--success)' : 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <Icon name={mainUrlStatus.success ? 'check' : 'close'} size={14} />
+                  <span>{mainUrlStatus.message}</span>
+                </div>
+              )}
             </div>
-            {mainUrlStatus && (
-              <div style={{
-                marginTop: '0.5rem',
-                padding: '0.75rem',
-                borderRadius: '6px',
-                fontSize: '14px',
-                backgroundColor: mainUrlStatus.success ? '#d1fae5' : '#fee2e2',
-                color: mainUrlStatus.success ? '#065f46' : '#991b1b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}>
-                <Icon name={mainUrlStatus.success ? 'check' : 'close'} size={16} />
-                <span>{mainUrlStatus.message}</span>
-              </div>
-            )}
+            <button
+              onClick={() => testMintConnection(settings.mintUrl)}
+              className="icon-btn"
+              disabled={testingMainUrl || !settings.mintUrl}
+              title={testingMainUrl ? '테스트 중...' : '연결 테스트'}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              {testingMainUrl ? (
+                <Icon name="refresh" size={20} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Icon name={mainUrlStatus?.success ? 'check' : 'shield'} size={20} />
+              )}
+            </button>
           </div>
+        </div>
 
-          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        {/* Store Management */}
+        <div className="settings-section">
+          <h2>매장 관리</h2>
+
+          <div className="setting-item">
             <div className="setting-info">
-              <div className="setting-title">백업 Mint URL</div>
+              <div className="setting-title">비트코인 결제 가능 매장 등록</div>
               <div className="setting-description">
-                메인 서버 연결 실패 시 자동으로 사용할 백업 서버 (선택사항)
+                비트코인/라이트닝 결제를 받는 매장을 지도에 등록할 수 있습니다
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="url"
-                placeholder="백업 Mint URL (선택사항)"
-                value={settings.backupMintUrl}
-                onChange={(e) => {
-                  handleSettingChange('backupMintUrl', e.target.value);
-                  setBackupUrlStatus(null);
-                }}
-                className="setting-input"
-                style={{ flex: 1 }}
-              />
-              <button
-                onClick={() => testMintConnection(settings.backupMintUrl, true)}
-                className="setting-button"
-                disabled={testingBackupUrl || !settings.backupMintUrl}
-              >
-                {testingBackupUrl ? '테스트 중...' : '연결 테스트'}
-              </button>
-            </div>
-            {backupUrlStatus && (
-              <div style={{
-                marginTop: '0.5rem',
-                padding: '0.75rem',
-                borderRadius: '6px',
-                fontSize: '14px',
-                backgroundColor: backupUrlStatus.success ? '#d1fae5' : '#fee2e2',
-                color: backupUrlStatus.success ? '#065f46' : '#991b1b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}>
-                <Icon name={backupUrlStatus.success ? 'check' : 'close'} size={16} />
-                <span>{backupUrlStatus.message}</span>
-              </div>
-            )}
+            <button
+              onClick={() => navigate('/settings/add-store')}
+              className="setting-button"
+            >
+              매장 등록하기
+            </button>
           </div>
         </div>
 

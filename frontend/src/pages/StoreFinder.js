@@ -9,34 +9,16 @@ function StoreFinder() {
   const [filteredStores, setFilteredStores] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('전체');
   // const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [submitLoading, setSubmitLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [sortByDistance, setSortByDistance] = useState(false);
-  const [manualMapControl, setManualMapControl] = useState(false);
-  const createEmptyStore = () => ({
-    name: '',
-    category: '',
-    address: '',
-    phone: '',
-    hours: '',
-    description: '',
-    lat: null,
-    lng: null,
-  });
-  const [newStore, setNewStore] = useState(createEmptyStore);
   const mapRef = useRef();
   const kakaoMapRef = useRef();
   const markersRef = useRef([]);
   const infowindowsRef = useRef([]);
-  const mapClickHandlerRef = useRef(null);
-  const geocoderRef = useRef(null);
-  const tempMarkerRef = useRef(null);
   const userMarkerRef = useRef(null);
   const currentInfowindowRef = useRef(null);
 
@@ -149,156 +131,6 @@ function StoreFinder() {
     }
   };
 
-  // Helpers for geocoding and preview marker
-  const updateTempMarker = (lat, lng) => {
-    if (!kakaoMapRef.current || !window.kakao) return;
-    const pos = new window.kakao.maps.LatLng(lat, lng);
-    if (!tempMarkerRef.current) {
-      tempMarkerRef.current = new window.kakao.maps.Marker({ position: pos });
-    } else {
-      tempMarkerRef.current.setPosition(pos);
-    }
-    tempMarkerRef.current.setMap(kakaoMapRef.current);
-    kakaoMapRef.current.setCenter(pos);
-  };
-
-  const geocodeAddress = () => {
-    if (!geocoderRef.current || !newStore.address) return;
-    geocoderRef.current.addressSearch(newStore.address, (result, status) => {
-      if (status === window.kakao.maps.services.Status.OK && result && result.length) {
-        const { x, y } = result[0];
-        const lat = parseFloat(y);
-        const lng = parseFloat(x);
-        setNewStore((prev) => ({ ...prev, lat, lng }));
-        updateTempMarker(lat, lng);
-      } else {
-        alert('주소를 찾을 수 없습니다. 다른 표현으로 시도해보세요.');
-      }
-    });
-  };
-
-  const openAddressSearch = () => {
-    if (!window.daum) {
-      alert('주소 검색 스크립트가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
-      return;
-    }
-    const openPostcode = () => {
-      const postcode = new window.daum.Postcode({
-        oncomplete: function(data) {
-          const addr = data.roadAddress || data.jibunAddress || '';
-          if (addr) {
-            setNewStore((prev) => ({ ...prev, address: addr, lat: null, lng: null }));
-            // 지오코딩으로 좌표 업데이트
-            setTimeout(() => geocodeAddress(), 0);
-          }
-        }
-      });
-      postcode.open();
-    };
-    if (window.daum.postcode && typeof window.daum.postcode.load === 'function') {
-      window.daum.postcode.load(openPostcode);
-    } else {
-      openPostcode();
-    }
-  };
-
-
-  const openAddModal = () => {
-    setNewStore(createEmptyStore());
-    if (tempMarkerRef.current) {
-      tempMarkerRef.current.setMap(null);
-      tempMarkerRef.current = null;
-    }
-    if (kakaoMapRef.current && window.kakao && mapClickHandlerRef.current) {
-      window.kakao.maps.event.removeListener(kakaoMapRef.current, 'click', mapClickHandlerRef.current);
-      mapClickHandlerRef.current = null;
-    }
-    setShowAddModal(true);
-    setAdding(true);
-    // enable map click to set coordinates
-    if (kakaoMapRef.current && window.kakao) {
-      const handler = (mouseEvent) => {
-        const latlng = mouseEvent.latLng;
-        setNewStore((prev) => ({
-          ...prev,
-          lat: latlng.getLat(),
-          lng: latlng.getLng(),
-        }));
-        updateTempMarker(latlng.getLat(), latlng.getLng());
-      };
-      window.kakao.maps.event.addListener(kakaoMapRef.current, 'click', handler);
-      mapClickHandlerRef.current = handler;
-    }
-  };
-
-  const closeAddModal = () => {
-    setShowAddModal(false);
-    setAdding(false);
-    setNewStore(createEmptyStore());
-    if (kakaoMapRef.current && window.kakao && mapClickHandlerRef.current) {
-      window.kakao.maps.event.removeListener(kakaoMapRef.current, 'click', mapClickHandlerRef.current);
-      mapClickHandlerRef.current = null;
-    }
-    if (tempMarkerRef.current) {
-      tempMarkerRef.current.setMap(null);
-      tempMarkerRef.current = null;
-    }
-  };
-
-  const submitNewStore = async () => {
-    const { name, category, address, phone, hours, description, lat, lng } = newStore;
-    const trimmedName = name.trim();
-    const trimmedCategory = category.trim();
-    const trimmedAddress = address.trim();
-    if (!trimmedName || !trimmedCategory || !trimmedAddress) {
-      alert('이름, 카테고리, 주소를 입력하세요');
-      return;
-    }
-    if (lat == null || lng == null) {
-      // 주소로 좌표를 우선 시도
-      geocodeAddress();
-      alert('주소 기반 위치를 찾는 중입니다. 다시 저장을 눌러주세요.');
-      return;
-    }
-    try {
-      setSubmitLoading(true);
-      const payload = {
-        name: trimmedName,
-        category: trimmedCategory,
-        address: trimmedAddress,
-        lat: Number(lat),
-        lng: Number(lng),
-        phone: phone.trim() ? phone.trim() : null,
-        hours: hours.trim() ? hours.trim() : null,
-        description: description.trim() ? description.trim() : null,
-      };
-      const resp = await fetch(apiUrl('/api/stores'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || '매장 등록 실패');
-      }
-      const created = await resp.json();
-      await fetchStores();
-      // focus on new store
-      if (kakaoMapRef.current && window.kakao) {
-        const moveLatLon = new window.kakao.maps.LatLng(created.lat, created.lng);
-        kakaoMapRef.current.setCenter(moveLatLon);
-        kakaoMapRef.current.setLevel(4);
-      }
-      closeAddModal();
-      alert('매장이 등록되었습니다');
-    } catch (e) {
-      console.error(e);
-      alert(e.message || '매장 등록 중 오류가 발생했습니다');
-    } finally {
-      setSubmitLoading(false);
-    }
-  };
-
   const initKakaoMap = () => {
     if (!window.kakao || !window.kakao.maps) {
       console.error('카카오맵 API가 로드되지 않았습니다');
@@ -313,9 +145,6 @@ function StoreFinder() {
       };
 
       kakaoMapRef.current = new window.kakao.maps.Map(container, options);
-      if (window.kakao.maps.services) {
-        geocoderRef.current = new window.kakao.maps.services.Geocoder();
-      }
     });
   };
 
@@ -417,8 +246,8 @@ function StoreFinder() {
       infowindowsRef.current.push({ storeId: store.id, marker, infowindow });
     });
 
-    // Adjust map bounds to show all markers (skip if user location mode is active or manual control)
-    if (storeData.length > 0 && !sortByDistance && !manualMapControl) {
+    // Adjust map bounds to show all markers (skip if user location mode is active)
+    if (storeData.length > 0 && !sortByDistance) {
       const bounds = new window.kakao.maps.LatLngBounds();
       storeData.forEach(store => {
         bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
@@ -452,17 +281,12 @@ function StoreFinder() {
       })).sort((a, b) => a.distance - b.distance);
     }
 
-    // Reset manual control when filters change
-    setManualMapControl(false);
-
     setFilteredStores(filtered);
     updateMapMarkers(filtered);
   };
 
   const handleStoreClick = (store) => {
     if (kakaoMapRef.current && window.kakao) {
-      setManualMapControl(true); // Prevent auto bounds adjustment
-
       const moveLatLon = new window.kakao.maps.LatLng(store.lat, store.lng);
       kakaoMapRef.current.setCenter(moveLatLon);
       kakaoMapRef.current.setLevel(3); // Zoom in
@@ -576,14 +400,6 @@ function StoreFinder() {
           >
             <Icon name="map" size={18} /> {loadingLocation ? '위치 확인 중...' : sortByDistance ? '내 주변 매장 ✓' : '내 주변 매장'}
           </button>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="add-store-btn"
-            disabled={adding}
-          >
-            <Icon name="plus" size={18} /> 매장 등록
-          </button>
         </div>
 
       <div className="store-finder-content">
@@ -642,87 +458,6 @@ function StoreFinder() {
         </div>
       </div>
     </div>
-    {showAddModal && (
-      <div className="sf-modal-overlay" onClick={closeAddModal}>
-        <div className="sf-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="sf-modal-header">
-            <h3>매장 등록</h3>
-            <button className="sf-modal-close" onClick={closeAddModal} aria-label="닫기">
-              <Icon name="close" size={20} />
-            </button>
-          </div>
-          <div className="sf-modal-body">
-            <div className="sf-tip">카카오 주소검색을 이용해 위치를 찾거나 지도를 클릭해 위도/경도를 지정하세요.</div>
-            <div className="sf-form-grid">
-              <label>
-                <span>이름</span>
-                <input
-                  type="text"
-                  value={newStore.name}
-                  onChange={(e)=>setNewStore((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="예: 한입 비트코인 카페"
-                />
-              </label>
-              <label>
-                <span>카테고리</span>
-                <input
-                  type="text"
-                  value={newStore.category}
-                  onChange={(e)=>setNewStore((prev) => ({ ...prev, category: e.target.value }))}
-                  placeholder="예: 카페, 음식점, 편의점"
-                />
-              </label>
-              <label>
-                <span>전화번호</span>
-                <input
-                  type="tel"
-                  value={newStore.phone}
-                  onChange={(e)=>setNewStore((prev) => ({ ...prev, phone: e.target.value }))}
-                  placeholder="예: 02-123-4567"
-                />
-              </label>
-              <label>
-                <span>영업시간</span>
-                <input
-                  type="text"
-                  value={newStore.hours}
-                  onChange={(e)=>setNewStore((prev) => ({ ...prev, hours: e.target.value }))}
-                  placeholder="예: 매일 09:00~21:00"
-                />
-              </label>
-              <label className="sf-col-span">
-                <span>주소</span>
-                <div className="sf-inline-row">
-                  <input
-                    type="text"
-                    value={newStore.address}
-                    onChange={(e)=>setNewStore((prev) => ({ ...prev, address: e.target.value, lat: null, lng: null }))}
-                    onBlur={geocodeAddress}
-                    onKeyDown={(e)=>{ if (e.key === 'Enter') { e.preventDefault(); geocodeAddress(); } }}
-                  />
-                  <button type="button" className="sf-small-btn" onClick={openAddressSearch}>주소 검색</button>
-                </div>
-              </label>
-              <label className="sf-col-span">
-                <span>매장 설명</span>
-                <textarea
-                  rows={3}
-                  value={newStore.description}
-                  onChange={(e)=>setNewStore((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="예: 비트코인·라이트닝 결제가 가능한 스페셜티 커피 전문점입니다."
-                />
-              </label>
-            </div>
-          </div>
-          <div className="sf-modal-actions">
-            <button className="sf-btn" onClick={closeAddModal}>취소</button>
-            <button className="sf-btn primary" onClick={submitNewStore} disabled={submitLoading}>
-              {submitLoading ? '등록 중...' : '등록'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     {showDetailModal && selectedStore && (
       <div className="sf-modal-overlay" onClick={closeStoreDetail}>
         <div className="sf-modal" onClick={(e) => e.stopPropagation()}>

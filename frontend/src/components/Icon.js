@@ -20,6 +20,14 @@ const paths = {
       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </>
   ),
+  refresh: (
+    <>
+      <path d="M21.5 2v6h-6" />
+      <path d="M2.5 22v-6h6" />
+      <path d="M2 11.5a10 10 0 0 1 18.8-4.3" />
+      <path d="M22 12.5a10 10 0 0 1-18.8 4.2" />
+    </>
+  ),
   info: (
     <>
       <circle cx="12" cy="12" r="9" />

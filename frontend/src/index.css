@@ -5,36 +5,6 @@
 }
 
 :root {
-  --bg: #f5f6fa;
-  --bg-gradient: linear-gradient(180deg, #f8fafc 0%, #edf1f7 55%, #e2e8f0 100%);
-  --card-bg: rgba(255, 255, 255, 0.94);
-  --surface-bg: rgba(248, 250, 252, 0.88);
-  --text: #1f2933;
-  --muted: #6b7280;
-  --border: rgba(148, 163, 184, 0.22);
-  --primary: #2563eb;
-  --primary-600: #1d4ed8;
-  --primary-light: #dbeafe;
-  --primary-rgb: 37, 99, 235;
-  --secondary: #334155;
-  --secondary-600: #1e293b;
-  --secondary-rgb: 51, 65, 85;
-  --accent: #0ea5e9;
-  --accent-600: #0284c7;
-  --accent-rgb: 14, 165, 233;
-  --success: #16a34a;
-  --success-rgb: 22, 163, 74;
-  --danger: #ef4444;
-  --danger-rgb: 239, 68, 68;
-  --info: #38bdf8;
-  --info-rgb: 56, 189, 248;
-  --radius: 16px;
-  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.05);
-  --shadow-md: 0 4px 16px 0 rgb(15 23 42 / 0.08);
-  --shadow-lg: 0 12px 32px 0 rgb(15 23 42 / 0.12);
-}
-
-:root.dark {
   --bg: #0f172a;
   --bg-gradient: linear-gradient(180deg, #0f172a 0%, #111827 60%, #1f2937 100%);
   --card-bg: rgba(30, 41, 59, 0.88);
@@ -58,6 +28,7 @@
   --danger-rgb: 248, 113, 113;
   --info: #38bdf8;
   --info-rgb: 56, 189, 248;
+  --radius: 16px;
   --shadow-sm: 0 1px 4px 0 rgb(15 23 42 / 0.35);
   --shadow-md: 0 6px 18px 0 rgb(15 23 42 / 0.45);
   --shadow-lg: 0 14px 36px 0 rgb(15 23 42 / 0.55);
@@ -76,9 +47,6 @@ body {
   overflow-y: auto;
 }
 
-:root.dark body {
-  background: var(--bg-gradient);
-}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',

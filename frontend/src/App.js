@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
+import InstallPrompt from './components/InstallPrompt';
 import About from './pages/About';
 import StoreFinder from './pages/StoreFinder';
 import Wallet from './pages/Wallet';
 import Settings from './pages/Settings';
+import AddStore from './pages/AddStore';
 import TransactionDetail from './pages/TransactionDetail';
 import PaymentSuccess from './pages/PaymentSuccess';
 import { WebSocketProvider, useWebSocket } from './contexts/WebSocketContext';
@@ -55,6 +57,7 @@ function AppContent() {
   return (
     <Router>
       <PaymentListener />
+      <InstallPrompt />
       <Layout>
         <Routes>
           <Route path="/" element={<Wallet />} />
@@ -66,6 +69,7 @@ function AppContent() {
           <Route path="/about" element={<About />} />
           <Route path="/map" element={<StoreFinder />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/add-store" element={<AddStore />} />
         </Routes>
       </Layout>
     </Router>
@@ -73,18 +77,6 @@ function AppContent() {
 }
 
 function App() {
-  useEffect(() => {
-    // Initialize dark mode on app load
-    try {
-      const saved = localStorage.getItem('app_settings');
-      const darkMode = saved ? JSON.parse(saved).darkMode : true; // Default to true (dark mode)
-      document.documentElement.classList.toggle('dark', darkMode !== false);
-    } catch (e) {
-      console.error('Failed to load dark mode setting:', e);
-      document.documentElement.classList.add('dark'); // Default to dark mode on error
-    }
-  }, []);
-
   return (
     <WebSocketProvider>
       <AppContent />
