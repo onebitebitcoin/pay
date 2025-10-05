@@ -133,7 +133,7 @@ systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 
-su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm install --no-audit"
+su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm install --no-audit --legacy-peer-deps"
 su - "$DEPLOY_USER" -c "cd '$FRONTEND_DIR' && npm run build"
 
 rsync -a --delete "$FRONTEND_DIR/build/" "$FRONTEND_DEPLOY_DIR/"
