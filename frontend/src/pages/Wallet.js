@@ -199,12 +199,12 @@ function Wallet() {
   }, [ecashBalance]);
 
   useEffect(() => {
-    if (showSend) {
+    if (showSend || isSendView) {
       setEnableSendScanner(true);
     } else {
       setEnableSendScanner(false);
     }
-  }, [showSend]);
+  }, [showSend, isSendView]);
 
   // Warn on page unload if there is any eCash balance
   useEffect(() => {

@@ -105,7 +105,7 @@
   padding: 0.5rem 0.75rem;
   border: 2px solid var(--border);
   border-radius: 0.375rem;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--text);
   font-size: 0.875rem;
   cursor: pointer;
@@ -122,7 +122,7 @@
   padding: 0.5rem 0.75rem;
   border: 2px solid var(--border);
   border-radius: 0.375rem;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--text);
   font-size: 0.875rem;
   transition: border-color 0.2s;
@@ -209,9 +209,9 @@ input:checked + .toggle-slider:before {
 
 .info-item {
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(var(--primary-rgb), 0.08);
   border-radius: 0.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--border);
 }
 
 .info-label {

@@ -271,7 +271,7 @@
 }
 
 .manage-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
-.manage-btn { padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.35); color: var(--text); cursor: pointer; transition: background-color 0.2s; }
+.manage-btn { padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); background: rgba(var(--primary-rgb), 0.1); color: var(--text); cursor: pointer; transition: background-color 0.2s; }
 .manage-btn:hover { background: rgba(var(--primary-rgb), 0.16); }
 
 /* Cashu explainer */
@@ -390,7 +390,7 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--text);
   border: 2px solid var(--border);
   border-radius: 0.75rem;
@@ -489,7 +489,8 @@
   border-radius: 0.5rem;
   font-size: 0.9rem;
   font-family: 'Courier New', monospace;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--text);
 }
 .invoice-input:focus {
   outline: none;
@@ -504,7 +505,7 @@
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--primary-rgb), 0.15);
   border: 1px solid var(--border);
   width: 36px;
   height: 36px;
@@ -541,10 +542,11 @@
   width: 240px;
   height: 240px;
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.35);
+  background: #ffffff;
   border: 1px solid var(--border);
   display: block;
   margin: 0 auto 0.5rem;
+  padding: 8px;
 }
 
 .payment-checking {
@@ -572,7 +574,7 @@
 }
 
 .secondary-btn {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--text);
   border: 1px solid var(--border);
   padding: 0.875rem 1.5rem;
@@ -905,7 +907,7 @@
   gap: 0.75rem;
   align-items: flex-start;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(var(--primary-rgb), 0.08);
   border-radius: 0.5rem;
   border: 1px solid var(--border);
 }
@@ -1382,7 +1384,8 @@
   border-radius: 0.5rem;
   font-size: 0.85rem;
   font-family: 'Courier New', monospace;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--text);
   resize: none;
   word-break: break-all;
   transition: all 0.2s;

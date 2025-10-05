@@ -264,7 +264,7 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.75rem;
-  background: white;
+  background: rgba(var(--primary-rgb), 0.12);
   border: 1px solid var(--border);
   border-radius: 0.375rem;
   font-size: 0.85rem;
