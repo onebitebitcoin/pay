@@ -195,7 +195,7 @@ function AddStore() {
                 type="text"
                 value={newStore.name}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="예: 한입만 카페"
+                placeholder="예: 비트코인 카페"
               />
             </label>
 
