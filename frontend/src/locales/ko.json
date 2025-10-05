@@ -31,6 +31,7 @@
   },
   "wallet": {
     "title": "한입만",
+    "subtitle": "Cashu 기반 프라이버시 중심 라이트닝 지갑",
     "balance": "잔액",
     "ecashBalance": "eCash 잔액",
     "receive": "받기",
@@ -75,7 +76,15 @@
     "storageWarning": "저장공간 주의",
     "storageText": "사용 가능한 저장공간: {{available}}",
     "storageBackup": "데이터를 백업하고 불필요한 파일을 삭제하세요.",
-    "viewDetails": "상세 보기"
+    "viewDetails": "상세 보기",
+    "storageAccessDenied": "저장소 접근 불가",
+    "storageAccessDeniedDesc": "이 브라우저에서 eCash를 안전하게 보관할 수 없습니다. 다른 브라우저를 사용하거나, 즉시 백업 후 종료하세요.",
+    "backupImportant": "중요",
+    "backupWarningDesc": "브라우저 데이터 삭제 시 eCash 잔액이 사라집니다. 지금 백업 파일을 내려받아 안전하게 보관하세요.",
+    "refreshTokens": "토큰 새로고침 (Swap)",
+    "checkPending": "미처리 결제 확인",
+    "backup": "백업",
+    "restore": "복구"
   },
   "settings": {
     "title": "설정",
@@ -233,6 +242,10 @@
     "insufficientBalance": "eCash 잔액이 부족합니다",
     "maxConversionAmount": "최대 {{amount}} sats까지 전환 가능합니다",
     "cashuModeConversionNotAllowed": "Cashu 모드에서는 전환 모달은 별도로 사용하지 않습니다. 받기/보내기를 이용해 주세요.",
-    "copyFailed": "복사에 실패했습니다"
+    "copyFailed": "복사에 실패했습니다",
+    "autoReflectFailed": "증명서 데이터가 없어 잔액 자동 반영에 실패했습니다. \"미처리 결제 확인\"으로 복구하세요.",
+    "insufficientBalanceSimple": "잔액이 부족합니다",
+    "insufficientBalanceDetails": "잔액 부족: {{amount}} sats 부족",
+    "tokenAlreadyUsed": "이미 사용된 토큰입니다. 다른 기기에서 이미 사용되었거나 잔액이 동기화되지 않았을 수 있습니다. 페이지를 새로고침한 후 다시 시도해주세요."
   }
 }

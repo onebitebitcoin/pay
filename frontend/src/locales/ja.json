@@ -31,6 +31,7 @@
   },
   "wallet": {
     "title": "ハニブマン",
+    "subtitle": "Cashuベースのプライバシー重視ライトニングウォレット",
     "balance": "残高",
     "ecashBalance": "eCash残高",
     "receive": "受け取る",
@@ -75,7 +76,15 @@
     "storageWarning": "ストレージ警告",
     "storageText": "利用可能なストレージ：{{available}}",
     "storageBackup": "データをバックアップし、不要なファイルを削除してください。",
-    "viewDetails": "詳細を見る"
+    "viewDetails": "詳細を見る",
+    "storageAccessDenied": "ストレージアクセス拒否",
+    "storageAccessDeniedDesc": "このブラウザではeCashを安全に保管できません。別のブラウザを使用するか、すぐにバックアップして終了してください。",
+    "backupImportant": "重要",
+    "backupWarningDesc": "ブラウザデータを削除するとeCash残高が失われます。今すぐバックアップファイルをダウンロードして安全に保管してください。",
+    "refreshTokens": "トークン更新 (Swap)",
+    "checkPending": "未処理支払い確認",
+    "backup": "バックアップ",
+    "restore": "復元"
   },
   "settings": {
     "title": "設定",
@@ -233,6 +242,10 @@
     "insufficientBalance": "eCash残高が不足しています",
     "maxConversionAmount": "最大{{amount}} satsまで変換可能です",
     "cashuModeConversionNotAllowed": "Cashuモードでは、変換モーダルは別途使用しません。受け取り/送信をご利用ください。",
-    "copyFailed": "コピーに失敗しました"
+    "copyFailed": "コピーに失敗しました",
+    "autoReflectFailed": "証明書データがないため残高の自動反映に失敗しました。「未処理支払い確認」で復元してください。",
+    "insufficientBalanceSimple": "残高が不足しています",
+    "insufficientBalanceDetails": "残高不足：{{amount}} sats 不足",
+    "tokenAlreadyUsed": "既に使用済みのトークンです。他のデバイスで既に使用されたか、残高が同期されていない可能性があります。ページを更新してから再試行してください。"
   }
 }

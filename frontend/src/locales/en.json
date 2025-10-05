@@ -31,6 +31,7 @@
   },
   "wallet": {
     "title": "Hanibman",
+    "subtitle": "Privacy-focused Lightning wallet based on Cashu",
     "balance": "Balance",
     "ecashBalance": "eCash Balance",
     "receive": "Receive",
@@ -75,7 +76,15 @@
     "storageWarning": "Storage Warning",
     "storageText": "Available storage: {{available}}",
     "storageBackup": "Please backup your data and delete unnecessary files.",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
+    "storageAccessDenied": "Storage Access Denied",
+    "storageAccessDeniedDesc": "eCash cannot be safely stored in this browser. Please use a different browser or backup immediately and exit.",
+    "backupImportant": "Important",
+    "backupWarningDesc": "Your eCash balance will be lost if browser data is deleted. Download your backup file now and keep it safe.",
+    "refreshTokens": "Refresh Tokens (Swap)",
+    "checkPending": "Check Pending Payments",
+    "backup": "Backup",
+    "restore": "Restore"
   },
   "settings": {
     "title": "Settings",
@@ -233,6 +242,10 @@
     "insufficientBalance": "Insufficient eCash balance",
     "maxConversionAmount": "Maximum {{amount}} sats can be converted",
     "cashuModeConversionNotAllowed": "In Cashu mode, conversion modal is not used separately. Please use receive/send.",
-    "copyFailed": "Failed to copy"
+    "copyFailed": "Failed to copy",
+    "autoReflectFailed": "Failed to automatically reflect balance due to missing proof data. Please use \"Check Pending Payments\" to recover.",
+    "insufficientBalanceSimple": "Insufficient balance",
+    "insufficientBalanceDetails": "Insufficient balance: {{amount}} sats short",
+    "tokenAlreadyUsed": "Token already used. It may have been used on another device or balance is not synchronized. Please refresh the page and try again."
   }
 }

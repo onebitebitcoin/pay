@@ -440,7 +440,7 @@ function Wallet() {
           markQuoteRedeemed(quote);
         }
       } else if (applyResult.reason === 'missing_output_datas') {
-        showInfoMessage('증명서 데이터가 없어 잔액 자동 반영에 실패했습니다. "미처리 결제 확인"으로 복구하세요.', 'error', 6000);
+        showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
       }
     }
 
@@ -1091,7 +1091,7 @@ function Wallet() {
 
     // Insufficient balance
     if (msg.includes('insufficient') || msg.includes('not enough')) {
-      return '잔액이 부족합니다';
+      return t('messages.insufficientBalanceSimple');
     }
 
     // Payment failed
@@ -1166,7 +1166,7 @@ function Wallet() {
         const available = getBalanceSats();
 
         if (available < need) {
-          setInvoiceError(`잔액 부족: ${formatAmount(need - available)} sats 부족`);
+          setInvoiceError(t('messages.insufficientBalanceDetails', { amount: formatAmount(need - available) }));
         }
 
         setInvoiceQuote({
@@ -1257,12 +1257,12 @@ function Wallet() {
 
       const available = getBalanceSats();
       if (available < need) {
-        throw new Error(`잔액 부족: ${formatAmount(need - available)} sats 부족`);
+        throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(need - available) }));
       }
 
       // Execute send directly
       const { ok, picked, total } = selectProofsForAmount(need);
-      if (!ok) throw new Error('eCash 잔액이 부족합니다');
+      if (!ok) throw new Error(t('messages.insufficientBalance'));
 
       let changeOutputs = undefined;
       let changeOutputDatas = undefined;
@@ -1298,7 +1298,7 @@ function Wallet() {
 
             // Check for "already spent" error
             if (/already spent|token.*spent/i.test(errorStr)) {
-              msg = '이미 사용된 토큰입니다. 다른 기기에서 이미 사용되었거나 잔액이 동기화되지 않았을 수 있습니다. 페이지를 새로고침한 후 다시 시도해주세요.';
+              msg = t('messages.tokenAlreadyUsed');
             } else {
               try {
                 const inner = JSON.parse(err.error);
@@ -1376,7 +1376,7 @@ function Wallet() {
       const feeReserve = Number(quoteData?.fee_reserve || quoteData?.fee || 0);
       const need = invoiceAmount + feeReserve;
       const { ok, picked, total } = selectProofsForAmount(need);
-      if (!ok) throw new Error('eCash 잔액이 부족합니다');
+      if (!ok) throw new Error(t('messages.insufficientBalance'));
       // Prepare change outputs if necessary
       let changeOutputs = undefined;
       let changeOutputDatas = undefined;
@@ -1404,7 +1404,7 @@ function Wallet() {
 
             // Check for "already spent" error
             if (/already spent|token.*spent/i.test(errorStr)) {
-              msg = '이미 사용된 토큰입니다. 다른 기기에서 이미 사용되었거나 잔액이 동기화되지 않았을 수 있습니다. 페이지를 새로고침한 후 다시 시도해주세요.';
+              msg = t('messages.tokenAlreadyUsed');
             } else {
               try {
                 const inner = JSON.parse(err.error);
@@ -1775,21 +1775,21 @@ function Wallet() {
         <div className="wallet">
       <div className="wallet-header">
         <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
-        <p>Cashu 기반 프라이버시 중심 라이트닝 지갑</p>
+        <p>{t('wallet.subtitle')}</p>
       </div>
 
       {/* Storage warning banners */}
       {!storageHealthy && (
         <div className="warning-banner danger">
           <div>
-            <strong>저장소 접근 불가</strong> · 이 브라우저에서 eCash를 안전하게 보관할 수 없습니다. 다른 브라우저를 사용하거나, 즉시 백업 후 종료하세요.
+            <strong>{t('wallet.storageAccessDenied')}</strong> · {t('wallet.storageAccessDeniedDesc')}
           </div>
         </div>
       )}
       {storageHealthy && showBackupBanner && (
         <div className="warning-banner warning">
           <div className="warning-content">
-            <strong>중요</strong> · 브라우저 데이터 삭제 시 eCash 잔액이 사라집니다. 지금 백업 파일을 내려받아 안전하게 보관하세요.
+            <strong>{t('wallet.backupImportant')}</strong> · {t('wallet.backupWarningDesc')}
           </div>
           <button className="warning-close-btn" onClick={() => { try { localStorage.setItem('cashu_backup_dismissed', '1'); } catch {}; setShowBackupBanner(false); }}>
             <Icon name="close" size={18} />
@@ -1808,23 +1808,23 @@ function Wallet() {
             <div className="balance-info">
               <h3>
                 <Icon name="bitcoin" size={20} />
-                잔액
+                {t('wallet.balance')}
               </h3>
               <div className="balance-amount">
                 {formatAmount(ecashBalance)} <span className="unit">sats</span>
               </div>
             </div>
             <div className="balance-manage">
-              <button className="icon-btn" onClick={handleRefreshProofs} title="토큰 새로고침 (Swap)" disabled={loading}>
+              <button className="icon-btn" onClick={handleRefreshProofs} title={t('wallet.refreshTokens')} disabled={loading}>
                 <Icon name="refresh" size={18} />
               </button>
-              <button className="icon-btn" onClick={checkPendingQuote} title="미처리 결제 확인" disabled={loading}>
+              <button className="icon-btn" onClick={checkPendingQuote} title={t('wallet.checkPending')} disabled={loading}>
                 <Icon name="repeat" size={18} />
               </button>
-              <button className="icon-btn" onClick={handleBackup} title="백업">
+              <button className="icon-btn" onClick={handleBackup} title={t('wallet.backup')}>
                 <Icon name="download" size={18} />
               </button>
-              <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title="복구">
+              <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title={t('wallet.restore')}>
                 <Icon name="upload" size={18} />
               </button>
               <input type="file" accept="application/json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleRestoreFile} />
@@ -2298,7 +2298,7 @@ function Wallet() {
             <button
               className="icon-btn"
               onClick={handleRefreshProofs}
-              title="토큰 새로고침 (Swap)"
+              title={t('wallet.refreshTokens')}
               disabled={loading}
               style={{ padding: '0.25rem' }}
             >
