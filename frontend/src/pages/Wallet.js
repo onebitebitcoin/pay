@@ -27,8 +27,12 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 function Wallet() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isConnected: isWebSocketConnected, send: sendWebSocketMessage } = useWebSocket();
+
+  useEffect(() => {
+    document.title = t('pageTitle.wallet');
+  }, [t, i18n.language]);
   // Initialize balance from localStorage immediately
   const [ecashBalance, setEcashBalance] = useState(() => {
     try {
@@ -362,7 +366,7 @@ function Wallet() {
       await loadWalletData(false, true); // Sync with Mint on connect
     } catch (e) {
       console.error(e);
-      alert(e.message || 'Mint 연결 실패');
+      alert(e.message || t('messages.mintConnectionFailed'));
     } finally {
       setLoading(false);
     }
@@ -803,11 +807,11 @@ function Wallet() {
 
   const executeBackup = async () => {
     if (!passphrase || passphrase.length < 8) {
-      alert('패스프레이즈는 최소 8자 이상이어야 합니다.');
+      alert(t('messages.passphraseMinLength'));
       return;
     }
     if (passphrase !== passphraseConfirm) {
-      alert('패스프레이즈가 일치하지 않습니다.');
+      alert(t('messages.passphraseMismatch'));
       return;
     }
 
@@ -878,7 +882,7 @@ function Wallet() {
 
   const executeRestore = async () => {
     if (!passphrase) {
-      alert('패스프레이즈를 입력하세요.');
+      alert(t('messages.enterPassphrase'));
       return;
     }
 
@@ -924,7 +928,7 @@ function Wallet() {
 
   const generateInvoice = async () => {
     if (!receiveAmount || receiveAmount <= 0) {
-      alert('올바른 금액을 입력하세요');
+      alert(t('messages.enterValidAmount'));
       return;
     }
 
@@ -971,7 +975,7 @@ function Wallet() {
       setCheckingPayment(true);
     } catch (error) {
       console.error('인보이스 생성 오류:', error);
-      alert('인보이스 생성에 실패했습니다');
+      alert(t('messages.invoiceGenerationFailed'));
     } finally {
       setLoading(false);
     }
@@ -1465,7 +1469,7 @@ function Wallet() {
 
   const convertFunds = async () => {
     if (!convertAmount || convertAmount <= 0) {
-      alert('올바른 금액을 입력하세요');
+      alert(t('messages.enterValidAmount'));
       return;
     }
 
@@ -1473,20 +1477,20 @@ function Wallet() {
 
     if (convertDirection === 'ecash_to_ln') {
       if (amount > ecashBalance) {
-        alert('eCash 잔액이 부족합니다');
+        alert(t('messages.insufficientBalance'));
         return;
       }
     }
 
     if (amount > ECASH_CONFIG.maxAmount) {
-      alert(`최대 ${formatAmount(ECASH_CONFIG.maxAmount)} sats까지 전환 가능합니다`);
+      alert(t('messages.maxConversionAmount', { amount: formatAmount(ECASH_CONFIG.maxAmount) }));
       return;
     }
 
     try {
       setLoading(true);
       // Cashu 모드에서는 받기/보내기 플로우로 전환이 처리됩니다.
-      alert('Cashu 모드에서는 전환 모달은 별도로 사용하지 않습니다. 받기/보내기를 이용해 주세요.');
+      alert(t('messages.cashuModeConversionNotAllowed'));
     } catch (error) {
       console.error('전환 오류:', error);
     } finally {
@@ -1708,7 +1712,7 @@ function Wallet() {
                                 setInvoiceCopied(true);
                                 setTimeout(() => setInvoiceCopied(false), 2000);
                               } catch {
-                                alert('복사에 실패했습니다');
+                                alert(t('messages.copyFailed'));
                               }
                             }}
                             rows="5"

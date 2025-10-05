@@ -1,4 +1,11 @@
 {
+  "pageTitle": {
+    "wallet": "Hanibman - Wallet",
+    "map": "Hanibman - Map",
+    "settings": "Hanibman - Settings",
+    "faq": "Hanibman - FAQ",
+    "addStore": "Hanibman - Add Store"
+  },
   "common": {
     "confirm": "Confirm",
     "cancel": "Cancel",
@@ -195,5 +202,37 @@
     "appLike": "App-like Experience",
     "installNow": "Install Now",
     "later": "Later"
+  },
+  "messages": {
+    "settingsSaveFailed": "Failed to save settings.",
+    "currentPinIncorrect": "Current PIN is incorrect.",
+    "pinMinLength": "PIN must be at least 4 digits.",
+    "pinMismatch": "PINs do not match.",
+    "pinSet": "PIN has been set.",
+    "confirmDisablePin": "Do you want to disable PIN lock?",
+    "enterCurrentPinPrompt": "Enter current PIN:",
+    "pinDisabled": "PIN lock has been disabled.",
+    "pinIncorrect": "PIN is incorrect.",
+    "enterMintUrl": "Please enter a URL",
+    "confirmResetWallet": "Are you sure you want to reset your wallet? This action cannot be undone.",
+    "confirmBackupCheck": "All data will be deleted. Have you confirmed your backup?",
+    "walletReset": "Wallet has been reset. Refreshing the page.",
+    "resetFailed": "An error occurred during reset.",
+    "addressNotFound": "Address not found. Please try a different search.",
+    "addressSearchNotReady": "Address search script not yet loaded. Please try again in a moment.",
+    "requiredFields": "Please enter name, category, and address",
+    "geocoding": "Finding location based on address. Please save again.",
+    "storeSubmitSuccess": "Store has been registered",
+    "storeSubmitError": "An error occurred while registering the store",
+    "mintConnectionFailed": "Mint connection failed",
+    "passphraseMinLength": "Passphrase must be at least 8 characters.",
+    "passphraseMismatch": "Passphrases do not match.",
+    "enterPassphrase": "Please enter a passphrase.",
+    "enterValidAmount": "Please enter a valid amount",
+    "invoiceGenerationFailed": "Failed to generate invoice",
+    "insufficientBalance": "Insufficient eCash balance",
+    "maxConversionAmount": "Maximum {{amount}} sats can be converted",
+    "cashuModeConversionNotAllowed": "In Cashu mode, conversion modal is not used separately. Please use receive/send.",
+    "copyFailed": "Failed to copy"
   }
 }

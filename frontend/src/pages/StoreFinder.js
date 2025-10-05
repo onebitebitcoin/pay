@@ -5,8 +5,12 @@ import Icon from '../components/Icon';
 import { apiUrl, loadKakaoSdk } from '../config';
 
 function StoreFinder() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [stores, setStores] = useState([]);
+
+  useEffect(() => {
+    document.title = t('pageTitle.map');
+  }, [t, i18n.language]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredStores, setFilteredStores] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('전체');

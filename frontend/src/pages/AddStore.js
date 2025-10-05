@@ -7,8 +7,12 @@ import './AddStore.css';
 
 function AddStore() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [submitLoading, setSubmitLoading] = useState(false);
+
+  useEffect(() => {
+    document.title = t('pageTitle.addStore');
+  }, [t, i18n.language]);
   const createEmptyStore = () => ({
     name: '',
     category: '',
@@ -97,14 +101,14 @@ function AddStore() {
         setNewStore((prev) => ({ ...prev, lat, lng }));
         updateTempMarker(lat, lng);
       } else {
-        alert(t('addStore.addressNotFound'));
+        alert(t('messages.addressNotFound'));
       }
     });
   };
 
   const openAddressSearch = () => {
     if (!window.daum) {
-      alert(t('addStore.addressSearchNotReady'));
+      alert(t('messages.addressSearchNotReady'));
       return;
     }
     const openPostcode = () => {
@@ -132,12 +136,12 @@ function AddStore() {
     const trimmedCategory = category.trim();
     const trimmedAddress = address.trim();
     if (!trimmedName || !trimmedCategory || !trimmedAddress) {
-      alert(t('addStore.requiredFields'));
+      alert(t('messages.requiredFields'));
       return;
     }
     if (lat == null || lng == null) {
       geocodeAddress();
-      alert(t('addStore.geocoding'));
+      alert(t('messages.geocoding'));
       return;
     }
     try {
@@ -161,11 +165,11 @@ function AddStore() {
         const err = await resp.json().catch(() => ({}));
         throw new Error(err.error || t('addStore.error'));
       }
-      alert(t('addStore.success'));
+      alert(t('messages.storeSubmitSuccess'));
       navigate('/map');
     } catch (e) {
       console.error(e);
-      alert(e.message || t('addStore.submitError'));
+      alert(e.message || t('messages.storeSubmitError'));
     } finally {
       setSubmitLoading(false);
     }

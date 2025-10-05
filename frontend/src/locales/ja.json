@@ -1,4 +1,11 @@
 {
+  "pageTitle": {
+    "wallet": "ハニブマン - ウォレット",
+    "map": "ハニブマン - 地図",
+    "settings": "ハニブマン - 設定",
+    "faq": "ハニブマン - FAQ",
+    "addStore": "ハニブマン - 店舗登録"
+  },
   "common": {
     "confirm": "確認",
     "cancel": "キャンセル",
@@ -195,5 +202,37 @@
     "appLike": "アプリのように使用",
     "installNow": "今すぐインストール",
     "later": "後で"
+  },
+  "messages": {
+    "settingsSaveFailed": "設定の保存に失敗しました。",
+    "currentPinIncorrect": "現在のPINが正しくありません。",
+    "pinMinLength": "PINは最低4桁以上である必要があります。",
+    "pinMismatch": "PINが一致しません。",
+    "pinSet": "PINが設定されました。",
+    "confirmDisablePin": "PINロックを解除しますか？",
+    "enterCurrentPinPrompt": "現在のPINを入力してください：",
+    "pinDisabled": "PINロックが解除されました。",
+    "pinIncorrect": "PINが正しくありません。",
+    "enterMintUrl": "URLを入力してください",
+    "confirmResetWallet": "本当にウォレットをリセットしますか？この操作は元に戻せません。",
+    "confirmBackupCheck": "すべてのデータが削除されます。バックアップを確認しましたか？",
+    "walletReset": "ウォレットがリセットされました。ページを更新します。",
+    "resetFailed": "リセット中にエラーが発生しました。",
+    "addressNotFound": "住所が見つかりません。別の表現で試してください。",
+    "addressSearchNotReady": "住所検索スクリプトがまだ読み込まれていません。しばらく待ってから再試行してください。",
+    "requiredFields": "名前、カテゴリー、住所を入力してください",
+    "geocoding": "住所に基づいて位置を検索中です。もう一度保存を押してください。",
+    "storeSubmitSuccess": "店舗が登録されました",
+    "storeSubmitError": "店舗登録中にエラーが発生しました",
+    "mintConnectionFailed": "Mint接続に失敗しました",
+    "passphraseMinLength": "パスフレーズは最低8文字以上である必要があります。",
+    "passphraseMismatch": "パスフレーズが一致しません。",
+    "enterPassphrase": "パスフレーズを入力してください。",
+    "enterValidAmount": "正しい金額を入力してください",
+    "invoiceGenerationFailed": "インボイスの生成に失敗しました",
+    "insufficientBalance": "eCash残高が不足しています",
+    "maxConversionAmount": "最大{{amount}} satsまで変換可能です",
+    "cashuModeConversionNotAllowed": "Cashuモードでは、変換モーダルは別途使用しません。受け取り/送信をご利用ください。",
+    "copyFailed": "コピーに失敗しました"
   }
 }

@@ -1,4 +1,11 @@
 {
+  "pageTitle": {
+    "wallet": "한입만 - 지갑",
+    "map": "한입만 - 지도",
+    "settings": "한입만 - 설정",
+    "faq": "한입만 - FAQ",
+    "addStore": "한입만 - 매장 등록"
+  },
   "common": {
     "confirm": "확인",
     "cancel": "취소",
@@ -195,5 +202,37 @@
     "appLike": "앱처럼 사용",
     "installNow": "지금 설치하기",
     "later": "나중에"
+  },
+  "messages": {
+    "settingsSaveFailed": "설정 저장에 실패했습니다.",
+    "currentPinIncorrect": "현재 PIN이 올바르지 않습니다.",
+    "pinMinLength": "PIN은 최소 4자리 이상이어야 합니다.",
+    "pinMismatch": "PIN이 일치하지 않습니다.",
+    "pinSet": "PIN이 설정되었습니다.",
+    "confirmDisablePin": "PIN 잠금을 해제하시겠습니까?",
+    "enterCurrentPinPrompt": "현재 PIN을 입력하세요:",
+    "pinDisabled": "PIN 잠금이 해제되었습니다.",
+    "pinIncorrect": "PIN이 올바르지 않습니다.",
+    "enterMintUrl": "URL을 입력해주세요",
+    "confirmResetWallet": "정말로 지갑을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "confirmBackupCheck": "모든 데이터가 삭제됩니다. 백업을 확인하셨나요?",
+    "walletReset": "지갑이 초기화되었습니다. 페이지를 새로고침합니다.",
+    "resetFailed": "초기화 중 오류가 발생했습니다.",
+    "addressNotFound": "주소를 찾을 수 없습니다. 다른 표현으로 시도해보세요.",
+    "addressSearchNotReady": "주소 검색 스크립트가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.",
+    "requiredFields": "이름, 카테고리, 주소를 입력하세요",
+    "geocoding": "주소 기반 위치를 찾는 중입니다. 다시 저장을 눌러주세요.",
+    "storeSubmitSuccess": "매장이 등록되었습니다",
+    "storeSubmitError": "매장 등록 중 오류가 발생했습니다",
+    "mintConnectionFailed": "Mint 연결 실패",
+    "passphraseMinLength": "패스프레이즈는 최소 8자 이상이어야 합니다.",
+    "passphraseMismatch": "패스프레이즈가 일치하지 않습니다.",
+    "enterPassphrase": "패스프레이즈를 입력하세요.",
+    "enterValidAmount": "올바른 금액을 입력하세요",
+    "invoiceGenerationFailed": "인보이스 생성에 실패했습니다",
+    "insufficientBalance": "eCash 잔액이 부족합니다",
+    "maxConversionAmount": "최대 {{amount}} sats까지 전환 가능합니다",
+    "cashuModeConversionNotAllowed": "Cashu 모드에서는 전환 모달은 별도로 사용하지 않습니다. 받기/보내기를 이용해 주세요.",
+    "copyFailed": "복사에 실패했습니다"
   }
 }

@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import './Home.css';
 import Icon from '../components/Icon';
 
 function About() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [openIndex, setOpenIndex] = useState(null);
+
+  useEffect(() => {
+    document.title = t('pageTitle.faq');
+  }, [t, i18n.language]);
 
   const faqs = [
     {

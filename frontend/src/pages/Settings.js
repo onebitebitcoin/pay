@@ -26,6 +26,10 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
 
+  useEffect(() => {
+    document.title = t('pageTitle.settings');
+  }, [t, i18n.language]);
+
   // Load settings from localStorage
   useEffect(() => {
     try {
@@ -72,7 +76,7 @@ function Settings() {
       localStorage.setItem('app_settings', JSON.stringify(newSettings));
     } catch (e) {
       console.error('Failed to save settings:', e);
-      alert('설정 저장에 실패했습니다.');
+      alert(t('messages.settingsSaveFailed'));
     }
   };
 
@@ -112,17 +116,17 @@ function Settings() {
         setPinStep('new');
         setCurrentPin('');
       } else {
-        alert('현재 PIN이 올바르지 않습니다.');
+        alert(t('messages.currentPinIncorrect'));
       }
     } else if (pinStep === 'new') {
       if (pinInput.length < 4) {
-        alert('PIN은 최소 4자리 이상이어야 합니다.');
+        alert(t('messages.pinMinLength'));
         return;
       }
       setPinStep('confirm');
     } else if (pinStep === 'confirm') {
       if (pinInput !== pinConfirm) {
-        alert('PIN이 일치하지 않습니다.');
+        alert(t('messages.pinMismatch'));
         setPinConfirm('');
         return;
       }
@@ -132,27 +136,27 @@ function Settings() {
       setShowPinSetup(false);
       setPinInput('');
       setPinConfirm('');
-      alert('PIN이 설정되었습니다.');
+      alert(t('messages.pinSet'));
     }
   };
 
   const disablePin = () => {
-    if (window.confirm('PIN 잠금을 해제하시겠습니까?')) {
+    if (window.confirm(t('messages.confirmDisablePin'))) {
       const storedPin = localStorage.getItem('app_pin');
-      const inputPin = prompt('현재 PIN을 입력하세요:');
+      const inputPin = prompt(t('messages.enterCurrentPinPrompt'));
       if (inputPin === storedPin) {
         localStorage.removeItem('app_pin');
         handleSettingChange('pinEnabled', false);
-        alert('PIN 잠금이 해제되었습니다.');
+        alert(t('messages.pinDisabled'));
       } else {
-        alert('PIN이 올바르지 않습니다.');
+        alert(t('messages.pinIncorrect'));
       }
     }
   };
 
   const testMintConnection = async (url) => {
     if (!url || !url.trim()) {
-      alert('URL을 입력해주세요');
+      alert(t('messages.enterMintUrl'));
       return;
     }
 
@@ -194,8 +198,8 @@ function Settings() {
   };
 
   const handleResetWallet = () => {
-    if (window.confirm('정말로 지갑을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      if (window.confirm('모든 데이터가 삭제됩니다. 백업을 확인하셨나요?')) {
+    if (window.confirm(t('messages.confirmResetWallet'))) {
+      if (window.confirm(t('messages.confirmBackupCheck'))) {
         try {
           // Clear all wallet data
           localStorage.removeItem('cashu_proofs');
@@ -217,11 +221,11 @@ function Settings() {
             pinEnabled: false
           });
 
-          alert('지갑이 초기화되었습니다. 페이지를 새로고침합니다.');
+          alert(t('messages.walletReset'));
           window.location.reload();
         } catch (e) {
           console.error('Reset failed:', e);
-          alert('초기화 중 오류가 발생했습니다.');
+          alert(t('messages.resetFailed'));
         }
       }
     }
