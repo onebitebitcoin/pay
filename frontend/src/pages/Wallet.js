@@ -1581,11 +1581,10 @@ function Wallet() {
                 </div>
               )}
               {invoiceQuote && (
-                <div className="conversion-info" style={{ marginTop: '1rem' }}>
-                  <div className="info-item"><Icon name="bolt" size={16} /> 송금 금액: {formatAmount(invoiceQuote.invoiceAmount)} sats</div>
-                  <div className="info-item"><Icon name="info" size={16} /> 수수료: {formatAmount(invoiceQuote.feeReserve)} sats</div>
-                  <div className="info-item"><Icon name="diamond" size={16} /> 총 필요: {formatAmount(invoiceQuote.need)} sats</div>
-                  <div className="info-item"><Icon name="shield" size={16} /> 보유 잔액: {formatAmount(invoiceQuote.available)} sats</div>
+                <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
+                  <div>보낼 금액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
+                  <div>수수료: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
+                  <div>송금 후 잔액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
                 </div>
               )}
               {invoiceError && (
@@ -1921,11 +1920,10 @@ function Wallet() {
                 </div>
               )}
               {invoiceQuote && (
-                <div className="conversion-info" style={{ marginTop: '1rem' }}>
-                  <div className="info-item"><Icon name="bolt" size={16} /> 송금 금액: {formatAmount(invoiceQuote.invoiceAmount)} sats</div>
-                  <div className="info-item"><Icon name="info" size={16} /> 수수료: {formatAmount(invoiceQuote.feeReserve)} sats</div>
-                  <div className="info-item"><Icon name="diamond" size={16} /> 총 필요: {formatAmount(invoiceQuote.need)} sats</div>
-                  <div className="info-item"><Icon name="shield" size={16} /> 보유 잔액: {formatAmount(invoiceQuote.available)} sats</div>
+                <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
+                  <div>보낼 금액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
+                  <div>수수료: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
+                  <div>송금 후 잔액: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
                 </div>
               )}
               {invoiceError && (
