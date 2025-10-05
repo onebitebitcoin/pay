@@ -71,9 +71,16 @@ echo "=== Installing required dependencies (Node.js, build tools, nginx) ==="
 apt install -y curl wget git build-essential python3 python3-pip python3-venv nginx pkg-config
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "Installing Node.js LTS..."
-  curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  echo "Installing Node.js 22.x..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt install -y nodejs
+else
+  NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+  if [ "$NODE_VERSION" -lt 22 ]; then
+    echo "Current Node.js version is too old (v$NODE_VERSION). Upgrading to Node.js 22.x..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt install -y nodejs
+  fi
 fi
 
 systemctl enable nginx
