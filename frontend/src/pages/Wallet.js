@@ -2311,12 +2311,23 @@ function Wallet() {
               ))}
             </div>
             {displayedTxCount < transactions.length && (
-              <button
-                className="load-more-btn"
+              <div
+                className="load-more-link"
                 onClick={() => setDisplayedTxCount(prev => prev + 10)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  justifyContent: 'center',
+                  padding: '1rem',
+                  cursor: 'pointer',
+                  color: 'var(--primary)',
+                  fontSize: '0.95rem'
+                }}
               >
-                더보기 ({transactions.length - displayedTxCount}개 남음)
-              </button>
+                <Icon name="plus" size={16} />
+                <span>{t('wallet.loadMore', { count: transactions.length - displayedTxCount })}</span>
+              </div>
             )}
           </>
         )}

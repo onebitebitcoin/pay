@@ -69,6 +69,7 @@
     "transactions": "Transactions",
     "noTransactions": "No transactions",
     "loadingTransactions": "Loading transactions...",
+    "loadMore": "Load more ({{count}} remaining)",
     "lightningReceive": "Lightning Receive",
     "lightningSend": "Lightning Send",
     "mintStatus": "Mint Connected",
