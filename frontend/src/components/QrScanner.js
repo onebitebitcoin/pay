@@ -18,7 +18,7 @@ function QrScanner({ onScan, onError, className = '' }) {
 
         const config = {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: 350,
           aspectRatio: 1.0
         };
 

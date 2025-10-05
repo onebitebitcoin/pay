@@ -60,6 +60,7 @@ function Wallet() {
   const [invoiceError, setInvoiceError] = useState('');
   const [invoice, setInvoice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetchingQuote, setFetchingQuote] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const fileInputRef = useRef(null);
@@ -560,7 +561,7 @@ function Wallet() {
       }
     } catch (error) {
       console.error('Sync error:', error);
-      showInfoMessage('동기화 실패: ' + (error?.message || '알 수 없는 오류'), 'error', 4000);
+      showInfoMessage('동기화 실패: ' + (translateErrorMessage(error?.message) || '알 수 없는 오류'), 'error', 4000);
     } finally {
       setLoading(false);
     }
@@ -582,7 +583,7 @@ function Wallet() {
       }
     } catch (error) {
       console.error('Refresh error:', error);
-      showInfoMessage('새로고침 실패: ' + (error?.message || '알 수 없는 오류'), 'error', 4000);
+      showInfoMessage('새로고침 실패: ' + (translateErrorMessage(error?.message) || '알 수 없는 오류'), 'error', 4000);
     } finally {
       setLoading(false);
     }
@@ -697,7 +698,7 @@ function Wallet() {
       }
     } catch (error) {
       console.error('Quote 확인 오류:', error);
-      showInfoMessage(error?.message || 'Quote 확인에 실패했습니다', 'error');
+      showInfoMessage(translateErrorMessage(error?.message) || 'Quote 확인에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -836,7 +837,7 @@ function Wallet() {
       try { localStorage.setItem('cashu_backup_dismissed', '1'); setShowBackupBanner(false); } catch {}
     } catch (e) {
       console.error('Backup failed:', e);
-      showInfoMessage('백업 실패: ' + e.message, 'error');
+      showInfoMessage('백업 실패: ' + translateErrorMessage(e.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -915,7 +916,7 @@ function Wallet() {
 
   const handleSendQrError = useCallback((err) => {
     console.error('QR scanner error:', err);
-    const message = err && err.message ? err.message : 'QR 스캔 기능을 사용할 수 없습니다';
+    const message = err && err.message ? translateErrorMessage(err.message) : 'QR 스캔 기능을 사용할 수 없습니다';
     showInfoMessage(message, 'error', 3500);
   }, [showInfoMessage]);
 
@@ -946,7 +947,7 @@ function Wallet() {
       });
       if (!resp.ok) {
         let msg = '인보이스 생성 실패';
-        try { const err = await resp.json(); if (err?.error) msg = err.error; } catch {}
+        try { const err = await resp.json(); if (err?.error) msg = translateErrorMessage(err.error); } catch {}
         throw new Error(msg);
       }
       const data = await resp.json();
@@ -1045,7 +1046,7 @@ function Wallet() {
 
   const isBolt11Invoice = (val) => {
     if (!val || typeof val !== 'string') return false;
-    const s = val.trim().toLowerCase().replace(/^lightning:/, '');
+    const s = val.trim().replace(/\s+/g, '').toLowerCase().replace(/^lightning:/, '');
     return s.startsWith('lnbc') || s.startsWith('lntb') || s.startsWith('lno');
   };
 
@@ -1062,16 +1063,69 @@ function Wallet() {
     return s.replace(/\s+/g, '').toLowerCase();
   };
 
+  const translateErrorMessage = (errorMsg) => {
+    if (!errorMsg || typeof errorMsg !== 'string') return errorMsg;
+
+    const msg = errorMsg.toLowerCase();
+
+    // Already paid errors
+    if (msg.includes('already paid') || msg.includes('alreday paid')) {
+      return '이미 지불된 인보이스입니다';
+    }
+
+    // Invoice expired
+    if (msg.includes('expired') || msg.includes('expire')) {
+      return '만료된 인보이스입니다';
+    }
+
+    // Invalid invoice
+    if (msg.includes('invalid invoice') || msg.includes('invalid bolt11')) {
+      return '유효하지 않은 인보이스입니다';
+    }
+
+    // Insufficient balance
+    if (msg.includes('insufficient') || msg.includes('not enough')) {
+      return '잔액이 부족합니다';
+    }
+
+    // Payment failed
+    if (msg.includes('payment failed') || msg.includes('failed to pay')) {
+      return '결제에 실패했습니다';
+    }
+
+    // Route not found
+    if (msg.includes('no route') || msg.includes('route not found')) {
+      return '결제 경로를 찾을 수 없습니다';
+    }
+
+    // Timeout
+    if (msg.includes('timeout') || msg.includes('timed out')) {
+      return '요청 시간이 초과되었습니다';
+    }
+
+    // Connection error
+    if (msg.includes('connection') || msg.includes('network')) {
+      return '네트워크 연결 오류가 발생했습니다';
+    }
+
+    // Return original message if no match
+    return errorMsg;
+  };
+
   // Auto-fetch quote when invoice is entered
   useEffect(() => {
     const fetchInvoiceQuote = async () => {
       if (!sendAddress || !isBolt11Invoice(sendAddress)) {
         setInvoiceQuote(null);
         setInvoiceError('');
+        setFetchingQuote(false);
         return;
       }
 
       try {
+        // Clear previous quote immediately when invoice changes
+        setInvoiceQuote(null);
+        setFetchingQuote(true);
         setInvoiceError('');
         const bolt11 = normalizeBolt11(sendAddress);
 
@@ -1093,8 +1147,9 @@ function Wallet() {
               } catch { msg = err.error; }
             }
           } catch {}
-          setInvoiceError(msg);
+          setInvoiceError(translateErrorMessage(msg));
           setInvoiceQuote(null);
+          setFetchingQuote(false);
           return;
         }
 
@@ -1116,10 +1171,12 @@ function Wallet() {
           need,
           available
         });
+        setFetchingQuote(false);
       } catch (error) {
         console.error('견적 요청 오류:', error);
-        setInvoiceError(error?.message || '견적 요청 실패');
+        setInvoiceError(translateErrorMessage(error?.message) || '견적 요청 실패');
         setInvoiceQuote(null);
+        setFetchingQuote(false);
       }
     };
 
@@ -1134,6 +1191,10 @@ function Wallet() {
     if (enableSendScanner) {
       setEnableSendScanner(false);
     }
+
+    // Clear previous error first
+    setInvoiceError('');
+
     const hasInvoice = isBolt11Invoice(sendAddress);
     const hasAddress = isLightningAddress(sendAddress);
 
@@ -1163,7 +1224,7 @@ function Wallet() {
           let msg = '주소 인보이스 발급 실패';
           try {
             const err = await rq.json();
-            if (err?.error) msg = err.error;
+            if (err?.error) msg = translateErrorMessage(err.error);
           } catch {}
           throw new Error(msg);
         }
@@ -1237,9 +1298,9 @@ function Wallet() {
                 const inner = JSON.parse(err.error);
                 if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
                   msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
-                } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
-                else msg = err.error;
-              } catch { msg = err.error; }
+                } else if (inner?.detail?.[0]?.msg) msg = translateErrorMessage(inner.detail[0].msg);
+                else msg = translateErrorMessage(err.error);
+              } catch { msg = translateErrorMessage(err.error); }
             }
           }
         } catch {}
@@ -1290,8 +1351,9 @@ function Wallet() {
       });
     } catch (error) {
       console.error('송금 오류:', error);
-      setInvoiceError(error?.message || '송금에 실패했습니다');
-      showInfoMessage(error?.message || '송금에 실패했습니다', 'error');
+      const translatedMsg = translateErrorMessage(error?.message) || '송금에 실패했습니다';
+      setInvoiceError(translatedMsg);
+      showInfoMessage(translatedMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -1342,9 +1404,9 @@ function Wallet() {
                 const inner = JSON.parse(err.error);
                 if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
                   msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
-                } else if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
-                else msg = err.error;
-              } catch { msg = err.error; }
+                } else if (inner?.detail?.[0]?.msg) msg = translateErrorMessage(inner.detail[0].msg);
+                else msg = translateErrorMessage(err.error);
+              } catch { msg = translateErrorMessage(err.error); }
             }
           }
         } catch {}
@@ -1393,7 +1455,7 @@ function Wallet() {
       });
     } catch (error) {
       console.error('송금 오류:', error);
-      showInfoMessage(error?.message || '송금에 실패했습니다', 'error');
+      showInfoMessage(translateErrorMessage(error?.message) || '송금에 실패했습니다', 'error');
     } finally {
       setLoading(false);
     }
@@ -1877,12 +1939,14 @@ function Wallet() {
                   className="primary-btn"
                   disabled={
                     loading ||
+                    fetchingQuote ||
                     !!invoiceError ||
+                    (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
                     (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
-                  {loading ? '송금 중...' : '송금하기'}
+                  {loading ? '송금 중...' : fetchingQuote ? '인보이스 검사 중...' : '송금하기'}
                 </button>
               </div>
             </div>
