@@ -1,47 +1,60 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { BrowserQRCodeReader } from '@zxing/browser';
 
 function QrScanner({ onScan, onError, className = '' }) {
-  const scannerRef = useRef(null);
-  const elementIdRef = useRef(`qr-scanner-${Math.random().toString(36).substring(7)}`);
+  const videoRef = useRef(null);
+  const readerRef = useRef(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
-    let scanner = null;
-    const elementId = elementIdRef.current;
+    let reader = null;
+    let isActive = true;
 
     async function startScanner() {
       try {
-        scanner = new Html5Qrcode(elementId);
-        scannerRef.current = scanner;
+        reader = new BrowserQRCodeReader();
+        readerRef.current = reader;
 
-        const config = {
-          fps: 10,
-          qrbox: 350,
-          aspectRatio: 1.0
-        };
+        // Get video input devices (cameras)
+        const videoInputDevices = await reader.listVideoInputDevices();
 
-        await scanner.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
-            // Success callback
-            if (decodedText && typeof onScan === 'function') {
-              onScan(decodedText.trim());
-              // Stop scanner after successful scan
-              if (scanner && scanner.isScanning) {
-                scanner.stop().catch(err => console.error('Failed to stop scanner:', err));
+        if (videoInputDevices.length === 0) {
+          throw new Error('NotFoundError');
+        }
+
+        // Prefer rear camera if available
+        const selectedDeviceId = videoInputDevices.find(device =>
+          device.label.toLowerCase().includes('back') ||
+          device.label.toLowerCase().includes('rear') ||
+          device.label.toLowerCase().includes('environment')
+        )?.deviceId || videoInputDevices[0].deviceId;
+
+        // Start continuous decode from video device
+        const controls = await reader.decodeFromVideoDevice(
+          selectedDeviceId,
+          videoRef.current,
+          (result, error) => {
+            if (!isActive) return;
+
+            if (result) {
+              const decodedText = result.getText();
+              if (decodedText && typeof onScan === 'function') {
+                onScan(decodedText.trim());
+                // Stop scanner after successful scan
+                if (controls) {
+                  controls.stop();
+                }
               }
             }
-          },
-          (errorMessage) => {
-            // Error callback - we can ignore these as they're mostly "no QR code found" messages
+            // Ignore decode errors (they're normal when no QR code is in view)
           }
         );
 
         setIsScanning(true);
       } catch (err) {
+        if (!isActive) return;
+
         let message = err?.message || '카메라를 시작할 수 없습니다.';
         if (err?.name === 'NotAllowedError' || message.includes('Permission')) {
           message = '카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.';
@@ -56,16 +69,11 @@ function QrScanner({ onScan, onError, className = '' }) {
     startScanner();
 
     return () => {
-      if (scanner && scanner.isScanning) {
-        scanner.stop()
-          .then(() => {
-            scanner.clear();
-          })
-          .catch(err => {
-            console.error('Failed to stop scanner:', err);
-          });
+      isActive = false;
+      if (reader) {
+        reader.reset();
       }
-      scannerRef.current = null;
+      readerRef.current = null;
     };
   }, [onScan, onError]);
 
@@ -78,7 +86,14 @@ function QrScanner({ onScan, onError, className = '' }) {
         </div>
       ) : (
         <div className="qr-scanner__viewport">
-          <div id={elementIdRef.current} style={{ width: '100%' }} />
+          <video
+            ref={videoRef}
+            style={{
+              width: '100%',
+              maxWidth: '500px',
+              borderRadius: '8px'
+            }}
+          />
           {!isScanning && (
             <div className="qr-scanner__hint">카메라를 시작하는 중...</div>
           )}
