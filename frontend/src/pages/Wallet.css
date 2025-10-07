@@ -247,9 +247,15 @@
   margin-bottom: 2rem;
 }
 
+.info-message-container {
+  margin-top: 1rem;
+  margin-bottom: 0.75rem;
+}
+
 .balance-actions {
   display: flex;
   gap: 1rem;
+  margin-top: 1rem;
 }
 
 .network-warning {
@@ -1910,7 +1916,8 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
-.qr-modal-code img {
+.qr-modal-code img,
+.qr-modal-code canvas {
   display: block;
   width: 100%;
   max-width: 400px;
@@ -1957,7 +1964,8 @@
     padding: 1.5rem;
   }
 
-  .qr-modal-code img {
+  .qr-modal-code img,
+  .qr-modal-code canvas {
     max-width: 300px;
   }
 }

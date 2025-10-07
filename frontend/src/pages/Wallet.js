@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import QRCode from 'qrcode';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint } from '../services/cashu';
@@ -67,6 +68,12 @@ function Wallet() {
   const [walletName, setWalletName] = useState('');
   const [showSend, setShowSend] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
+
+  // Debug transactions state changes
+  useEffect(() => {
+    console.log('[Transactions State] Updated:', transactions.length, 'transactions');
+    console.log('[Transactions State] Data:', transactions);
+  }, [transactions]);
   // Cashu mode: no explicit join modal
   const [receiveAmount, setReceiveAmount] = useState('');
   const [sendAmount, setSendAmount] = useState('');
@@ -82,6 +89,7 @@ function Wallet() {
   const [toasts, setToasts] = useState([]);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const fileInputRef = useRef(null);
+  const qrCanvasRef = useRef(null);
   const wasReceiveViewRef = useRef(false);
   const [receiveCompleted, setReceiveCompleted] = useState(false);
   const [receivedAmount, setReceivedAmount] = useState(0);
@@ -239,6 +247,26 @@ function Wallet() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [ecashBalance]);
 
+  // Generate QR code for modal
+  useEffect(() => {
+    if (showQrModal && invoice && qrCanvasRef.current) {
+      const qrData = (invoice || '').toLowerCase().startsWith('ln') ? `lightning:${invoice}` : invoice;
+      QRCode.toCanvas(qrCanvasRef.current, qrData, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        errorCorrectionLevel: 'M'
+      }, (error) => {
+        if (error) {
+          console.error('QR Code generation error:', error);
+        }
+      });
+    }
+  }, [showQrModal, invoice]);
+
   const addToast = useCallback((message, type = 'success', timeout = 3500) => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -285,29 +313,53 @@ function Wallet() {
   }, [showInfoMessage]);
 
   const persistTransactions = useCallback((list) => {
-    try { localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(list || [])); } catch {}
+    console.log('[persistTransactions] Saving to localStorage:', list?.length || 0, 'transactions');
+    try {
+      const data = JSON.stringify(list || []);
+      localStorage.setItem(TX_STORAGE_KEY, data);
+      // Verify save
+      const saved = localStorage.getItem(TX_STORAGE_KEY);
+      if (saved === data) {
+        console.log('[persistTransactions] Saved and verified successfully');
+      } else {
+        console.error('[persistTransactions] Save verification failed');
+      }
+    } catch (err) {
+      console.error('[persistTransactions] Failed to save:', err);
+    }
   }, [TX_STORAGE_KEY]);
 
   const addTransaction = useCallback((tx) => {
-    setTransactions((prev) => {
-      const prevArray = Array.isArray(prev) ? prev : [];
+    console.log('[addTransaction] Adding transaction:', tx);
+    console.log('[addTransaction] setTransactions will be called');
 
-      // Check for duplicate transactions (within 5 seconds, same type and amount)
+    setTransactions((prev) => {
+      console.log('[addTransaction - INSIDE setTransactions] Callback executing');
+      const prevArray = Array.isArray(prev) ? prev : [];
+      console.log('[addTransaction - INSIDE setTransactions] Current transactions count:', prevArray.length);
+      console.log('[addTransaction - INSIDE setTransactions] Current transactions:', prevArray);
+
+      // Check for duplicate transactions (within 1 second, same type, amount, and description)
       const isDuplicate = prevArray.some(existing =>
         existing.type === tx.type &&
         existing.amount === tx.amount &&
-        Math.abs(new Date(existing.timestamp).getTime() - new Date(tx.timestamp).getTime()) < 5000
+        existing.description === tx.description &&
+        Math.abs(new Date(existing.timestamp).getTime() - new Date(tx.timestamp).getTime()) < 1000
       );
 
       if (isDuplicate) {
-        console.log('Duplicate transaction detected, skipping:', tx);
+        console.log('[addTransaction - INSIDE setTransactions] Duplicate transaction detected, skipping:', tx);
         return prev;
       }
 
       const next = [tx, ...prevArray];
+      console.log('[addTransaction - INSIDE setTransactions] Will save:', next.length, 'transactions');
       persistTransactions(next);
+      console.log('[addTransaction - INSIDE setTransactions] Transaction added successfully. New count:', next.length);
       return next;
     });
+
+    console.log('[addTransaction] setTransactions called (async, may not be executed yet)');
   }, [persistTransactions]);
 
   const hasQuoteRedeemed = useCallback((q) => {
@@ -417,10 +469,13 @@ function Wallet() {
   }, [clearPendingMint, ensurePendingMint]);
 
   const processPaymentNotification = useCallback(async (detail) => {
+    console.log('[processPaymentNotification] Called with detail:', detail);
     const quote = detail?.quote;
     const amount = parseInt(detail?.amount || 0, 10) || 0;
     const timestamp = detail?.timestamp || new Date().toISOString();
     const lastQuote = localStorage.getItem('cashu_last_quote');
+
+    console.log('[processPaymentNotification] quote:', quote, 'amount:', amount, 'lastQuote:', lastQuote);
 
     if (quote === lastQuote) {
       try { stopAutoRedeem(); } catch {}
@@ -429,14 +484,17 @@ function Wallet() {
     }
 
     let signatures = Array.isArray(detail?.signatures) ? detail.signatures : [];
+    console.log('[processPaymentNotification] Initial signatures count:', signatures.length);
 
     if ((!signatures || signatures.length === 0) && quote) {
       try {
+        console.log('[processPaymentNotification] Fetching signatures from API...');
         const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${encodeURIComponent(quote)}`));
         if (resultResp.ok) {
           const resJson = await resultResp.json();
           if (Array.isArray(resJson?.signatures) && resJson.signatures.length) {
             signatures = resJson.signatures;
+            console.log('[processPaymentNotification] Fetched signatures count:', signatures.length);
           }
         }
       } catch (err) {
@@ -446,7 +504,9 @@ function Wallet() {
 
     let creditedAmount = 0;
     if (quote && Array.isArray(signatures) && signatures.length) {
+      console.log('[processPaymentNotification] Applying redeemed signatures...');
       const applyResult = await applyRedeemedSignatures(quote, signatures, amount);
+      console.log('[processPaymentNotification] Apply result:', applyResult);
       if (applyResult.ok && applyResult.added) {
         creditedAmount = applyResult.added;
         if (quote === lastQuote) {
@@ -462,8 +522,11 @@ function Wallet() {
       setReceivedAmount(creditedOrExpected);
     }
 
+    console.log('[processPaymentNotification] creditedAmount:', creditedAmount, 'amount:', amount);
+
     // Always add transaction for received payment
     if (creditedAmount > 0) {
+      console.log('[processPaymentNotification] Adding confirmed transaction with amount:', creditedAmount);
       addTransaction({
         id: Date.now(),
         type: 'receive',
@@ -474,6 +537,7 @@ function Wallet() {
         memo: detail?.memo || ''
       });
     } else {
+      console.log('[processPaymentNotification] Adding pending transaction with amount:', amount);
       addTransaction({
         id: Date.now(),
         type: 'receive',
@@ -485,7 +549,9 @@ function Wallet() {
       });
     }
 
+    console.log('[processPaymentNotification] Loading wallet data...');
     await loadWalletData();
+    console.log('[processPaymentNotification] Completed');
   }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
 
   useEffect(() => {
@@ -515,13 +581,20 @@ function Wallet() {
     })();
 
     const handler = (event) => {
-      if (!event?.detail) return;
+      console.log('[payment_received EVENT] Received payment_received event:', event);
+      console.log('[payment_received EVENT] Event detail:', event?.detail);
+      if (!event?.detail) {
+        console.warn('[payment_received EVENT] No detail in event, ignoring');
+        return;
+      }
+      console.log('[payment_received EVENT] Calling processPaymentNotification...');
       processPaymentNotification(event.detail).catch((err) => {
-        console.error('Failed to handle payment notification:', err);
+        console.error('[payment_received EVENT] Failed to handle payment notification:', err);
       });
     };
 
     window.addEventListener('payment_received', handler);
+    console.log('[payment_received EVENT] Event listener registered');
 
     return () => {
       try { stopAutoRedeem(); } catch {}
@@ -1305,6 +1378,18 @@ function Wallet() {
       }
 
       const md = await m.json();
+
+      // 송금 성공 즉시 거래 내역 저장 (이후 작업이 실패해도 기록 남도록)
+      addTransaction({
+        id: Date.now(),
+        type: 'send',
+        amount: invoiceAmount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.lightningSend'),
+        memo: ''
+      });
+
       let changeProofs = [];
       const signatures = md?.change || md?.signatures || md?.promises || [];
 
@@ -1321,22 +1406,15 @@ function Wallet() {
       setEcashBalance(getBalanceSats());
       await loadWalletData();
 
-      addTransaction({
-        id: Date.now(),
-        type: 'send',
-        amount: invoiceAmount,
-        timestamp: new Date().toISOString(),
-        status: 'confirmed',
-        description: t('wallet.lightningSend'),
-        memo: ''
-      });
-
       setSendAmount('');
       setSendAddress('');
       setShowSend(false);
       setEnableSendScanner(false);
       setInvoiceQuote(null);
       setInvoiceError('');
+
+      // Wait a bit for state updates to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Navigate to success page
       navigate('/wallet/payment-success', {
@@ -1410,6 +1488,19 @@ function Wallet() {
         throw new Error(msg);
       }
       const md = await m.json();
+      const sentAmount = pendingSendDetails?.invoiceAmount || 0;
+
+      // 송금 성공 즉시 거래 내역 저장 (이후 작업이 실패해도 기록 남도록)
+      addTransaction({
+        id: Date.now(),
+        type: 'send',
+        amount: sentAmount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.lightningSend'),
+        memo: ''
+      });
+
       // Process change promises if any
       let changeProofs = [];
       const signatures = md?.change || md?.signatures || md?.promises || [];
@@ -1424,23 +1515,15 @@ function Wallet() {
       if (changeProofs.length) addProofs(changeProofs, mintUrl);
       setEcashBalance(getBalanceSats());
       await loadWalletData();
-      const sentAmount = pendingSendDetails?.invoiceAmount || 0;
-
-      addTransaction({
-        id: Date.now(),
-        type: 'send',
-        amount: sentAmount,
-        timestamp: new Date().toISOString(),
-        status: 'confirmed',
-        description: t('wallet.lightningSend'),
-        memo: ''
-      });
       setSendAmount('');
       setSendAddress('');
       setShowSend(false);
       setEnableSendScanner(false);
       setShowSendConfirm(false);
       setPendingSendDetails(null);
+
+      // Wait a bit for state updates to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Navigate to success page
       navigate('/wallet/payment-success', {
@@ -1843,17 +1926,19 @@ function Wallet() {
               <input type="file" accept="application/json" ref={fileInputRef} style={{ display: 'none' }} onChange={handleRestoreFile} />
             </div>
           </div>
-          <div className="balance-actions">
-            {infoMessage && (
+          {infoMessage && (
+            <div className="info-message-container">
               <div className="network-warning" style={{
                 backgroundColor: infoMessageType === 'success' ? 'rgba(16, 185, 129, 0.1)' : infoMessageType === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
                 borderColor: infoMessageType === 'success' ? 'rgba(16, 185, 129, 0.3)' : infoMessageType === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)',
                 color: 'var(--text)',
-                marginBottom: '0.75rem'
+                marginBottom: 0
               }}>
                 {infoMessage}
               </div>
-            )}
+            </div>
+          )}
+          <div className="balance-actions">
             {!isConnected || !isWebSocketConnected ? (
               <div className="network-warning">
                 {t('wallet.networkDisconnected', {
@@ -2383,12 +2468,9 @@ function Wallet() {
             <div className="qr-modal-body">
               <h3>{formatAmount(receiveAmount)} sats</h3>
               <div className="qr-modal-code">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                  alt="Lightning Invoice QR"
-                />
+                <canvas ref={qrCanvasRef} />
               </div>
-              <p className="qr-modal-hint">QR 코드를 스캔하여 결제하세요</p>
+              <p className="qr-modal-hint">{t('wallet.scanQrToPayHint')}</p>
             </div>
           </div>
         </div>

@@ -119,7 +119,8 @@
     "actualConversion": "実際の変換",
     "actualConversionAmount": "実際の変換金額",
     "valid": "利用可能",
-    "invalid": "利用不可"
+    "invalid": "利用不可",
+    "scanQrToPayHint": "QRコードをスキャンして決済してください"
   },
   "settings": {
     "title": "設定",

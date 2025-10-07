@@ -18,12 +18,17 @@ function PaymentListener() {
   const location = useLocation();
 
   useEffect(() => {
+    console.log('[PaymentListener] Subscribing to WebSocket messages...');
+
     // Subscribe to WebSocket messages
     const unsubscribe = subscribe('app-payment-listener', (message) => {
+      console.log('[PaymentListener] WebSocket message received:', message);
+
       if (message.type === 'payment_received') {
-        console.log('Payment received notification:', message);
+        console.log('[PaymentListener] Payment received notification:', message);
 
         // Dispatch custom event so Wallet component can update balance
+        console.log('[PaymentListener] Dispatching payment_received event...');
         window.dispatchEvent(new CustomEvent('payment_received', {
           detail: {
             amount: message.amount,
@@ -33,19 +38,29 @@ function PaymentListener() {
             keysetId: message.keysetId
           }
         }));
+        console.log('[PaymentListener] Event dispatched');
 
-        // Navigate to payment success page from any page
-        const currentPath = location.pathname;
-        navigate('/wallet/payment-success', {
-          state: {
-            amount: message.amount,
-            returnTo: currentPath
-          }
-        });
+        // Wait a bit before navigating to allow transaction to be saved
+        console.log('[PaymentListener] Waiting 200ms before navigation...');
+        setTimeout(() => {
+          // Navigate to payment success page from any page
+          const currentPath = location.pathname;
+          console.log('[PaymentListener] Navigating to payment-success from:', currentPath);
+          navigate('/wallet/payment-success', {
+            state: {
+              amount: message.amount,
+              returnTo: currentPath,
+              type: 'receive'
+            }
+          });
+        }, 200);
       }
     });
 
+    console.log('[PaymentListener] Subscription complete');
+
     return () => {
+      console.log('[PaymentListener] Unsubscribing...');
       unsubscribe();
     };
   }, [subscribe, navigate, location]);

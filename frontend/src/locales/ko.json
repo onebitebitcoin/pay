@@ -119,7 +119,8 @@
     "actualConversion": "실제 전환",
     "actualConversionAmount": "실제 전환 금액",
     "valid": "사용 가능",
-    "invalid": "사용 불가"
+    "invalid": "사용 불가",
+    "scanQrToPayHint": "QR 코드를 스캔하여 결제하세요"
   },
   "settings": {
     "title": "설정",

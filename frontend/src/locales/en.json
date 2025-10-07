@@ -119,7 +119,8 @@
     "actualConversion": "Actual Conversion",
     "actualConversionAmount": "Actual Conversion Amount",
     "valid": "Available",
-    "invalid": "Unavailable"
+    "invalid": "Unavailable",
+    "scanQrToPayHint": "Scan QR code to pay"
   },
   "settings": {
     "title": "Settings",
