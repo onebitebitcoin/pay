@@ -9,7 +9,7 @@ import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deseria
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
-import { useWebSocket } from '../contexts/WebSocketContext';
+
 
 const normalizeQrValue = (rawValue = '') => {
   if (!rawValue) return '';
@@ -29,7 +29,7 @@ const normalizeQrValue = (rawValue = '') => {
 
 function Wallet() {
   const { t, i18n } = useTranslation();
-  const { isConnected: isWebSocketConnected, send: sendWebSocketMessage } = useWebSocket();
+  // Removed WebSocket functionality - using polling instead
 
   useEffect(() => {
     document.title = t('pageTitle.wallet');
@@ -604,7 +604,8 @@ function Wallet() {
         timestamp,
         status: 'confirmed',
         description: t('wallet.lightningReceive'),
-        memo: detail?.memo || ''
+        memo: detail?.memo || '',
+        quoteId: quote
       });
     } else {
       console.log('[processPaymentNotification] Adding pending transaction with amount:', amount);
@@ -615,7 +616,8 @@ function Wallet() {
         timestamp,
         status: 'pending',
         description: t('wallet.lightningReceive'),
-        memo: detail?.memo || ''
+        memo: detail?.memo || '',
+        quoteId: quote
       });
     }
 
@@ -624,6 +626,148 @@ function Wallet() {
     setDebugInvoiceStatus('completed'); // Temp debug: set when processing is completed
     console.log('[processPaymentNotification] Completed');
   }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
+
+  // Function to check for any missed payments after WebSocket reconnection
+  const checkForMissedPayments = useCallback(async () => {
+    console.log('[checkForMissedPayments] Checking for missed payments after WebSocket reconnection...');
+    
+    try {
+      // Check the last quote that was generated
+      const lastQuote = localStorage.getItem('cashu_last_quote');
+      if (lastQuote) {
+        await checkAndProcessQuotePayment(lastQuote);
+      }
+
+      // Also check any pending mint that might have been processed
+      try {
+        const pendingMintData = localStorage.getItem(PENDING_MINT_STORAGE_KEY);
+        if (pendingMintData) {
+          const pendingMint = JSON.parse(pendingMintData);
+          if (pendingMint && pendingMint.quote) {
+            await checkAndProcessQuotePayment(pendingMint.quote);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check pending mint:', err);
+      }
+    } catch (error) {
+      console.error('[checkForMissedPayments] Error checking for missed payments:', error);
+    }
+  }, [PENDING_MINT_STORAGE_KEY, apiUrl, t, transactions]);
+
+  // Helper function to check and process a specific quote payment
+  const checkAndProcessQuotePayment = useCallback(async (quoteId) => {
+    try {
+      // Check if payment was completed while app was disconnected
+      const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${quoteId}`));
+      if (resultResp.ok) {
+        const data = await resultResp.json();
+        console.log('[checkAndProcessQuotePayment] Found payment result for quote:', quoteId, data);
+
+        // Check if this quote hasn't been processed yet
+        const existingTx = transactions.find(tx => tx.quoteId === quoteId);
+        
+        if (!existingTx) {
+          console.log('[checkAndProcessQuotePayment] Processing missed payment notification for quote:', quoteId);
+          
+          // Dispatch custom event to trigger the same processing as WebSocket message
+          window.dispatchEvent(new CustomEvent('payment_received', {
+            detail: {
+              amount: data.amount,
+              quote: data.quote,
+              timestamp: data.timestamp,
+              signatures: data.signatures,
+              keysetId: data.keysetId,
+              memo: data.memo || ''
+            }
+          }));
+        } else {
+          console.log('[checkAndProcessQuotePayment] Payment for quote already processed in transactions:', quoteId);
+        }
+      } else {
+        console.log('[checkAndProcessQuotePayment] No completed payment found for quote:', quoteId);
+      }
+    } catch (error) {
+      console.error('[checkAndProcessQuotePayment] Error checking payment for quote:', quoteId, error);
+    }
+  }, [apiUrl, transactions]);
+
+  // Polling function to check invoice status
+  const startInvoicePolling = useCallback((quoteId, amount) => {
+    console.log('[startInvoicePolling] Starting poll for quote:', quoteId);
+    
+    // Set up polling to check for payment status for up to 3 minutes (180 seconds)
+    // Check every 3 seconds (3000ms), so that's 60 polls max
+    const MAX_POLLS = 60;
+    let pollCount = 0;
+    let isPollingActive = true;
+
+    const pollForPayment = async () => {
+      if (pollCount >= MAX_POLLS || !isPollingActive) {
+        console.log('[startInvoicePolling] Polling stopped - max attempts reached or cancelled for quote:', quoteId);
+        // Update UI to indicate polling has ended
+        setCheckingPayment(false);
+        return;
+      }
+
+      try {
+        // Check quote state first
+        const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quoteId)}`));
+        if (checkResp.ok) {
+          const quoteData = await checkResp.json();
+          const state = (quoteData?.state || '').toUpperCase();
+          console.log('[startInvoicePolling] Quote state:', state, 'for quote:', quoteId);
+
+          if (state === 'PAID' || state === 'ISSUED') {
+            // Payment completed! Get the result and process it
+            const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${quoteId}`));
+            if (resultResp.ok) {
+              const data = await resultResp.json();
+              console.log('[startInvoicePolling] Payment completed for quote:', quoteId, data);
+              
+              // Stop polling
+              isPollingActive = false;
+              setCheckingPayment(false);
+              
+              // Process the payment notification
+              window.dispatchEvent(new CustomEvent('payment_received', {
+                detail: {
+                  amount: data.amount,
+                  quote: data.quote,
+                  timestamp: data.timestamp,
+                  signatures: data.signatures,
+                  keysetId: data.keysetId,
+                  memo: data.memo || ''
+                }
+              }));
+              
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[startInvoicePolling] Error polling for quote:', quoteId, error);
+      }
+
+      // Continue polling
+      pollCount++;
+      setTimeout(() => {
+        if (isPollingActive) {
+          pollForPayment();
+        }
+      }, 3000); // Poll every 3 seconds
+    };
+
+    // Start polling immediately
+    pollForPayment();
+    
+    // Return a function to stop polling if needed
+    return () => {
+      isPollingActive = false;
+      setCheckingPayment(false);
+      console.log('[startInvoicePolling] Polling cancelled for quote:', quoteId);
+    };
+  }, [apiUrl]);
 
   useEffect(() => {
     // Load Mint URL from settings and auto-connect
@@ -675,10 +819,7 @@ function Wallet() {
     };
   }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
   
-  // Temporary debug: Track WebSocket connection status
-  useEffect(() => {
-    setDebugWsStatus(isWebSocketConnected ? 'connected' : 'disconnected');
-  }, [isWebSocketConnected]);
+  // Removed WebSocket status tracking - using polling instead
 
   // Handle page visibility change (app resuming from background)
   useEffect(() => {
@@ -697,11 +838,38 @@ function Wallet() {
             const data = await resultResp.json();
             console.log('Payment completed while app was in background:', data);
 
+            // Stop current polling before processing
+            if (pollingCancelRef.current) {
+              pollingCancelRef.current();
+              pollingCancelRef.current = null;
+            }
+            
             // Process the payment notification
             await processPaymentNotification(data);
+            
+            // Set state to reflect that payment has been processed
+            setCheckingPayment(false);
           } else {
-            // Payment not yet completed, WebSocket will handle it when connection resumes
-            console.log('Payment not yet completed');
+            // Check if there's still a valid quote to poll for
+            const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${lastQuote}`));
+            if (checkResp.ok) {
+              const quoteData = await checkResp.json();
+              const state = (quoteData?.state || '').toUpperCase();
+              
+              if (state !== 'UNPAID') {
+                // If the quote is no longer unpaid, stop polling
+                if (pollingCancelRef.current) {
+                  pollingCancelRef.current();
+                  pollingCancelRef.current = null;
+                }
+                setCheckingPayment(false);
+              } else {
+                // Quote still unpaid, potentially restart polling if it was stopped
+                // NOTE: We don't restart polling here since the existing polling interval 
+                // should still be running unless explicitly stopped
+                console.log('Payment still pending, continuing to wait...');
+              }
+            }
           }
         } catch (error) {
           console.error('Error checking payment status on resume:', error);
@@ -1113,8 +1281,10 @@ function Wallet() {
       const req = data?.request || data?.payment_request || '';
       const quoteId = data?.quote || data?.quote_id || '';
 
-      if (quoteId) {
-        sendWebSocketMessage({ type: 'subscribe', quoteId });
+      // Cancel any existing polling before starting new one
+      if (pollingCancelRef.current) {
+        pollingCancelRef.current();
+        pollingCancelRef.current = null;
       }
 
       setInvoice(req);
@@ -1125,7 +1295,10 @@ function Wallet() {
       }
       localStorage.setItem('cashu_last_quote', quoteId);
       localStorage.setItem('cashu_last_mint_amount', String(amount));
+      
+      // Start polling for payment status
       setCheckingPayment(true);
+      pollingCancelRef.current = startInvoicePolling(quoteId, amount);
       
       // Temp debug: update status after successful invoice generation
       setDebugInvoiceStatus('ready_for_payment');
@@ -1133,8 +1306,7 @@ function Wallet() {
       console.log('[DEBUG] Invoice generated:', {
         quoteId,
         amount,
-        hasOutputDatas: Array.isArray(outputDatas) && outputDatas.length > 0,
-        wsConnected: isWebSocketConnected
+        hasOutputDatas: Array.isArray(outputDatas) && outputDatas.length > 0
       });
     } catch (error) {
       console.error('Failed to generate invoice:', error);
@@ -1146,6 +1318,12 @@ function Wallet() {
   };
 
   const exitReceiveFlow = useCallback(() => {
+    // Stop any active polling
+    if (pollingCancelRef.current) {
+      pollingCancelRef.current();
+      pollingCancelRef.current = null;
+    }
+    
     try { stopAutoRedeem(); } catch {}
     setCheckingPayment(false);
     setInvoice('');
@@ -1191,6 +1369,12 @@ function Wallet() {
 
   useEffect(() => {
     if (!isReceiveView && wasReceiveViewRef.current) {
+      // Stop any active polling when leaving receive view
+      if (pollingCancelRef.current) {
+        pollingCancelRef.current();
+        pollingCancelRef.current = null;
+      }
+      
       try { stopAutoRedeem(); } catch {}
       setCheckingPayment(false);
       setInvoice('');
@@ -1536,6 +1720,9 @@ function Wallet() {
   }, [sendAddress, invoiceQuote, enableSendScanner, setEnableSendScanner, setInvoiceError, addToast, t, apiUrl, getBalanceSats, selectProofsForAmount, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setInvoiceQuote, navigate, translateErrorMessage, formatAmount, formatDate]);
 
   const [pendingSendDetails, setPendingSendDetails] = useState(null);
+  
+  // Ref to store the polling cancellation function
+  const pollingCancelRef = useRef(null);
 
   const confirmSend = useCallback(async () => {
     try {
@@ -1687,12 +1874,10 @@ function Wallet() {
               <h2><Icon name="send" size={20} /> {t('wallet.sendTitle')}</h2>
             </div>
             <div className="send-card-body">
-              {!isConnected || !isWebSocketConnected ? (
+              {!isConnected ? (
                 <div className="network-warning" style={{ marginBottom: '1rem' }}>
                   {t('wallet.networkDisconnected', {
-                    mintStatus: !isConnected ? t('wallet.mintConnection') : '',
-                    separator: !isConnected && !isWebSocketConnected ? t('wallet.andSeparator') : '',
-                    wsStatus: !isWebSocketConnected ? t('wallet.wsConnection') : ''
+                    mintStatus: !isConnected ? t('wallet.mintConnection') : ''
                   })}
                 </div>
               ) : null}
@@ -1713,7 +1898,7 @@ function Wallet() {
                     type="button"
                     className="link-btn"
                     onClick={() => setEnableSendScanner(true)}
-                    disabled={!isConnected || !isWebSocketConnected}
+                    disabled={!isConnected}
                   >
                     <Icon name="camera" size={16} /> {t('wallet.scanQR')}
                   </button>
@@ -1726,7 +1911,7 @@ function Wallet() {
                   onChange={(e) => setSendAddress(e.target.value)}
                   placeholder={t('wallet.invoicePlaceholder')}
                   rows="3"
-                  disabled={!isConnected || !isWebSocketConnected}
+                  disabled={!isConnected}
                 />
                 <small>
                   {isBolt11Invoice(sendAddress)
@@ -1746,7 +1931,7 @@ function Wallet() {
                     placeholder={t('wallet.amountPlaceholder')}
                     min="1"
                     max={ecashBalance}
-                    disabled={!isConnected || !isWebSocketConnected}
+                    disabled={!isConnected}
                   />
                   <small>{t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}</small>
                 </div>
@@ -1771,7 +1956,6 @@ function Wallet() {
                     loading ||
                     fetchingQuote ||
                     !isConnected ||
-                    !isWebSocketConnected ||
                     !!invoiceError ||
                     (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
                     (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
@@ -1821,12 +2005,10 @@ function Wallet() {
                 <>
                   {!invoice ? (
                     <>
-                      {!isConnected || !isWebSocketConnected ? (
+                      {!isConnected ? (
                         <div className="network-warning" style={{ marginBottom: '1rem' }}>
                           {t('wallet.networkDisconnected', {
-                            mintStatus: !isConnected ? t('wallet.mintConnection') : '',
-                            separator: !isConnected && !isWebSocketConnected ? t('wallet.andSeparator') : '',
-                            wsStatus: !isWebSocketConnected ? t('wallet.wsConnection') : ''
+                            mintStatus: !isConnected ? t('wallet.mintConnection') : ''
                           })}
                         </div>
                       ) : null}
@@ -1838,14 +2020,14 @@ function Wallet() {
                           onChange={(e) => setReceiveAmount(e.target.value)}
                           placeholder="10000"
                           min="1"
-                          disabled={!isConnected || !isWebSocketConnected}
+                          disabled={!isConnected}
                         />
                       </div>
                       <div className="receive-actions">
                         <button
                           onClick={generateInvoice}
                           className="primary-btn"
-                          disabled={loading || !receiveAmount || !isConnected || !isWebSocketConnected}
+                          disabled={loading || !receiveAmount || !isConnected}
                         >
                           {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
@@ -2030,12 +2212,10 @@ function Wallet() {
             </div>
           )}
           <div className="balance-actions">
-            {!isConnected || !isWebSocketConnected ? (
+            {!isConnected ? (
               <div className="network-warning">
                 {t('wallet.networkDisconnected', {
-                  mintStatus: !isConnected ? t('wallet.mintConnection') : '',
-                  separator: !isConnected && !isWebSocketConnected ? t('wallet.andSeparator') : '',
-                  wsStatus: !isWebSocketConnected ? t('wallet.wsConnection') : ''
+                  mintStatus: !isConnected ? t('wallet.mintConnection') : ''
                 })}
               </div>
             ) : (
