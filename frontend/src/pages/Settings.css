@@ -323,6 +323,7 @@ input:checked + .toggle-slider:before {
   }
 
   .setting-select,
+  .setting-input,
   .setting-button,
   .danger-button {
     width: 100%;

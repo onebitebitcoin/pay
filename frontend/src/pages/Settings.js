@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL } from '../config';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import './Settings.css';
 import Icon from '../components/Icon';
 
 function Settings() {
   const { t, i18n } = useTranslation();
+  const { isConnected, connect } = useWebSocket();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
     walletName: '',
@@ -27,6 +29,7 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
@@ -251,6 +254,26 @@ function Settings() {
     }
   };
 
+  // WebSocket reconnection function
+  const handleWebSocketReconnect = () => {
+    try {
+      setReconnecting(true);
+      connect();
+    } catch (error) {
+      console.error('WebSocket reconnect failed:', error);
+      setReconnecting(false);
+      addToast(t('settings.webSocketReconnectFailed'), 'error');
+    }
+  };
+
+  // Watch for WebSocket connection status changes
+  useEffect(() => {
+    if (reconnecting && isConnected) {
+      setReconnecting(false);
+      addToast(t('settings.webSocketConnected'), 'success');
+    }
+  }, [isConnected, reconnecting, t]);
+
   return (
     <>
       <div className="toast-container">
@@ -344,6 +367,58 @@ function Settings() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* WebSocket Connection */}
+        <div className="settings-section">
+          <h2>{t('settings.webSocketSection')}</h2>
+
+          <div className="setting-item">
+            <div className="setting-info">
+              <div className="setting-title">{t('settings.webSocketStatus')}</div>
+              <div className="setting-description">
+                {t('settings.webSocketStatusDesc')}
+              </div>
+            </div>
+            <div className="status-indicator" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '999px',
+              background: reconnecting ? 'rgba(245, 158, 11, 0.14)' : (isConnected ? 'rgba(34, 197, 94, 0.14)' : 'rgba(239, 68, 68, 0.14)'),
+              border: reconnecting ? '1px solid rgba(245, 158, 11, 0.35)' : (isConnected ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)'),
+              color: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
+            }}>
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
+                }}
+              />
+              <span style={{ fontWeight: 600 }}>
+                {reconnecting ? t('settings.connecting') : (isConnected ? t('settings.connected') : t('settings.disconnected'))}
+              </span>
+            </div>
+          </div>
+
+          <div className="setting-item">
+            <div className="setting-info">
+              <div className="setting-title">{t('settings.webSocketReconnect')}</div>
+              <div className="setting-description">
+                {t('settings.webSocketReconnectDesc')}
+              </div>
+            </div>
+            <button
+              onClick={handleWebSocketReconnect}
+              className="setting-button"
+              disabled={isConnected || reconnecting}
+            >
+              {t('settings.reconnect')}
+            </button>
           </div>
         </div>
 

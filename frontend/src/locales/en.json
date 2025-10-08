@@ -169,7 +169,18 @@
     "english": "English",
     "japanese": "日本語",
     "sats": "Satoshis (sats)",
-    "btc": "Bitcoin (BTC)"
+    "btc": "Bitcoin (BTC)",
+    "webSocketSection": "WebSocket Connection",
+    "webSocketStatus": "WebSocket Status",
+    "webSocketStatusDesc": "Current WebSocket connection status",
+    "webSocketReconnect": "Reconnect WebSocket",
+    "webSocketReconnectDesc": "Manually reconnect to WebSocket server",
+    "reconnect": "Reconnect",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connecting": "Connecting...",
+    "webSocketConnected": "Connected successfully",
+    "webSocketReconnectFailed": "WebSocket reconnection failed"
   },
   "storeFinder": {
     "title": "Bitcoin-Accepting Stores",

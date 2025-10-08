@@ -169,7 +169,18 @@
     "english": "English",
     "japanese": "日本語",
     "sats": "サトシ (sats)",
-    "btc": "ビットコイン (BTC)"
+    "btc": "ビットコイン (BTC)",
+    "webSocketSection": "WebSocket接続",
+    "webSocketStatus": "WebSocket状態",
+    "webSocketStatusDesc": "現在のWebSocket接続状態",
+    "webSocketReconnect": "WebSocket再接続",
+    "webSocketReconnectDesc": "WebSocketサーバーに手動で再接続します",
+    "reconnect": "再接続",
+    "connected": "接続済み",
+    "disconnected": "切断",
+    "connecting": "接続中...",
+    "webSocketConnected": "接続しました",
+    "webSocketReconnectFailed": "WebSocket再接続に失敗しました"
   },
   "storeFinder": {
     "title": "ビットコイン決済可能店舗",
