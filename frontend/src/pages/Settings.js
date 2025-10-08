@@ -8,7 +8,7 @@ import Icon from '../components/Icon';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  const { isConnected, connect, send, subscribe } = useWebSocket();
+  const { isConnected, subscriptionId, connect, send, subscribe } = useWebSocket();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
     walletName: '',
@@ -32,8 +32,6 @@ function Settings() {
   const [reconnecting, setReconnecting] = useState(false);
   const [wsDebugLogs, setWsDebugLogs] = useState([]);
   const [testMessage, setTestMessage] = useState('{"type":"ping","timestamp":' + Date.now() + '}');
-  const [testQuoteId, setTestQuoteId] = useState('');
-  const [subscribedQuoteIds, setSubscribedQuoteIds] = useState([]);
 
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
@@ -276,21 +274,7 @@ function Settings() {
       setReconnecting(false);
       addToast(t('settings.webSocketConnected'), 'success');
     }
-
-    // Clear subscriptions when disconnected
-    if (!isConnected) {
-      setSubscribedQuoteIds([]);
-    }
-
-    // Auto-check subscriptions when connected
-    if (isConnected && !reconnecting) {
-      // Small delay to ensure connection is stable
-      const timer = setTimeout(() => {
-        send({ type: 'getSubscriptions' });
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isConnected, reconnecting, t, send]);
+  }, [isConnected, reconnecting, t]);
 
   // Subscribe to WebSocket messages for debugging
   useEffect(() => {
@@ -302,47 +286,12 @@ function Settings() {
         data: data
       };
       setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50)); // Keep last 50 logs
-
-      // Update subscription status when we receive subscriptions response
-      if (data.type === 'subscriptions' && Array.isArray(data.subscriptions)) {
-        setSubscribedQuoteIds(data.subscriptions);
-
-        // Auto-subscribe if no subscriptions exist
-        if (data.subscriptions.length === 0 && isConnected) {
-          const autoQuoteId = `auto-${Date.now()}`;
-          const subscribeMessage = { type: 'subscribe', quoteId: autoQuoteId };
-          send(subscribeMessage);
-
-          const logEntry = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-            type: 'sent',
-            data: { ...subscribeMessage, note: 'Auto-subscribed on connection' }
-          };
-          setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-        }
-      }
-
-      // Update subscription status when we subscribe
-      if (data.type === 'subscribed' && data.quoteId) {
-        setSubscribedQuoteIds(prev => {
-          if (!prev.includes(data.quoteId)) {
-            return [...prev, data.quoteId];
-          }
-          return prev;
-        });
-      }
-
-      // Update subscription status when we unsubscribe
-      if (data.type === 'unsubscribed' && data.quoteId) {
-        setSubscribedQuoteIds(prev => prev.filter(id => id !== data.quoteId));
-      }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [subscribe, send, isConnected]);
+  }, [subscribe]);
 
   // Handle test message send
   const handleSendTestMessage = () => {
@@ -383,67 +332,22 @@ function Settings() {
     setWsDebugLogs([]);
   };
 
-  // Handle subscription status check
-  const handleCheckSubscriptions = () => {
-    if (!isConnected) {
-      const logEntry = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-        type: 'error',
-        data: { error: t('settings.webSocketNotConnected') }
-      };
-      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+
+  // Handle copy subscription ID
+  const handleCopySubscriptionId = () => {
+    if (!subscriptionId) {
+      addToast(t('settings.noSubscriptionId'), 'error');
       return;
     }
 
-    send({ type: 'getSubscriptions' });
-
-    const logEntry = {
-      id: Date.now(),
-      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-      type: 'sent',
-      data: { type: 'getSubscriptions' }
-    };
-    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+    navigator.clipboard.writeText(subscriptionId).then(() => {
+      addToast(t('settings.subscriptionIdCopied'), 'success');
+    }).catch(() => {
+      addToast(t('settings.copyFailed'), 'error');
+    });
   };
 
-  // Handle subscribe to test quoteId
-  const handleSubscribeQuoteId = () => {
-    if (!isConnected) {
-      const logEntry = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-        type: 'error',
-        data: { error: t('settings.webSocketNotConnected') }
-      };
-      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-      return;
-    }
-
-    if (!testQuoteId.trim()) {
-      const logEntry = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-        type: 'error',
-        data: { error: 'Quote ID is required' }
-      };
-      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-      return;
-    }
-
-    const subscribeMessage = { type: 'subscribe', quoteId: testQuoteId };
-    send(subscribeMessage);
-
-    const logEntry = {
-      id: Date.now(),
-      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-      type: 'sent',
-      data: subscribeMessage
-    };
-    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-  };
-
-  // Handle send push test (ping with quoteId)
+  // Handle send push test (ping with subscriptionId)
   const handleSendPushTest = () => {
     if (!isConnected) {
       const logEntry = {
@@ -456,12 +360,12 @@ function Settings() {
       return;
     }
 
-    if (!testQuoteId.trim()) {
+    if (!subscriptionId) {
       const logEntry = {
         id: Date.now(),
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
         type: 'error',
-        data: { error: 'Quote ID is required' }
+        data: { error: 'Subscription ID is required' }
       };
       setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
       return;
@@ -469,7 +373,7 @@ function Settings() {
 
     const pingMessage = {
       type: 'ping',
-      quoteId: testQuoteId,
+      subscriptionId: subscriptionId,
       timestamp: Date.now()
     };
     send(pingMessage);
@@ -483,30 +387,6 @@ function Settings() {
     setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
   };
 
-  // Handle unsubscribe from quoteId
-  const handleUnsubscribeQuoteId = (quoteId) => {
-    if (!isConnected) {
-      const logEntry = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-        type: 'error',
-        data: { error: t('settings.webSocketNotConnected') }
-      };
-      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-      return;
-    }
-
-    const unsubscribeMessage = { type: 'unsubscribe', quoteId: quoteId };
-    send(unsubscribeMessage);
-
-    const logEntry = {
-      id: Date.now(),
-      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
-      type: 'sent',
-      data: unsubscribeMessage
-    };
-    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
-  };
 
   return (
     <>
@@ -644,22 +524,29 @@ function Settings() {
                 gap: '0.5rem',
                 padding: '0.5rem 1rem',
                 borderRadius: '999px',
-                background: subscribedQuoteIds.length > 0 ? 'rgba(59, 130, 246, 0.14)' : 'rgba(156, 163, 175, 0.14)',
-                border: subscribedQuoteIds.length > 0 ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid rgba(156, 163, 175, 0.35)',
-                color: subscribedQuoteIds.length > 0 ? '#3b82f6' : '#9ca3af'
+                background: subscriptionId ? 'rgba(59, 130, 246, 0.14)' : 'rgba(156, 163, 175, 0.14)',
+                border: subscriptionId ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid rgba(156, 163, 175, 0.35)',
+                color: subscriptionId ? '#3b82f6' : '#9ca3af'
               }}>
                 <div
                   style={{
                     width: '8px',
                     height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: subscribedQuoteIds.length > 0 ? '#3b82f6' : '#9ca3af'
+                    backgroundColor: subscriptionId ? '#3b82f6' : '#9ca3af'
                   }}
                 />
-                <span style={{ fontWeight: 600 }}>
-                  {subscribedQuoteIds.length > 0
-                    ? `${t('settings.subscribed')} (${subscribedQuoteIds.length})`
-                    : t('settings.notSubscribed')}
+                <span style={{
+                  fontWeight: 600,
+                  fontFamily: 'monospace',
+                  fontSize: '0.75rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                  minWidth: 0
+                }}>
+                  {subscriptionId ? `${subscriptionId.substring(0, 8)}...${subscriptionId.substring(subscriptionId.length - 8)}` : t('settings.noSubscriptionId')}
                 </span>
               </div>
             </div>
@@ -691,34 +578,26 @@ function Settings() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem' }}>
               {/* General Test Message */}
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <input
                   type="text"
                   value={testMessage}
                   onChange={(e) => setTestMessage(e.target.value)}
                   placeholder='{"type":"ping","timestamp":1234567890}'
                   className="setting-input"
-                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.875rem' }}
+                  style={{ flex: '1 1 250px', fontFamily: 'monospace', fontSize: '0.875rem', minWidth: 0 }}
                 />
                 <button
                   onClick={handleSendTestMessage}
                   className="setting-button"
                   disabled={!isConnected}
-                  style={{ whiteSpace: 'nowrap' }}
+                  style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }}
                 >
                   {t('settings.sendTest')}
                 </button>
-                <button
-                  onClick={handleCheckSubscriptions}
-                  className="setting-button"
-                  disabled={!isConnected}
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  {t('settings.checkSubscriptions')}
-                </button>
               </div>
 
-              {/* Subscription Test */}
+              {/* Subscription ID Display */}
               <div style={{
                 padding: '0.75rem',
                 borderRadius: '6px',
@@ -726,88 +605,45 @@ function Settings() {
                 border: '1px solid var(--border)'
               }}>
                 <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text)' }}>
-                  {t('settings.testSubscription')}
+                  {t('settings.subscriptionId')}
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <input
                     type="text"
-                    value={testQuoteId}
-                    onChange={(e) => setTestQuoteId(e.target.value)}
-                    placeholder={t('settings.quoteIdPlaceholder')}
+                    value={subscriptionId || ''}
+                    readOnly
+                    placeholder={t('settings.noSubscriptionId')}
                     className="setting-input"
-                    style={{ flex: '1 1 200px', fontFamily: 'monospace', fontSize: '0.875rem' }}
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.875rem', backgroundColor: 'var(--bg)', cursor: 'default' }}
                   />
-                  <button
-                    onClick={handleSubscribeQuoteId}
-                    className="setting-button"
-                    disabled={!isConnected}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    {t('settings.subscribeQuoteId')}
-                  </button>
-                  <button
-                    onClick={handleSendPushTest}
-                    className="setting-button"
-                    disabled={!isConnected}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    {t('settings.sendPushTest')}
-                  </button>
-                </div>
-
-                {/* Active Subscriptions List */}
-                {subscribedQuoteIds.length > 0 && (
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text)' }}>
-                      {t('settings.subscribed')} ({subscribedQuoteIds.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {subscribedQuoteIds.map((quoteId) => (
-                        <div
-                          key={quoteId}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.5rem',
-                            borderRadius: '4px',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            border: '1px solid rgba(59, 130, 246, 0.3)'
-                          }}
-                        >
-                          <span style={{
-                            fontFamily: 'monospace',
-                            fontSize: '0.8125rem',
-                            color: 'var(--text)',
-                            wordBreak: 'break-all'
-                          }}>
-                            {quoteId}
-                          </span>
-                          <button
-                            onClick={() => handleUnsubscribeQuoteId(quoteId)}
-                            className="icon-btn"
-                            style={{
-                              marginLeft: '0.5rem',
-                              padding: '0.25rem 0.5rem',
-                              fontSize: '0.75rem',
-                              color: '#ef4444',
-                              whiteSpace: 'nowrap'
-                            }}
-                            title={t('settings.unsubscribe')}
-                          >
-                            <Icon name="close" size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleCopySubscriptionId}
+                      className="setting-button"
+                      disabled={!subscriptionId}
+                      style={{ flex: '1 1 auto', whiteSpace: 'nowrap', minWidth: '120px' }}
+                      title={t('settings.copySubscriptionId')}
+                    >
+                      <Icon name="copy" size={16} style={{ marginRight: '0.25rem' }} />
+                      {t('settings.copy')}
+                    </button>
+                    <button
+                      onClick={handleSendPushTest}
+                      className="setting-button"
+                      disabled={!isConnected || !subscriptionId}
+                      style={{ flex: '1 1 auto', whiteSpace: 'nowrap', minWidth: '120px' }}
+                      title={t('settings.sendPushTest')}
+                    >
+                      {t('settings.sendPushTest')}
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
             {wsDebugLogs.length > 0 && (
               <div style={{ marginTop: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text)' }}>
                     {t('settings.debugLogs')} ({wsDebugLogs.length})
                   </span>
@@ -815,6 +651,7 @@ function Settings() {
                     onClick={clearDebugLogs}
                     className="icon-btn"
                     title={t('settings.clearLogs')}
+                    style={{ padding: '0.5rem' }}
                   >
                     <Icon name="trash" size={16} />
                   </button>
@@ -853,18 +690,23 @@ function Settings() {
                           justifyContent: 'space-between',
                           marginBottom: '0.25rem',
                           color: 'var(--muted)',
-                          fontSize: '0.75rem'
+                          fontSize: '0.75rem',
+                          gap: '0.5rem',
+                          flexWrap: 'wrap'
                         }}>
                           <span style={{ fontWeight: '600', textTransform: 'uppercase', color: style.border }}>
                             {style.label}
                           </span>
-                          <span>{log.timestamp}</span>
+                          <span style={{ fontSize: '0.7rem' }}>{log.timestamp}</span>
                         </div>
                         <pre style={{
                           margin: 0,
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
-                          color: 'var(--text)'
+                          overflowWrap: 'break-word',
+                          color: 'var(--text)',
+                          fontSize: '0.75rem',
+                          lineHeight: '1.4'
                         }}>
                           {JSON.stringify(log.data, null, 2)}
                         </pre>

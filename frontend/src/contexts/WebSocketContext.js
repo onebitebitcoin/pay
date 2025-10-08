@@ -12,6 +12,7 @@ export const useWebSocket = () => {
 
 export const WebSocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [subscriptionId, setSubscriptionId] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
@@ -63,6 +64,12 @@ export const WebSocketProvider = ({ children }) => {
           const data = JSON.parse(event.data);
           console.log('WebSocket message received:', data);
 
+          // Store subscriptionId when connected
+          if (data.type === 'connected' && data.subscriptionId) {
+            setSubscriptionId(data.subscriptionId);
+            console.log('Subscription ID received:', data.subscriptionId);
+          }
+
           // Notify all registered listeners
           listenersRef.current.forEach((callback) => {
             callback(data);
@@ -80,6 +87,7 @@ export const WebSocketProvider = ({ children }) => {
       ws.onclose = () => {
         console.log('WebSocket disconnected');
         setIsConnected(false);
+        setSubscriptionId(null);
         wsRef.current = null;
 
         // Attempt to reconnect with exponential backoff (max 10 attempts)
@@ -149,6 +157,7 @@ export const WebSocketProvider = ({ children }) => {
 
   const value = {
     isConnected,
+    subscriptionId,
     subscribe,
     send,
     connect,

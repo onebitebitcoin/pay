@@ -9,15 +9,31 @@ const db = require('./db');
 const cashu = require('./cashu');
 const lnaddr = require('./lightningaddr');
 
+const crypto = require('crypto');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-const quoteSubscriptions = new Map();
+const subscriptions = new Map(); // subscriptionId -> ws
+const quoteToSubscription = new Map(); // quoteId -> subscriptionId for payment notifications
 const PORT = process.env.PORT || 5001;
+
+// Generate unique subscription ID using SHA256
+function generateSubscriptionId() {
+  const timestamp = Date.now().toString();
+  const randomBytes = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.createHash('sha256').update(timestamp + randomBytes).digest('hex');
+  return hash;
+}
 
 // WebSocket connection handling
 wss.on('connection', (ws) => {
-  console.log('Client connected to WebSocket');
+  // Generate unique subscription ID for this connection
+  const subscriptionId = generateSubscriptionId();
+  subscriptions.set(subscriptionId, ws);
+  ws.subscriptionId = subscriptionId;
+
+  console.log(`Client connected to WebSocket with subscriptionId: ${subscriptionId}`);
 
   ws.on('message', (message) => {
     try {
@@ -26,30 +42,30 @@ wss.on('connection', (ws) => {
 
       // Handle test ping messages
       if (data.type === 'ping') {
-        const quoteId = data.quoteId;
+        const targetSubscriptionId = data.subscriptionId;
 
-        if (quoteId) {
-          // Send to subscribed client only (like push notification)
-          const subscribedClient = quoteSubscriptions.get(quoteId);
-          if (subscribedClient && subscribedClient.readyState === WebSocket.OPEN) {
-            subscribedClient.send(JSON.stringify({
+        if (targetSubscriptionId) {
+          // Send to specific subscription (like push notification)
+          const targetClient = subscriptions.get(targetSubscriptionId);
+          if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+            targetClient.send(JSON.stringify({
               type: 'pong',
               timestamp: Date.now(),
-              quoteId: quoteId,
+              subscriptionId: targetSubscriptionId,
               message: 'Response sent to subscribed client',
               originalMessage: data
             }));
-            console.log(`Sent pong to subscriber of quoteId: ${quoteId}`);
+            console.log(`Sent pong to subscriptionId: ${targetSubscriptionId}`);
           } else {
             ws.send(JSON.stringify({
               type: 'error',
-              error: `No active subscription found for quoteId: ${quoteId}`,
-              quoteId: quoteId
+              error: `No active subscription found for subscriptionId: ${targetSubscriptionId}`,
+              subscriptionId: targetSubscriptionId
             }));
-            console.log(`No subscriber found for quoteId: ${quoteId}`);
+            console.log(`No subscriber found for subscriptionId: ${targetSubscriptionId}`);
           }
         } else {
-          // No quoteId - send to current client only
+          // No subscriptionId - send to current client only
           ws.send(JSON.stringify({
             type: 'pong',
             timestamp: Date.now(),
@@ -61,48 +77,38 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      // Handle subscription status check
-      if (data.type === 'getSubscriptions') {
-        const clientSubscriptions = [];
-        for (const [quoteId, client] of quoteSubscriptions.entries()) {
-          if (client === ws) {
-            clientSubscriptions.push(quoteId);
-          }
-        }
+      // Handle subscription info request
+      if (data.type === 'getSubscriptionInfo') {
         ws.send(JSON.stringify({
-          type: 'subscriptions',
-          subscriptions: clientSubscriptions,
-          totalActive: quoteSubscriptions.size
+          type: 'subscriptionInfo',
+          subscriptionId: ws.subscriptionId,
+          totalActive: subscriptions.size
         }));
-        console.log(`Sent subscription status: ${clientSubscriptions.length} active`);
+        console.log(`Sent subscription info to ${ws.subscriptionId}`);
         return;
       }
 
-      if (data.type === 'subscribe' && data.quoteId) {
-        // Remove any previous subscription for this client
-        for (const [key, value] of quoteSubscriptions.entries()) {
-          if (value === ws) {
-            quoteSubscriptions.delete(key);
-          }
-        }
-        quoteSubscriptions.set(data.quoteId, ws);
-        console.log(`Client subscribed to quoteId: ${data.quoteId}`);
+      // Handle quote subscription (for payment notifications)
+      if (data.type === 'subscribeQuote' && data.quoteId) {
+        quoteToSubscription.set(data.quoteId, ws.subscriptionId);
+        console.log(`Linked quoteId ${data.quoteId} to subscriptionId ${ws.subscriptionId}`);
 
         // Send confirmation
         ws.send(JSON.stringify({
-          type: 'subscribed',
-          quoteId: data.quoteId
+          type: 'quoteSubscribed',
+          quoteId: data.quoteId,
+          subscriptionId: ws.subscriptionId
         }));
       }
 
-      // Handle unsubscribe
-      if (data.type === 'unsubscribe' && data.quoteId) {
-        const removed = quoteSubscriptions.delete(data.quoteId);
-        console.log(`Client unsubscribed from quoteId: ${data.quoteId} - ${removed ? 'success' : 'not found'}`);
+      // Handle quote unsubscribe
+      if (data.type === 'unsubscribeQuote' && data.quoteId) {
+        const removed = quoteToSubscription.delete(data.quoteId);
+        console.log(`Unlinked quoteId ${data.quoteId} - ${removed ? 'success' : 'not found'}`);
 
         // Send confirmation
         ws.send(JSON.stringify({
-          type: 'unsubscribed',
+          type: 'quoteUnsubscribed',
           quoteId: data.quoteId,
           success: removed
         }));
@@ -118,31 +124,45 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected from WebSocket');
+    console.log(`Client disconnected from WebSocket: ${ws.subscriptionId}`);
     // Clean up subscriptions
-    for (const [key, value] of quoteSubscriptions.entries()) {
-      if (value === ws) {
-        quoteSubscriptions.delete(key);
+    subscriptions.delete(ws.subscriptionId);
+
+    // Clean up quote subscriptions
+    for (const [quoteId, subId] of quoteToSubscription.entries()) {
+      if (subId === ws.subscriptionId) {
+        quoteToSubscription.delete(quoteId);
       }
     }
   });
 
-  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connection established' }));
+  // Send connection confirmation with subscriptionId
+  ws.send(JSON.stringify({
+    type: 'connected',
+    message: 'WebSocket connection established',
+    subscriptionId: ws.subscriptionId
+  }));
 });
 
 // Send a notification to a specific client subscribed to a quote
 function sendPaymentNotification(quoteId, data) {
-  const ws = quoteSubscriptions.get(quoteId);
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'payment_received',
-      ...data
-    }));
-    // Once notified, remove the subscription
-    quoteSubscriptions.delete(quoteId);
-    console.log(`Sent payment notification for quote ${quoteId}`);
+  const subscriptionId = quoteToSubscription.get(quoteId);
+  if (subscriptionId) {
+    const ws = subscriptions.get(subscriptionId);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'payment_received',
+        ...data
+      }));
+      // Once notified, remove the quote subscription
+      quoteToSubscription.delete(quoteId);
+      console.log(`Sent payment notification for quote ${quoteId} to subscription ${subscriptionId}`);
+    } else {
+      console.log(`No active WebSocket found for subscription ${subscriptionId}`);
+      quoteToSubscription.delete(quoteId);
+    }
   } else {
-    console.log(`No active subscription found for quote ${quoteId}`);
+    console.log(`No subscription found for quote ${quoteId}`);
   }
 }
 

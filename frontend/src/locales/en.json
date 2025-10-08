@@ -189,14 +189,13 @@
     "webSocketNotConnected": "WebSocket is not connected",
     "testMessageSent": "Test message sent",
     "invalidJson": "Invalid JSON format",
-    "checkSubscriptions": "Check Subscriptions",
-    "testSubscription": "Test Subscription",
-    "subscribeQuoteId": "Subscribe QuoteId",
-    "quoteIdPlaceholder": "Enter Quote ID to test",
-    "sendPushTest": "Send Push Test",
-    "subscribed": "Subscribed",
-    "notSubscribed": "Not Subscribed",
-    "unsubscribe": "Unsubscribe"
+    "subscriptionId": "Subscription ID",
+    "noSubscriptionId": "Waiting for connection",
+    "subscriptionIdCopied": "Subscription ID copied",
+    "copyFailed": "Copy failed",
+    "copy": "Copy",
+    "copySubscriptionId": "Copy Subscription ID",
+    "sendPushTest": "Send Push Test"
   },
   "storeFinder": {
     "title": "Bitcoin-Accepting Stores",

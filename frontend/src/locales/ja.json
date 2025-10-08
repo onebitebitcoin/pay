@@ -189,14 +189,13 @@
     "webSocketNotConnected": "WebSocketが接続されていません",
     "testMessageSent": "テストメッセージを送信しました",
     "invalidJson": "無効なJSON形式です",
-    "checkSubscriptions": "購読状態を確認",
-    "testSubscription": "購読テスト",
-    "subscribeQuoteId": "QuoteId購読",
-    "quoteIdPlaceholder": "テストするQuote IDを入力",
-    "sendPushTest": "プッシュテスト",
-    "subscribed": "購読中",
-    "notSubscribed": "未購読",
-    "unsubscribe": "購読解除"
+    "subscriptionId": "Subscription ID",
+    "noSubscriptionId": "接続待機中",
+    "subscriptionIdCopied": "Subscription IDをコピーしました",
+    "copyFailed": "コピー失敗",
+    "copy": "コピー",
+    "copySubscriptionId": "Subscription IDをコピー",
+    "sendPushTest": "プッシュテスト"
   },
   "storeFinder": {
     "title": "ビットコイン決済可能店舗",
