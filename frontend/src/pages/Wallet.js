@@ -108,10 +108,7 @@ function Wallet() {
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
   
-  // Temporary debugging status states
-  const [debugInvoiceStatus, setDebugInvoiceStatus] = useState('idle');
-  const [debugWsStatus, setDebugWsStatus] = useState('disconnected');
-  const [debugEventReady, setDebugEventReady] = useState(false);
+
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
   const pendingMintRef = useRef(null);
@@ -550,7 +547,7 @@ function Wallet() {
       try { stopAutoRedeem(); } catch {}
       setCheckingPayment(false);
       setReceiveCompleted(true);
-      setDebugInvoiceStatus('payment_received'); // Temp debug: set when payment is received
+
     }
 
     let signatures = Array.isArray(detail?.signatures) ? detail.signatures : [];
@@ -623,7 +620,6 @@ function Wallet() {
 
     console.log('[processPaymentNotification] Loading wallet data...');
     await loadWalletData();
-    setDebugInvoiceStatus('completed'); // Temp debug: set when processing is completed
     console.log('[processPaymentNotification] Completed');
   }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
 
@@ -810,16 +806,14 @@ function Wallet() {
 
     window.addEventListener('payment_received', handler);
     console.log('[payment_received EVENT] Event listener registered');
-    setDebugEventReady(true); // Temp debug: set to true when event listener is ready
 
     return () => {
       try { stopAutoRedeem(); } catch {}
       window.removeEventListener('payment_received', handler);
-      setDebugEventReady(false); // Temp debug: set to false when cleaning up
     };
   }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
   
-  // Removed WebSocket status tracking - using polling instead
+
 
   // Handle page visibility change (app resuming from background)
   useEffect(() => {
@@ -924,7 +918,7 @@ function Wallet() {
       showInfoMessage(t('messages.checkingInvoiceStatus'), 'info', 2000);
       
       // Temp debug: set status when checking pending quote
-      setDebugInvoiceStatus('checking_pending');
+
 
       // Check quote state
       const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}`));
@@ -935,7 +929,7 @@ function Wallet() {
 
       if (state !== 'PAID' && state !== 'ISSUED') {
         showInfoMessage(t('messages.invoiceNotPaid'), 'info');
-        setDebugInvoiceStatus('pending_payment');
+
         return;
       }
 
@@ -958,7 +952,7 @@ function Wallet() {
               description: t('wallet.lightningReceive'),
               memo: ''
             });
-            setDebugInvoiceStatus('completed');
+
             showInfoMessage(t('messages.recoveredSuccess', { amount: formatAmount(applied.added) }), 'success');
             await loadWalletData();
             return;
@@ -1013,7 +1007,7 @@ function Wallet() {
           memo: ''
         });
         
-        setDebugInvoiceStatus('completed');
+
 
         showInfoMessage(t('messages.recoveredSuccess', { amount: formatAmount(added) }), 'success');
       } else {
@@ -1021,7 +1015,6 @@ function Wallet() {
       }
     } catch (error) {
       console.error('Failed to check quote:', error);
-      setDebugInvoiceStatus('error');
       showInfoMessage(translateErrorMessage(error?.message) || t('messages.quoteCheckError'), 'error');
     } finally {
       setLoading(false);
@@ -1256,9 +1249,6 @@ function Wallet() {
       setReceiveCompleted(false);
       setCheckingPayment(false);
       
-      // Temp debug: set status when starting invoice generation
-      setDebugInvoiceStatus('generating');
-
       // Get mint keys and create blinded outputs first
       const keysResp = await fetch(apiUrl('/api/cashu/keys'));
       if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
@@ -1300,9 +1290,6 @@ function Wallet() {
       setCheckingPayment(true);
       pollingCancelRef.current = startInvoicePolling(quoteId, amount);
       
-      // Temp debug: update status after successful invoice generation
-      setDebugInvoiceStatus('ready_for_payment');
-      
       console.log('[DEBUG] Invoice generated:', {
         quoteId,
         amount,
@@ -1310,7 +1297,6 @@ function Wallet() {
       });
     } catch (error) {
       console.error('Failed to generate invoice:', error);
-      setDebugInvoiceStatus('error');
       showInfoMessage(t('messages.invoiceGenerationFailed'), 'error');
     } finally {
       setLoading(false);
@@ -1329,7 +1315,6 @@ function Wallet() {
     setInvoice('');
     setReceiveCompleted(false);
     setReceivedAmount(0);
-    setDebugInvoiceStatus('idle'); // Reset debug status when exiting receive flow
     const target = receiveOriginRef.current || '/wallet';
     navigate(target, { replace: true });
   }, [navigate, stopAutoRedeem]);
@@ -1983,23 +1968,7 @@ function Wallet() {
               <p className="receive-subtext">{t('wallet.receiveSubtext')}</p>
             </div>
             <div className="receive-card-body">
-              {/* Temporary debugging info - will be removed later */}
-              <div style={{ 
-                marginBottom: '1rem', 
-                padding: '0.75rem', 
-                background: '#f0f9ff', 
-                border: '1px solid #bae6fd', 
-                borderRadius: '0.5rem',
-                fontSize: '0.8rem',
-                color: '#000000',
-                fontFamily: 'monospace'
-              }}>
-                <div style={{fontWeight: 'bold', marginBottom: '0.25rem', color: '#000000'}}><strong>Debug Status:</strong></div>
-                <div style={{color: '#000000'}}>Invoice Status: <span style={{fontWeight: 'bold'}}>{debugInvoiceStatus}</span></div>
-                <div style={{color: '#000000'}}>WS Connection: <span style={{fontWeight: 'bold'}}>{debugWsStatus}</span></div>
-                <div style={{color: '#000000'}}>Event Ready: <span style={{fontWeight: 'bold'}}>{debugEventReady ? 'YES' : 'NO'}</span></div>
-                <div style={{color: '#000000'}}>Current Quote: <span style={{fontWeight: 'bold'}}>{localStorage.getItem('cashu_last_quote') || 'None'}</span></div>
-              </div>
+
               
               {!receiveCompleted ? (
                 <>
