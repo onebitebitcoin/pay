@@ -8,7 +8,7 @@ import Icon from '../components/Icon';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  const { isConnected, connect } = useWebSocket();
+  const { isConnected, connect, send, subscribe } = useWebSocket();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
     walletName: '',
@@ -30,6 +30,10 @@ function Settings() {
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [reconnecting, setReconnecting] = useState(false);
+  const [wsDebugLogs, setWsDebugLogs] = useState([]);
+  const [testMessage, setTestMessage] = useState('{"type":"ping","timestamp":' + Date.now() + '}');
+  const [testQuoteId, setTestQuoteId] = useState('');
+  const [subscribedQuoteIds, setSubscribedQuoteIds] = useState([]);
 
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
@@ -272,7 +276,237 @@ function Settings() {
       setReconnecting(false);
       addToast(t('settings.webSocketConnected'), 'success');
     }
-  }, [isConnected, reconnecting, t]);
+
+    // Clear subscriptions when disconnected
+    if (!isConnected) {
+      setSubscribedQuoteIds([]);
+    }
+
+    // Auto-check subscriptions when connected
+    if (isConnected && !reconnecting) {
+      // Small delay to ensure connection is stable
+      const timer = setTimeout(() => {
+        send({ type: 'getSubscriptions' });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, reconnecting, t, send]);
+
+  // Subscribe to WebSocket messages for debugging
+  useEffect(() => {
+    const unsubscribe = subscribe('settings-debug', (data) => {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'received',
+        data: data
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50)); // Keep last 50 logs
+
+      // Update subscription status when we receive subscriptions response
+      if (data.type === 'subscriptions' && Array.isArray(data.subscriptions)) {
+        setSubscribedQuoteIds(data.subscriptions);
+
+        // Auto-subscribe if no subscriptions exist
+        if (data.subscriptions.length === 0 && isConnected) {
+          const autoQuoteId = `auto-${Date.now()}`;
+          const subscribeMessage = { type: 'subscribe', quoteId: autoQuoteId };
+          send(subscribeMessage);
+
+          const logEntry = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+            type: 'sent',
+            data: { ...subscribeMessage, note: 'Auto-subscribed on connection' }
+          };
+          setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+        }
+      }
+
+      // Update subscription status when we subscribe
+      if (data.type === 'subscribed' && data.quoteId) {
+        setSubscribedQuoteIds(prev => {
+          if (!prev.includes(data.quoteId)) {
+            return [...prev, data.quoteId];
+          }
+          return prev;
+        });
+      }
+
+      // Update subscription status when we unsubscribe
+      if (data.type === 'unsubscribed' && data.quoteId) {
+        setSubscribedQuoteIds(prev => prev.filter(id => id !== data.quoteId));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [subscribe, send, isConnected]);
+
+  // Handle test message send
+  const handleSendTestMessage = () => {
+    if (!isConnected) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.webSocketNotConnected') }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    try {
+      const messageData = JSON.parse(testMessage);
+      send(messageData);
+
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'sent',
+        data: messageData
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+    } catch (error) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.invalidJson'), message: error.message }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+    }
+  };
+
+  const clearDebugLogs = () => {
+    setWsDebugLogs([]);
+  };
+
+  // Handle subscription status check
+  const handleCheckSubscriptions = () => {
+    if (!isConnected) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.webSocketNotConnected') }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    send({ type: 'getSubscriptions' });
+
+    const logEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+      type: 'sent',
+      data: { type: 'getSubscriptions' }
+    };
+    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+  };
+
+  // Handle subscribe to test quoteId
+  const handleSubscribeQuoteId = () => {
+    if (!isConnected) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.webSocketNotConnected') }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    if (!testQuoteId.trim()) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: 'Quote ID is required' }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    const subscribeMessage = { type: 'subscribe', quoteId: testQuoteId };
+    send(subscribeMessage);
+
+    const logEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+      type: 'sent',
+      data: subscribeMessage
+    };
+    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+  };
+
+  // Handle send push test (ping with quoteId)
+  const handleSendPushTest = () => {
+    if (!isConnected) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.webSocketNotConnected') }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    if (!testQuoteId.trim()) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: 'Quote ID is required' }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    const pingMessage = {
+      type: 'ping',
+      quoteId: testQuoteId,
+      timestamp: Date.now()
+    };
+    send(pingMessage);
+
+    const logEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+      type: 'sent',
+      data: pingMessage
+    };
+    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+  };
+
+  // Handle unsubscribe from quoteId
+  const handleUnsubscribeQuoteId = (quoteId) => {
+    if (!isConnected) {
+      const logEntry = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+        type: 'error',
+        data: { error: t('settings.webSocketNotConnected') }
+      };
+      setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+      return;
+    }
+
+    const unsubscribeMessage = { type: 'unsubscribe', quoteId: quoteId };
+    send(unsubscribeMessage);
+
+    const logEntry = {
+      id: Date.now(),
+      timestamp: new Date().toLocaleTimeString('ko-KR', { hour12: false }),
+      type: 'sent',
+      data: unsubscribeMessage
+    };
+    setWsDebugLogs(prev => [logEntry, ...prev].slice(0, 50));
+  };
 
   return (
     <>
@@ -381,27 +615,53 @@ function Settings() {
                 {t('settings.webSocketStatusDesc')}
               </div>
             </div>
-            <div className="status-indicator" style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.5rem 1rem',
-              borderRadius: '999px',
-              background: reconnecting ? 'rgba(245, 158, 11, 0.14)' : (isConnected ? 'rgba(34, 197, 94, 0.14)' : 'rgba(239, 68, 68, 0.14)'),
-              border: reconnecting ? '1px solid rgba(245, 158, 11, 0.35)' : (isConnected ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)'),
-              color: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
-            }}>
-              <div
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
-                }}
-              />
-              <span style={{ fontWeight: 600 }}>
-                {reconnecting ? t('settings.connecting') : (isConnected ? t('settings.connected') : t('settings.disconnected'))}
-              </span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <div className="status-indicator" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                borderRadius: '999px',
+                background: reconnecting ? 'rgba(245, 158, 11, 0.14)' : (isConnected ? 'rgba(34, 197, 94, 0.14)' : 'rgba(239, 68, 68, 0.14)'),
+                border: reconnecting ? '1px solid rgba(245, 158, 11, 0.35)' : (isConnected ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)'),
+                color: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
+              }}>
+                <div
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: reconnecting ? '#f59e0b' : (isConnected ? '#22c55e' : '#ef4444')
+                  }}
+                />
+                <span style={{ fontWeight: 600 }}>
+                  {reconnecting ? t('settings.connecting') : (isConnected ? t('settings.connected') : t('settings.disconnected'))}
+                </span>
+              </div>
+              <div className="status-indicator" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                borderRadius: '999px',
+                background: subscribedQuoteIds.length > 0 ? 'rgba(59, 130, 246, 0.14)' : 'rgba(156, 163, 175, 0.14)',
+                border: subscribedQuoteIds.length > 0 ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid rgba(156, 163, 175, 0.35)',
+                color: subscribedQuoteIds.length > 0 ? '#3b82f6' : '#9ca3af'
+              }}>
+                <div
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: subscribedQuoteIds.length > 0 ? '#3b82f6' : '#9ca3af'
+                  }}
+                />
+                <span style={{ fontWeight: 600 }}>
+                  {subscribedQuoteIds.length > 0
+                    ? `${t('settings.subscribed')} (${subscribedQuoteIds.length})`
+                    : t('settings.notSubscribed')}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -419,6 +679,201 @@ function Settings() {
             >
               {t('settings.reconnect')}
             </button>
+          </div>
+
+          <div className="setting-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="setting-info">
+              <div className="setting-title">{t('settings.webSocketDebug')}</div>
+              <div className="setting-description">
+                {t('settings.webSocketDebugDesc')}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem' }}>
+              {/* General Test Message */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  value={testMessage}
+                  onChange={(e) => setTestMessage(e.target.value)}
+                  placeholder='{"type":"ping","timestamp":1234567890}'
+                  className="setting-input"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.875rem' }}
+                />
+                <button
+                  onClick={handleSendTestMessage}
+                  className="setting-button"
+                  disabled={!isConnected}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('settings.sendTest')}
+                </button>
+                <button
+                  onClick={handleCheckSubscriptions}
+                  className="setting-button"
+                  disabled={!isConnected}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('settings.checkSubscriptions')}
+                </button>
+              </div>
+
+              {/* Subscription Test */}
+              <div style={{
+                padding: '0.75rem',
+                borderRadius: '6px',
+                backgroundColor: 'var(--surface-bg)',
+                border: '1px solid var(--border)'
+              }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text)' }}>
+                  {t('settings.testSubscription')}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={testQuoteId}
+                    onChange={(e) => setTestQuoteId(e.target.value)}
+                    placeholder={t('settings.quoteIdPlaceholder')}
+                    className="setting-input"
+                    style={{ flex: '1 1 200px', fontFamily: 'monospace', fontSize: '0.875rem' }}
+                  />
+                  <button
+                    onClick={handleSubscribeQuoteId}
+                    className="setting-button"
+                    disabled={!isConnected}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {t('settings.subscribeQuoteId')}
+                  </button>
+                  <button
+                    onClick={handleSendPushTest}
+                    className="setting-button"
+                    disabled={!isConnected}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {t('settings.sendPushTest')}
+                  </button>
+                </div>
+
+                {/* Active Subscriptions List */}
+                {subscribedQuoteIds.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text)' }}>
+                      {t('settings.subscribed')} ({subscribedQuoteIds.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {subscribedQuoteIds.map((quoteId) => (
+                        <div
+                          key={quoteId}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.5rem',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            border: '1px solid rgba(59, 130, 246, 0.3)'
+                          }}
+                        >
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontSize: '0.8125rem',
+                            color: 'var(--text)',
+                            wordBreak: 'break-all'
+                          }}>
+                            {quoteId}
+                          </span>
+                          <button
+                            onClick={() => handleUnsubscribeQuoteId(quoteId)}
+                            className="icon-btn"
+                            style={{
+                              marginLeft: '0.5rem',
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.75rem',
+                              color: '#ef4444',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title={t('settings.unsubscribe')}
+                          >
+                            <Icon name="close" size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {wsDebugLogs.length > 0 && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text)' }}>
+                    {t('settings.debugLogs')} ({wsDebugLogs.length})
+                  </span>
+                  <button
+                    onClick={clearDebugLogs}
+                    className="icon-btn"
+                    title={t('settings.clearLogs')}
+                  >
+                    <Icon name="trash" size={16} />
+                  </button>
+                </div>
+                <div style={{
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--surface-bg)',
+                  padding: '0.5rem'
+                }}>
+                  {wsDebugLogs.map((log) => {
+                    const colors = {
+                      sent: { bg: 'rgba(59, 130, 246, 0.1)', border: '#3b82f6', label: '↑ SENT' },
+                      received: { bg: 'rgba(34, 197, 94, 0.1)', border: '#22c55e', label: '↓ RECEIVED' },
+                      error: { bg: 'rgba(239, 68, 68, 0.1)', border: '#ef4444', label: '✕ ERROR' }
+                    };
+                    const style = colors[log.type] || colors.received;
+
+                    return (
+                      <div
+                        key={log.id}
+                        style={{
+                          padding: '0.5rem',
+                          marginBottom: '0.5rem',
+                          borderRadius: '4px',
+                          backgroundColor: style.bg,
+                          borderLeft: `3px solid ${style.border}`,
+                          fontSize: '0.8125rem',
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          marginBottom: '0.25rem',
+                          color: 'var(--muted)',
+                          fontSize: '0.75rem'
+                        }}>
+                          <span style={{ fontWeight: '600', textTransform: 'uppercase', color: style.border }}>
+                            {style.label}
+                          </span>
+                          <span>{log.timestamp}</span>
+                        </div>
+                        <pre style={{
+                          margin: 0,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          color: 'var(--text)'
+                        }}>
+                          {JSON.stringify(log.data, null, 2)}
+                        </pre>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

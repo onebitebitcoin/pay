@@ -24,6 +24,60 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(message);
       console.log('Received WebSocket message:', data);
 
+      // Handle test ping messages
+      if (data.type === 'ping') {
+        const quoteId = data.quoteId;
+
+        if (quoteId) {
+          // Send to subscribed client only (like push notification)
+          const subscribedClient = quoteSubscriptions.get(quoteId);
+          if (subscribedClient && subscribedClient.readyState === WebSocket.OPEN) {
+            subscribedClient.send(JSON.stringify({
+              type: 'pong',
+              timestamp: Date.now(),
+              quoteId: quoteId,
+              message: 'Response sent to subscribed client',
+              originalMessage: data
+            }));
+            console.log(`Sent pong to subscriber of quoteId: ${quoteId}`);
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              error: `No active subscription found for quoteId: ${quoteId}`,
+              quoteId: quoteId
+            }));
+            console.log(`No subscriber found for quoteId: ${quoteId}`);
+          }
+        } else {
+          // No quoteId - send to current client only
+          ws.send(JSON.stringify({
+            type: 'pong',
+            timestamp: Date.now(),
+            message: 'Direct response (no subscription)',
+            originalMessage: data
+          }));
+          console.log('Sent direct pong response');
+        }
+        return;
+      }
+
+      // Handle subscription status check
+      if (data.type === 'getSubscriptions') {
+        const clientSubscriptions = [];
+        for (const [quoteId, client] of quoteSubscriptions.entries()) {
+          if (client === ws) {
+            clientSubscriptions.push(quoteId);
+          }
+        }
+        ws.send(JSON.stringify({
+          type: 'subscriptions',
+          subscriptions: clientSubscriptions,
+          totalActive: quoteSubscriptions.size
+        }));
+        console.log(`Sent subscription status: ${clientSubscriptions.length} active`);
+        return;
+      }
+
       if (data.type === 'subscribe' && data.quoteId) {
         // Remove any previous subscription for this client
         for (const [key, value] of quoteSubscriptions.entries()) {
@@ -33,9 +87,33 @@ wss.on('connection', (ws) => {
         }
         quoteSubscriptions.set(data.quoteId, ws);
         console.log(`Client subscribed to quoteId: ${data.quoteId}`);
+
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'subscribed',
+          quoteId: data.quoteId
+        }));
+      }
+
+      // Handle unsubscribe
+      if (data.type === 'unsubscribe' && data.quoteId) {
+        const removed = quoteSubscriptions.delete(data.quoteId);
+        console.log(`Client unsubscribed from quoteId: ${data.quoteId} - ${removed ? 'success' : 'not found'}`);
+
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'unsubscribed',
+          quoteId: data.quoteId,
+          success: removed
+        }));
       }
     } catch (e) {
       console.error('Invalid WebSocket message:', e);
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Invalid message format',
+        message: e.message
+      }));
     }
   });
 
