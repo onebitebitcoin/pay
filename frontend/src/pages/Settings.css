@@ -7,6 +7,45 @@
   }
 }
 
+/* Toast Messages */
+.toast-container {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1100;
+}
+
+.toast {
+  background: var(--card-bg);
+  border-left: 4px solid var(--success);
+  color: var(--text);
+  box-shadow: 0 10px 20px rgba(var(--primary-rgb), 0.18);
+  padding: 10px 12px;
+  border-radius: 8px;
+  min-width: 220px;
+  max-width: 320px;
+  font-weight: 600;
+  animation: slideInRight 0.3s ease-out;
+}
+
+.toast-error { border-left-color: var(--danger); }
+.toast-info { border-left-color: var(--info); }
+.toast-success { border-left-color: var(--success); }
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 .settings-page {
   padding: 2rem 1rem;
   max-width: 800px;

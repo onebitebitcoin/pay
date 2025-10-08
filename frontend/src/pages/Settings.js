@@ -26,6 +26,23 @@ function Settings() {
   const [pinStep, setPinStep] = useState('current'); // 'current', 'new', 'confirm'
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  // Recommended mint URLs
+  const RECOMMENDED_MINTS = [
+    'https://mint.cubabitcoin.org',
+    'https://mint.minibits.cash/Bitcoin',
+    'https://mint.coinos.io',
+    'https://mint.lnvoltz.com'
+  ];
+
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3500);
+  };
 
   useEffect(() => {
     document.title = t('pageTitle.settings');
@@ -79,7 +96,7 @@ function Settings() {
       localStorage.setItem('app_settings', JSON.stringify(newSettings));
     } catch (e) {
       console.error('Failed to save settings:', e);
-      alert(t('messages.settingsSaveFailed'));
+      addToast(t('messages.settingsSaveFailed'), 'error');
     }
   };
 
@@ -119,17 +136,17 @@ function Settings() {
         setPinStep('new');
         setCurrentPin('');
       } else {
-        alert(t('messages.currentPinIncorrect'));
+        addToast(t('messages.currentPinIncorrect'), 'error');
       }
     } else if (pinStep === 'new') {
       if (pinInput.length < 4) {
-        alert(t('messages.pinMinLength'));
+        addToast(t('messages.pinMinLength'), 'error');
         return;
       }
       setPinStep('confirm');
     } else if (pinStep === 'confirm') {
       if (pinInput !== pinConfirm) {
-        alert(t('messages.pinMismatch'));
+        addToast(t('messages.pinMismatch'), 'error');
         setPinConfirm('');
         return;
       }
@@ -139,7 +156,7 @@ function Settings() {
       setShowPinSetup(false);
       setPinInput('');
       setPinConfirm('');
-      alert(t('messages.pinSet'));
+      addToast(t('messages.pinSet'), 'success');
     }
   };
 
@@ -150,16 +167,16 @@ function Settings() {
       if (inputPin === storedPin) {
         localStorage.removeItem('app_pin');
         handleSettingChange('pinEnabled', false);
-        alert(t('messages.pinDisabled'));
+        addToast(t('messages.pinDisabled'), 'success');
       } else {
-        alert(t('messages.pinIncorrect'));
+        addToast(t('messages.pinIncorrect'), 'error');
       }
     }
   };
 
   const testMintConnection = async (url) => {
     if (!url || !url.trim()) {
-      alert(t('messages.enterMintUrl'));
+      addToast(t('messages.enterMintUrl'), 'error');
       return;
     }
 
@@ -224,22 +241,31 @@ function Settings() {
             pinEnabled: false
           });
 
-          alert(t('messages.walletReset'));
-          window.location.reload();
+          addToast(t('messages.walletReset'), 'success');
+          setTimeout(() => window.location.reload(), 1000);
         } catch (e) {
           console.error('Reset failed:', e);
-          alert(t('messages.resetFailed'));
+          addToast(t('messages.resetFailed'), 'error');
         }
       }
     }
   };
 
   return (
-    <div className="settings-page">
-      <div className="page-header">
-        <h1><Icon name="settings" size={22} /> {t('settings.title')}</h1>
-        <p>{t('settings.subtitle')}</p>
+    <>
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
+            {toast.message}
+          </div>
+        ))}
       </div>
+
+      <div className="settings-page">
+        <div className="page-header">
+          <h1><Icon name="settings" size={22} /> {t('settings.title')}</h1>
+          <p>{t('settings.subtitle')}</p>
+        </div>
 
       <div className="settings-sections">
         {/* General Settings */}
@@ -356,9 +382,41 @@ function Settings() {
                   )}
                 </button>
               </div>
+
+              {/* Recommended Mints */}
+              <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: 'var(--muted)' }}>
+                  {t('settings.recommendedMints')}:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {RECOMMENDED_MINTS.map((mintUrl) => (
+                    <button
+                      key={mintUrl}
+                      onClick={() => {
+                        handleSettingChange('mintUrl', mintUrl);
+                        setMainUrlStatus(null);
+                      }}
+                      className="mint-suggestion-btn"
+                      style={{
+                        padding: '0.375rem 0.75rem',
+                        fontSize: '0.8125rem',
+                        background: settings.mintUrl === mintUrl ? 'rgba(var(--primary-rgb), 0.15)' : 'var(--surface-bg)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '0.375rem',
+                        color: settings.mintUrl === mintUrl ? 'var(--primary)' : 'var(--text)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {mintUrl.replace('https://', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {mainUrlStatus && (
                 <div style={{
-                  marginTop: '0.5rem',
+                  marginTop: '0.75rem',
                   padding: '0.5rem',
                   borderRadius: '6px',
                   fontSize: '13px',
@@ -477,7 +535,8 @@ function Settings() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -67,6 +67,7 @@ function Wallet() {
   const [displayedTxCount, setDisplayedTxCount] = useState(10);
   const [walletName, setWalletName] = useState('');
   const [showSend, setShowSend] = useState(false);
+  const [txUpdateCounter, setTxUpdateCounter] = useState(0);
   const [showConvert, setShowConvert] = useState(false);
 
   // Debug transactions state changes
@@ -262,6 +263,31 @@ function Wallet() {
       }, (error) => {
         if (error) {
           console.error('QR Code generation error:', error);
+        } else {
+          // Add logo in the center after QR code is drawn
+          const canvas = qrCanvasRef.current;
+          const ctx = canvas.getContext('2d');
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          const logoSize = canvas.width * 0.2; // 20% of canvas size
+          
+          // Create image element for the logo
+          const logoImg = new Image();
+          logoImg.crossOrigin = 'anonymous';
+          logoImg.src = '/logo-192.png';
+          logoImg.onload = () => {
+            // Draw the logo in the center
+            ctx.drawImage(
+              logoImg,
+              centerX - logoSize / 2,
+              centerY - logoSize / 2,
+              logoSize,
+              logoSize
+            );
+          };
+          logoImg.onerror = (err) => {
+            console.error('Failed to load QR logo:', err);
+          };
         }
       });
     }
@@ -286,6 +312,34 @@ function Wallet() {
       }, timeout);
     }
   }, []);
+
+  const formatAmount = (sats) => {
+    const localeMap = {
+      ko: 'ko-KR',
+      en: 'en-US',
+      ja: 'ja-JP'
+    };
+    const locale = localeMap[i18n.language] || 'en-US';
+    return new Intl.NumberFormat(locale).format(sats);
+  };
+
+  const formatDate = (timestamp) => {
+    // Map i18n language to locale
+    const localeMap = {
+      ko: 'ko-KR',
+      en: 'en-US',
+      ja: 'ja-JP'
+    };
+    const locale = localeMap[i18n.language] || 'en-US';
+
+    return new Date(timestamp).toLocaleString(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const loadWalletData = useCallback(async (showLoading = false, syncWithMint = false) => {
     try {
@@ -323,9 +377,17 @@ function Wallet() {
         console.log('[persistTransactions] Saved and verified successfully');
       } else {
         console.error('[persistTransactions] Save verification failed');
+        // Try saving again if verification failed
+        localStorage.setItem(TX_STORAGE_KEY, data);
       }
     } catch (err) {
       console.error('[persistTransactions] Failed to save:', err);
+      // Fallback: try to save with smaller string if needed
+      try {
+        localStorage.setItem(TX_STORAGE_KEY, JSON.stringify([]));
+      } catch (e) {
+        console.error('[persistTransactions] LocalStorage completely unavailable:', e);
+      }
     }
   }, [TX_STORAGE_KEY]);
 
@@ -333,7 +395,8 @@ function Wallet() {
     console.log('[addTransaction] Adding transaction:', tx);
     console.log('[addTransaction] setTransactions will be called');
 
-    setTransactions((prev) => {
+    // Create a new transaction array immediately to ensure we have the latest data
+    setTransactions(prev => {
       console.log('[addTransaction - INSIDE setTransactions] Callback executing');
       const prevArray = Array.isArray(prev) ? prev : [];
       console.log('[addTransaction - INSIDE setTransactions] Current transactions count:', prevArray.length);
@@ -358,8 +421,9 @@ function Wallet() {
       console.log('[addTransaction - INSIDE setTransactions] Transaction added successfully. New count:', next.length);
       return next;
     });
-
-    console.log('[addTransaction] setTransactions called (async, may not be executed yet)');
+    
+    // Increment counter to force UI update on transaction changes
+    setTxUpdateCounter(prev => prev + 1);
   }, [persistTransactions]);
 
   const hasQuoteRedeemed = useCallback((q) => {
@@ -431,7 +495,7 @@ function Wallet() {
       await loadWalletData(false, true); // Sync with Mint on connect
     } catch (e) {
       console.error(e);
-      alert(e.message || t('messages.mintConnectionFailed'));
+      showInfoMessage(e.message || t('messages.mintConnectionFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -871,11 +935,11 @@ function Wallet() {
 
   const executeBackup = async () => {
     if (!passphrase || passphrase.length < 8) {
-      alert(t('messages.passphraseMinLength'));
+      showInfoMessage(t('messages.passphraseMinLength'), 'error');
       return;
     }
     if (passphrase !== passphraseConfirm) {
-      alert(t('messages.passphraseMismatch'));
+      showInfoMessage(t('messages.passphraseMismatch'), 'error');
       return;
     }
 
@@ -946,7 +1010,7 @@ function Wallet() {
 
   const executeRestore = async () => {
     if (!passphrase) {
-      alert(t('messages.enterPassphrase'));
+      showInfoMessage(t('messages.enterPassphrase'), 'error');
       return;
     }
 
@@ -992,7 +1056,7 @@ function Wallet() {
 
   const generateInvoice = async () => {
     if (!receiveAmount || receiveAmount <= 0) {
-      alert(t('messages.enterValidAmount'));
+      showInfoMessage(t('messages.enterValidAmount'), 'error');
       return;
     }
 
@@ -1039,7 +1103,7 @@ function Wallet() {
       setCheckingPayment(true);
     } catch (error) {
       console.error('Failed to generate invoice:', error);
-      alert(t('messages.invoiceGenerationFailed'));
+      showInfoMessage(t('messages.invoiceGenerationFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -1257,7 +1321,7 @@ function Wallet() {
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const sendCtxRef = useRef(null); // { bolt11, quoteData }
 
-  const prepareSend = async () => {
+  const prepareSend = useCallback(async () => {
     if (enableSendScanner) {
       setEnableSendScanner(false);
     }
@@ -1432,11 +1496,11 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sendAddress, invoiceQuote, enableSendScanner, setEnableSendScanner, setInvoiceError, addToast, t, apiUrl, getBalanceSats, selectProofsForAmount, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setInvoiceQuote, navigate, translateErrorMessage, formatAmount, formatDate]);
 
   const [pendingSendDetails, setPendingSendDetails] = useState(null);
 
-  const confirmSend = async () => {
+  const confirmSend = useCallback(async () => {
     try {
       setLoading(true);
       const { quoteData } = sendCtxRef.current || {};
@@ -1539,11 +1603,11 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sendCtxRef, t, selectProofsForAmount, apiUrl, createBlindedOutputs, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setEnableSendScanner, setShowSendConfirm, setPendingSendDetails, navigate, pendingSendDetails, translateErrorMessage, formatAmount, formatDate]);
 
-  const convertFunds = async () => {
+  const convertFunds = useCallback(async () => {
     if (!convertAmount || convertAmount <= 0) {
-      alert(t('messages.enterValidAmount'));
+      showInfoMessage(t('messages.enterValidAmount'), 'error');
       return;
     }
 
@@ -1551,54 +1615,26 @@ function Wallet() {
 
     if (convertDirection === 'ecash_to_ln') {
       if (amount > ecashBalance) {
-        alert(t('messages.insufficientBalance'));
+        showInfoMessage(t('messages.insufficientBalance'), 'error');
         return;
       }
     }
 
     if (amount > ECASH_CONFIG.maxAmount) {
-      alert(t('messages.maxConversionAmount', { amount: formatAmount(ECASH_CONFIG.maxAmount) }));
+      showInfoMessage(t('messages.maxConversionAmount', { amount: formatAmount(ECASH_CONFIG.maxAmount) }), 'error');
       return;
     }
 
     try {
       setLoading(true);
       // Cashu 모드에서는 받기/보내기 플로우로 전환이 처리됩니다.
-      alert(t('messages.cashuModeConversionNotAllowed'));
+      showInfoMessage(t('messages.cashuModeConversionNotAllowed'), 'info');
     } catch (error) {
       console.error('Failed to convert funds:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatAmount = (sats) => {
-    const localeMap = {
-      ko: 'ko-KR',
-      en: 'en-US',
-      ja: 'ja-JP'
-    };
-    const locale = localeMap[i18n.language] || 'en-US';
-    return new Intl.NumberFormat(locale).format(sats);
-  };
-
-  const formatDate = (timestamp) => {
-    // Map i18n language to locale
-    const localeMap = {
-      ko: 'ko-KR',
-      en: 'en-US',
-      ja: 'ja-JP'
-    };
-    const locale = localeMap[i18n.language] || 'en-US';
-
-    return new Date(timestamp).toLocaleString(locale, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  }, [convertAmount, convertDirection, ecashBalance, ECASH_CONFIG, showInfoMessage, t, formatAmount, setLoading]);
 
   return (
     <>
@@ -1810,7 +1846,7 @@ function Wallet() {
                                 setInvoiceCopied(true);
                                 setTimeout(() => setInvoiceCopied(false), 2000);
                               } catch {
-                                alert(t('messages.copyFailed'));
+                                addToast(t('messages.copyFailed'), 'error');
                               }
                             }}
                             rows="5"
@@ -2360,7 +2396,7 @@ function Wallet() {
           <>
             <div className="transaction-list">
               {transactions.slice(0, displayedTxCount).map(tx => (
-                <div key={tx.id} className="transaction-item">
+                <div key={`${tx.id}-${txUpdateCounter}`} className="transaction-item">
                   <div className="tx-icon">
                     <Icon
                       name={
