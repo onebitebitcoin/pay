@@ -250,74 +250,6 @@ function Wallet() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [ecashBalance]);
 
-  // Generate QR code for main display
-  useEffect(() => {
-    if (invoice && document.getElementById('main-qr-canvas')) {
-      const canvas = document.getElementById('main-qr-canvas');
-      if (!canvas) return;
-      
-      // Reset the QR loaded state while we're drawing
-      setQrLoaded(false);
-      
-      const qrData = (invoice || '').toLowerCase().startsWith('ln') ? `lightning:${invoice}` : invoice;
-      QRCode.toCanvas(canvas, qrData, {
-        width: 300,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        },
-        errorCorrectionLevel: 'H'  // High error correction for better recognition
-      }, (error) => {
-        if (error) {
-          console.error('Main QR Code generation error:', error);
-        } else {
-          // Add logo in the center after QR code is drawn
-          const ctx = canvas.getContext('2d');
-          const centerX = canvas.width / 2;
-          const centerY = canvas.height / 2;
-          const logoSize = canvas.width * 0.2; // 20% of canvas size
-          
-          // Create image element for the logo
-          const logoImg = new Image();
-          logoImg.crossOrigin = 'anonymous';
-          logoImg.src = '/logo-192.png';
-          logoImg.onload = () => {
-            // Draw the logo in the center with a white circle background
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, logoSize/2 + 4, 0, 2 * Math.PI);
-            ctx.fillStyle = 'white';
-            ctx.fill();
-            
-            // Draw the logo in the center
-            ctx.drawImage(
-              logoImg,
-              centerX - logoSize / 2,
-              centerY - logoSize / 2,
-              logoSize,
-              logoSize
-            );
-            
-            // Set QR as loaded after everything is drawn
-            setQrLoaded(true);
-          };
-          logoImg.onerror = (err) => {
-            console.error('Failed to load main QR logo:', err);
-            // Still mark as loaded even if logo fails
-            setQrLoaded(true);
-          };
-        }
-      });
-    } else if (invoice && !document.getElementById('main-qr-canvas')) {
-      // If the canvas element doesn't exist yet (likely due to timing), 
-      // we'll try again on the next render
-      const timer = setTimeout(() => {
-        setQrLoaded(false);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [invoice]);
-
   // Generate QR code for modal
   useEffect(() => {
     if (showQrModal && invoice && qrCanvasRef.current) {
@@ -329,7 +261,7 @@ function Wallet() {
           dark: '#000000',
           light: '#FFFFFF'
         },
-        errorCorrectionLevel: 'H'  // High error correction for better recognition
+        errorCorrectionLevel: 'M'
       }, (error) => {
         if (error) {
           console.error('QR Code generation error:', error);
@@ -346,12 +278,6 @@ function Wallet() {
           logoImg.crossOrigin = 'anonymous';
           logoImg.src = '/logo-192.png';
           logoImg.onload = () => {
-            // Draw the logo in the center with a white circle background
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, logoSize/2 + 4, 0, 2 * Math.PI);
-            ctx.fillStyle = 'white';
-            ctx.fill();
-            
             // Draw the logo in the center
             ctx.drawImage(
               logoImg,
@@ -2087,18 +2013,25 @@ function Wallet() {
                     <div className="invoice-loading">
                       <div className="loading-spinner"></div>
                       <p>{t('wallet.generatingInvoice')}</p>
+                      {invoice && (
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                          alt="Loading QR"
+                          style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                          onLoad={() => setQrLoaded(true)}
+                          onError={() => setQrLoaded(true)}
+                        />
+                      )}
                     </div>
                   ) : (
                     <>
                       <div className="invoice-section receive-invoice">
                         <div className="qr-placeholder">
                           <div className="qr-code-wrapper" onClick={() => setShowQrModal(true)} style={{ cursor: 'pointer' }}>
-                            <canvas 
-                              className="qr-image" 
-                              id="main-qr-canvas"
-                              width="300" 
-                              height="300"
-                              style={{ display: 'block' }}
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                              alt="Lightning Invoice QR"
+                              className="qr-image"
                             />
                             <div className="qr-logo-overlay">
                               <img src="/logo-192.png" alt="Logo" className="qr-logo" />
