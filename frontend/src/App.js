@@ -9,8 +9,6 @@ import Settings from './pages/Settings';
 import AddStore from './pages/AddStore';
 import TransactionDetail from './pages/TransactionDetail';
 import PaymentSuccess from './pages/PaymentSuccess';
-// Removed WebSocket functionality - using polling instead
-
 function AppContent() {
   return (
     <Router>

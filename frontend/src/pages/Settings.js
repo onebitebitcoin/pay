@@ -7,7 +7,6 @@ import Icon from '../components/Icon';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  // Removed WebSocket functionality - using polling instead
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
     walletName: '',
@@ -28,9 +27,6 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [wsDebugLogs, setWsDebugLogs] = useState([]);
-  const [testMessage, setTestMessage] = useState('{"type":"ping","timestamp":' + Date.now() + '}');
-
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
     'https://mint.cubabitcoin.org',
@@ -253,9 +249,6 @@ function Settings() {
       }
     }
   };
-
-  // Removed WebSocket functionality - using polling instead
-
 
   return (
     <>

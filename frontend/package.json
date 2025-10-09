@@ -6,6 +6,7 @@
     "@cashu/cashu-ts": "github:cashubtc/cashu-ts",
     "axios": "^1.5.0",
     "i18next": "^25.5.3",
+    "leaflet": "^1.9.4",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",

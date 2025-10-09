@@ -28,8 +28,6 @@ const normalizeQrValue = (rawValue = '') => {
 
 function Wallet() {
   const { t, i18n } = useTranslation();
-  // Removed WebSocket functionality - using polling instead
-
   useEffect(() => {
     document.title = t('pageTitle.wallet');
   }, [t, i18n.language]);
@@ -117,6 +115,8 @@ function Wallet() {
   const sendOriginRef = useRef('/wallet');
   const isReceiveView = location.pathname === '/wallet/receive';
   const isSendView = location.pathname === '/wallet/send';
+
+  const networkDisconnectedMessage = t('wallet.networkDisconnected');
 
   const clearPendingMint = useCallback(() => {
     pendingMintRef.current = null;
@@ -576,71 +576,6 @@ function Wallet() {
     await loadWalletData();
     console.log('[processPaymentNotification] Completed');
   }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
-
-  // Function to check for any missed payments after WebSocket reconnection
-  const checkForMissedPayments = useCallback(async () => {
-    console.log('[checkForMissedPayments] Checking for missed payments after WebSocket reconnection...');
-    
-    try {
-      // Check the last quote that was generated
-      const lastQuote = localStorage.getItem('cashu_last_quote');
-      if (lastQuote) {
-        await checkAndProcessQuotePayment(lastQuote);
-      }
-
-      // Also check any pending mint that might have been processed
-      try {
-        const pendingMintData = localStorage.getItem(PENDING_MINT_STORAGE_KEY);
-        if (pendingMintData) {
-          const pendingMint = JSON.parse(pendingMintData);
-          if (pendingMint && pendingMint.quote) {
-            await checkAndProcessQuotePayment(pendingMint.quote);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to check pending mint:', err);
-      }
-    } catch (error) {
-      console.error('[checkForMissedPayments] Error checking for missed payments:', error);
-    }
-  }, [PENDING_MINT_STORAGE_KEY, apiUrl, t, transactions]);
-
-  // Helper function to check and process a specific quote payment
-  const checkAndProcessQuotePayment = useCallback(async (quoteId) => {
-    try {
-      // Check if payment was completed while app was disconnected
-      const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${quoteId}`));
-      if (resultResp.ok) {
-        const data = await resultResp.json();
-        console.log('[checkAndProcessQuotePayment] Found payment result for quote:', quoteId, data);
-
-        // Check if this quote hasn't been processed yet
-        const existingTx = transactions.find(tx => tx.quoteId === quoteId);
-        
-        if (!existingTx) {
-          console.log('[checkAndProcessQuotePayment] Processing missed payment notification for quote:', quoteId);
-          
-          // Dispatch custom event to trigger the same processing as WebSocket message
-          window.dispatchEvent(new CustomEvent('payment_received', {
-            detail: {
-              amount: data.amount,
-              quote: data.quote,
-              timestamp: data.timestamp,
-              signatures: data.signatures,
-              keysetId: data.keysetId,
-              memo: data.memo || ''
-            }
-          }));
-        } else {
-          console.log('[checkAndProcessQuotePayment] Payment for quote already processed in transactions:', quoteId);
-        }
-      } else {
-        console.log('[checkAndProcessQuotePayment] No completed payment found for quote:', quoteId);
-      }
-    } catch (error) {
-      console.error('[checkAndProcessQuotePayment] Error checking payment for quote:', quoteId, error);
-    }
-  }, [apiUrl, transactions]);
 
   // Polling function to check invoice status
   const startInvoicePolling = useCallback((quoteId, amount) => {
@@ -1815,9 +1750,7 @@ function Wallet() {
             <div className="send-card-body">
               {!isConnected ? (
                 <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                  {t('wallet.networkDisconnected', {
-                    mintStatus: !isConnected ? t('wallet.mintConnection') : ''
-                  })}
+                  {networkDisconnectedMessage}
                 </div>
               ) : null}
               {enableSendScanner ? (
@@ -1930,9 +1863,7 @@ function Wallet() {
                     <>
                       {!isConnected ? (
                         <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                          {t('wallet.networkDisconnected', {
-                            mintStatus: !isConnected ? t('wallet.mintConnection') : ''
-                          })}
+                          {networkDisconnectedMessage}
                         </div>
                       ) : null}
                       <div className="input-group">
@@ -2137,9 +2068,7 @@ function Wallet() {
           <div className="balance-actions">
             {!isConnected ? (
               <div className="network-warning">
-                {t('wallet.networkDisconnected', {
-                  mintStatus: !isConnected ? t('wallet.mintConnection') : ''
-                })}
+                {networkDisconnectedMessage}
               </div>
             ) : (
               <>

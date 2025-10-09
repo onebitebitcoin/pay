@@ -8,6 +8,7 @@ function AddStore() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const [submitLoading, setSubmitLoading] = useState(false);
+  const isKorean = i18n.language === 'ko';
 
   useEffect(() => {
     document.title = t('pageTitle.addStore');
@@ -24,8 +25,18 @@ function AddStore() {
   });
   const [newStore, setNewStore] = useState(createEmptyStore);
   const geocoderRef = useRef(null);
+  const geocodeAbortRef = useRef(null);
 
   useEffect(() => {
+    if (!isKorean) {
+      geocoderRef.current = null;
+      if (geocodeAbortRef.current) {
+        geocodeAbortRef.current.abort();
+        geocodeAbortRef.current = null;
+      }
+      return undefined;
+    }
+
     let cancelled = false;
     loadKakaoSdk()
       .then(() => {
@@ -41,24 +52,78 @@ function AddStore() {
 
     return () => {
       cancelled = true;
+      if (geocodeAbortRef.current) {
+        geocodeAbortRef.current.abort();
+        geocodeAbortRef.current = null;
+      }
     };
-  }, []);
+  }, [isKorean]);
 
-  const geocodeAddress = () => {
-    if (!geocoderRef.current || !newStore.address) return;
-    geocoderRef.current.addressSearch(newStore.address, (result, status) => {
-      if (status === window.kakao.maps.services.Status.OK && result && result.length) {
-        const { x, y } = result[0];
-        const lat = parseFloat(y);
-        const lng = parseFloat(x);
-        setNewStore((prev) => ({ ...prev, lat, lng }));
+  const geocodeAddress = async () => {
+    const addressQuery = (newStore.address || '').trim();
+    if (!addressQuery) return;
+
+    if (isKorean) {
+      if (!geocoderRef.current) return;
+      geocoderRef.current.addressSearch(addressQuery, (result, status) => {
+        if (status === window.kakao.maps.services.Status.OK && result && result.length) {
+          const { x, y } = result[0];
+          const lat = parseFloat(y);
+          const lng = parseFloat(x);
+          setNewStore((prev) => ({ ...prev, lat, lng }));
+        } else {
+          alert(t('messages.addressNotFound'));
+        }
+      });
+      return;
+    }
+
+    try {
+      if (geocodeAbortRef.current) {
+        geocodeAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      geocodeAbortRef.current = controller;
+      const params = new URLSearchParams({
+        format: 'json',
+        limit: '1',
+        addressdetails: '0',
+        q: addressQuery,
+      });
+      const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+        headers: {
+          'Accept-Language': i18n.language,
+          'Accept': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      geocodeAbortRef.current = null;
+      if (!resp.ok) {
+        throw new Error('Geocoding failed');
+      }
+      const data = await resp.json();
+      if (Array.isArray(data) && data.length) {
+        const { lat, lon } = data[0];
+        setNewStore((prev) => ({ ...prev, lat: parseFloat(lat), lng: parseFloat(lon) }));
       } else {
         alert(t('messages.addressNotFound'));
       }
-    });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      console.error('OpenStreetMap geocoding failed:', error);
+      alert(t('messages.addressSearchNotReady'));
+    }
   };
 
   const openAddressSearch = () => {
+    if (!isKorean) {
+      const query = newStore.address ? encodeURIComponent(newStore.address) : '';
+      window.open(`https://www.openstreetmap.org/search?query=${query}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     if (!window.daum) {
       alert(t('messages.addressSearchNotReady'));
       return;
@@ -92,7 +157,7 @@ function AddStore() {
       return;
     }
     if (lat == null || lng == null) {
-      geocodeAddress();
+      await geocodeAddress();
       alert(t('messages.geocoding'));
       return;
     }

@@ -3,10 +3,30 @@ import { useTranslation } from 'react-i18next';
 import './StoreFinder.css';
 import Icon from '../components/Icon';
 import { apiUrl, loadKakaoSdk } from '../config';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+const STORE_MARKER_SVG = `
+  <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+    <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="#2563eb"/>
+    <circle cx="15" cy="15" r="10" fill="#ffffff"/>
+    <text x="15" y="19" text-anchor="middle" fill="#2563eb" font-size="12" font-weight="bold">B</text>
+  </svg>
+`;
+const STORE_MARKER_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(STORE_MARKER_SVG);
+
+const USER_MARKER_SVG = `
+  <svg width="24" height="35" viewBox="0 0 24 35" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 0C5.4 0 0 5.4 0 12c0 8.6 12 23 12 23s12-14.4 12-23C24 5.4 18.6 0 12 0z" fill="#facc15"/>
+    <path d="M12 6l1.9 3.8 4.2.6-3.1 3 0.7 4.3-3.7-1.9-3.7 1.9 0.7-4.3-3.1-3 4.2-.6L12 6z" fill="#1f2937"/>
+  </svg>
+`;
+const USER_MARKER_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(USER_MARKER_SVG);
 
 function StoreFinder() {
   const { t, i18n } = useTranslation();
   const [stores, setStores] = useState([]);
+  const isKakao = i18n.language === 'ko';
 
   // Helper function to get localized store name
   const getStoreName = (store) => {
@@ -51,12 +71,57 @@ function StoreFinder() {
   const infowindowsRef = useRef([]);
   const userMarkerRef = useRef(null);
   const currentInfowindowRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const leafletMarkersRef = useRef([]);
+  const leafletUserMarkerRef = useRef(null);
+  const currentLeafletPopupRef = useRef(null);
+  const latestFilteredStoresRef = useRef([]);
 
   useEffect(() => {
     fetchStores();
   }, []);
 
+  const resetKakaoArtifacts = () => {
+    markersRef.current.forEach(marker => {
+      if (marker && typeof marker.setMap === 'function') {
+        marker.setMap(null);
+      }
+    });
+    markersRef.current = [];
+    infowindowsRef.current = [];
+    if (userMarkerRef.current && typeof userMarkerRef.current.setMap === 'function') {
+      userMarkerRef.current.setMap(null);
+    }
+    userMarkerRef.current = null;
+    currentInfowindowRef.current = null;
+  };
+
+  const clearLeafletStoreMarkers = () => {
+    leafletMarkersRef.current.forEach(item => {
+      if (item && item.marker) {
+        item.marker.remove();
+      }
+    });
+    leafletMarkersRef.current = [];
+    currentLeafletPopupRef.current = null;
+  };
+
+  const resetLeafletArtifacts = () => {
+    clearLeafletStoreMarkers();
+    if (leafletUserMarkerRef.current) {
+      leafletUserMarkerRef.current.remove();
+    }
+    leafletUserMarkerRef.current = null;
+    currentLeafletPopupRef.current = null;
+  };
+
   useEffect(() => {
+    if (!isKakao) {
+      resetKakaoArtifacts();
+      kakaoMapRef.current = null;
+      return undefined;
+    }
+
     let cancelled = false;
     loadKakaoSdk()
       .then(() => {
@@ -68,12 +133,56 @@ function StoreFinder() {
 
     return () => {
       cancelled = true;
+      resetKakaoArtifacts();
+      kakaoMapRef.current = null;
     };
-  }, []);
+  }, [isKakao]);
+
+  useEffect(() => {
+    if (isKakao) {
+      resetLeafletArtifacts();
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+      return undefined;
+    }
+
+    const container = mapRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    container.innerHTML = '';
+    const mapInstance = L.map(container, {
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([37.5665, 126.9780], 12);
+
+    const tileLayerUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileLayerUrl, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(mapInstance);
+
+    leafletMapRef.current = mapInstance;
+    updateMapMarkers(latestFilteredStoresRef.current);
+
+    return () => {
+      resetLeafletArtifacts();
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [isKakao]);
 
   useEffect(() => {
     filterStores();
-  }, [searchQuery, stores, selectedCategory, sortByDistance, userLocation]); // eslint-disable-line react-hooks/exhaustive-deps
+    // We intentionally skip filterStores dependency to avoid recreation loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, stores, selectedCategory, sortByDistance, userLocation, isKakao, i18n.language]);
 
   const categories = [null, ...new Set(stores.map(s => s.category).filter(Boolean))];
 
@@ -104,7 +213,7 @@ function StoreFinder() {
         setSortByDistance(true);
 
         // Move map to user location
-        if (kakaoMapRef.current && window.kakao) {
+        if (isKakao && kakaoMapRef.current && window.kakao) {
           const moveLatLon = new window.kakao.maps.LatLng(latitude, longitude);
           kakaoMapRef.current.setCenter(moveLatLon);
           kakaoMapRef.current.setLevel(5); // Level 5 shows approximately 1-2km radius
@@ -114,9 +223,8 @@ function StoreFinder() {
             userMarkerRef.current.setMap(null);
           }
 
-          const imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
           const imageSize = new window.kakao.maps.Size(24, 35);
-          const markerImage = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
+          const markerImage = new window.kakao.maps.MarkerImage(USER_MARKER_ICON, imageSize);
 
           const marker = new window.kakao.maps.Marker({
             position: moveLatLon,
@@ -126,6 +234,28 @@ function StoreFinder() {
 
           marker.setMap(kakaoMapRef.current);
           userMarkerRef.current = marker;
+        } else if (!isKakao && leafletMapRef.current) {
+          const mapInstance = leafletMapRef.current;
+          mapInstance.setView([latitude, longitude], 13);
+
+          if (leafletUserMarkerRef.current) {
+            leafletUserMarkerRef.current.remove();
+          }
+
+          const userIcon = L.icon({
+            iconUrl: USER_MARKER_ICON,
+            iconSize: [24, 35],
+            iconAnchor: [12, 34],
+            popupAnchor: [0, -28],
+          });
+
+          const marker = L.marker([latitude, longitude], {
+            icon: userIcon,
+            title: t('storeFinder.myLocation'),
+          }).addTo(mapInstance);
+
+          marker.bindPopup(`<strong>${t('storeFinder.myLocation')}</strong>`);
+          leafletUserMarkerRef.current = marker;
         }
 
         setLoadingLocation(false);
@@ -169,41 +299,34 @@ function StoreFinder() {
 
     window.kakao.maps.load(() => {
       const container = mapRef.current;
+      if (!container) {
+        return;
+      }
+      container.innerHTML = '';
       const options = {
         center: new window.kakao.maps.LatLng(37.5665, 126.9780), // Seoul
         level: 6
       };
 
       kakaoMapRef.current = new window.kakao.maps.Map(container, options);
+      updateMapMarkers(latestFilteredStoresRef.current);
     });
   };
 
-  const updateMapMarkers = (storeData) => {
+  const updateKakaoMarkers = (storeData) => {
     if (!kakaoMapRef.current || !window.kakao) return;
 
-    // Clear existing markers and infowindows
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
     infowindowsRef.current = [];
 
-    // Create custom marker image for Bitcoin stores
-    const svgIcon = `
-      <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="#2563eb"/>
-        <circle cx="15" cy="15" r="10" fill="#ffffff"/>
-        <text x="15" y="19" text-anchor="middle" fill="#2563eb" font-size="12" font-weight="bold">B</text>
-      </svg>
-    `;
-    const imageSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
-    
     const imageSize = new window.kakao.maps.Size(30, 40);
     const imageOption = { offset: new window.kakao.maps.Point(15, 40) };
-    const markerImage = new window.kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+    const markerImage = new window.kakao.maps.MarkerImage(STORE_MARKER_ICON, imageSize, imageOption);
 
-    // Add new markers
     storeData.forEach(store => {
       const markerPosition = new window.kakao.maps.LatLng(store.lat, store.lng);
-      
+
       const storeName = getStoreName(store);
       const storeAddress = getStoreAddress(store);
 
@@ -217,7 +340,6 @@ function StoreFinder() {
 
       const storeCategory = getStoreCategory(store);
 
-      // Create info window
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `
           <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
@@ -254,9 +376,7 @@ function StoreFinder() {
         `
       });
 
-      // Add click event to marker
       window.kakao.maps.event.addListener(marker, 'click', () => {
-        // Close previous infowindow
         if (currentInfowindowRef.current) {
           currentInfowindowRef.current.close();
         }
@@ -264,7 +384,6 @@ function StoreFinder() {
         infowindow.open(kakaoMapRef.current, marker);
         currentInfowindowRef.current = infowindow;
 
-        // Attach click event to detail button after infowindow is rendered
         setTimeout(() => {
           const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
           if (detailBtn) {
@@ -281,13 +400,109 @@ function StoreFinder() {
       infowindowsRef.current.push({ storeId: store.id, marker, infowindow });
     });
 
-    // Adjust map bounds to show all markers (skip if user location mode is active)
     if (storeData.length > 0 && !sortByDistance) {
       const bounds = new window.kakao.maps.LatLngBounds();
       storeData.forEach(store => {
         bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
       });
       kakaoMapRef.current.setBounds(bounds);
+    }
+  };
+
+  const updateLeafletMarkers = (storeData) => {
+    if (!leafletMapRef.current) {
+      return;
+    }
+
+    clearLeafletStoreMarkers();
+
+    const markerIcon = L.icon({
+      iconUrl: STORE_MARKER_ICON,
+      iconSize: [30, 40],
+      iconAnchor: [15, 40],
+      popupAnchor: [0, -32],
+    });
+
+    storeData.forEach(store => {
+      const storeName = getStoreName(store);
+      const storeAddress = getStoreAddress(store);
+      const storeCategory = getStoreCategory(store);
+
+      const marker = L.marker([store.lat, store.lng], {
+        icon: markerIcon,
+        title: storeName,
+      }).addTo(leafletMapRef.current);
+
+      const popupContent = `
+        <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
+          <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${storeName}</h3>
+          <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${storeCategory}</p>
+          <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${storeAddress}</p>
+          <button
+            id="store-detail-btn-${store.id}"
+            style="
+              padding: 6px 12px;
+              background: #2563eb;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              transition: background 0.2s;
+            "
+            onmouseover="this.style.background='#1d4ed8'"
+            onmouseout="this.style.background='#2563eb'"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            ${t('storeFinder.viewDetails')}
+          </button>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent);
+
+      marker.on('popupopen', () => {
+        currentLeafletPopupRef.current = marker.getPopup();
+        setTimeout(() => {
+          const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
+          if (detailBtn) {
+            detailBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openStoreDetail(store);
+            };
+          }
+        }, 0);
+      });
+
+      marker.on('popupclose', () => {
+        if (currentLeafletPopupRef.current === marker.getPopup()) {
+          currentLeafletPopupRef.current = null;
+        }
+      });
+
+      leafletMarkersRef.current.push({ storeId: store.id, marker });
+    });
+
+    if (storeData.length > 0 && !sortByDistance) {
+      const bounds = L.latLngBounds(storeData.map(store => [store.lat, store.lng]));
+      leafletMapRef.current.fitBounds(bounds, { padding: [40, 40] });
+    }
+  };
+
+  const updateMapMarkers = (storeData) => {
+    if (isKakao) {
+      updateKakaoMarkers(storeData);
+    } else {
+      updateLeafletMarkers(storeData);
     }
   };
 
@@ -317,11 +532,12 @@ function StoreFinder() {
     }
 
     setFilteredStores(filtered);
+    latestFilteredStoresRef.current = filtered;
     updateMapMarkers(filtered);
   };
 
   const handleStoreClick = (store) => {
-    if (kakaoMapRef.current && window.kakao) {
+    if (isKakao && kakaoMapRef.current && window.kakao) {
       const moveLatLon = new window.kakao.maps.LatLng(store.lat, store.lng);
       kakaoMapRef.current.setCenter(moveLatLon);
       kakaoMapRef.current.setLevel(3); // Zoom in
@@ -348,6 +564,12 @@ function StoreFinder() {
             };
           }
         }, 100);
+      }
+    } else if (!isKakao && leafletMapRef.current) {
+      leafletMapRef.current.setView([store.lat, store.lng], 15);
+      const storeMarkerData = leafletMarkersRef.current.find(item => item.storeId === store.id);
+      if (storeMarkerData) {
+        storeMarkerData.marker.openPopup();
       }
     }
   };
