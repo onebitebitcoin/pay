@@ -1,50 +1,46 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import QrScannerLib from 'qr-scanner';
 
 function QrScanner({ onScan, onError, className = '' }) {
+  const videoRef = useRef(null);
   const scannerRef = useRef(null);
-  const elementIdRef = useRef(`qr-scanner-${Math.random().toString(36).substring(7)}`);
   const [errorMessage, setErrorMessage] = useState('');
   const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     let scanner = null;
-    const elementId = elementIdRef.current;
 
     async function startScanner() {
       try {
-        scanner = new Html5Qrcode(elementId);
-        scannerRef.current = scanner;
+        if (!videoRef.current) return;
 
-        // Optimized config for better performance
-        const config = {
-          fps: 20, // Increased from 10 to 20 for faster scanning
-          qrbox: { width: 250, height: 250 }, // Smaller box for better performance
-          aspectRatio: 1.0,
-          // Additional optimizations
-          experimentalFeatures: {
-            useBarCodeDetectorIfSupported: true
-          }
-        };
-
-        await scanner.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
+        // Create scanner instance
+        scanner = new QrScannerLib(
+          videoRef.current,
+          (result) => {
             // Success callback
-            if (decodedText && typeof onScan === 'function') {
-              onScan(decodedText.trim());
+            if (result && typeof onScan === 'function') {
+              onScan(result.data.trim());
               // Stop scanner after successful scan
-              if (scanner && scanner.isScanning) {
-                scanner.stop().catch(err => console.error('Failed to stop scanner:', err));
+              if (scanner) {
+                scanner.stop();
               }
             }
           },
-          (errorMessage) => {
-            // Error callback - we can ignore these as they're mostly "no QR code found" messages
+          {
+            // High-quality scanning settings
+            returnDetailedScanResult: true,
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+            maxScansPerSecond: 10,
+            preferredCamera: 'environment'
           }
         );
 
+        scannerRef.current = scanner;
+
+        // Start scanning
+        await scanner.start();
         setIsScanning(true);
       } catch (err) {
         let message = err?.message || '카메라를 시작할 수 없습니다.';
@@ -61,14 +57,9 @@ function QrScanner({ onScan, onError, className = '' }) {
     startScanner();
 
     return () => {
-      if (scanner && scanner.isScanning) {
-        scanner.stop()
-          .then(() => {
-            scanner.clear();
-          })
-          .catch(err => {
-            console.error('Failed to stop scanner:', err);
-          });
+      if (scanner) {
+        scanner.stop();
+        scanner.destroy();
       }
       scannerRef.current = null;
     };
@@ -83,7 +74,7 @@ function QrScanner({ onScan, onError, className = '' }) {
         </div>
       ) : (
         <div className="qr-scanner__viewport">
-          <div id={elementIdRef.current} style={{ width: '100%' }} />
+          <video ref={videoRef} style={{ width: '100%', maxWidth: '100%' }} />
           {!isScanning && (
             <div className="qr-scanner__hint">카메라를 시작하는 중...</div>
           )}

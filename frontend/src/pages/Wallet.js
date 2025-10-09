@@ -261,7 +261,7 @@ function Wallet() {
           dark: '#000000',
           light: '#FFFFFF'
         },
-        errorCorrectionLevel: 'M'
+        errorCorrectionLevel: 'H'  // High error correction for better recognition
       }, (error) => {
         if (error) {
           console.error('QR Code generation error:', error);
@@ -278,6 +278,12 @@ function Wallet() {
           logoImg.crossOrigin = 'anonymous';
           logoImg.src = '/logo-192.png';
           logoImg.onload = () => {
+            // Draw white circle background for better contrast
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, logoSize/2 + 6, 0, 2 * Math.PI);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+
             // Draw the logo in the center
             ctx.drawImage(
               logoImg,
