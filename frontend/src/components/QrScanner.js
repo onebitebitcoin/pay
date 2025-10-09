@@ -28,16 +28,16 @@ function QrScanner({ onScan, onError, className = '' }) {
             }
           },
           {
-            // High-quality scanning settings
+            // Maximum performance scanning settings
             returnDetailedScanResult: true,
             highlightScanRegion: true,
             highlightCodeOutline: true,
-            maxScansPerSecond: 40,
+            maxScansPerSecond: 60, // Maximum scan rate for highest performance
             preferredCamera: 'environment',
             calculateScanRegion: (video) => {
               // Use a very large scan region for maximum recognition
               const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-              const scanRegionSize = Math.round(0.9 * smallestDimension);
+              const scanRegionSize = Math.round(0.95 * smallestDimension);
               return {
                 x: Math.round((video.videoWidth - scanRegionSize) / 2),
                 y: Math.round((video.videoHeight - scanRegionSize) / 2),
@@ -50,9 +50,16 @@ function QrScanner({ onScan, onError, className = '' }) {
 
         scannerRef.current = scanner;
 
-        // Start scanning with advanced camera constraints
+        // Enable inversion mode to scan both normal and inverted QR codes
+        // This significantly improves recognition rate
+        scanner.setInversionMode('both');
+
+        // Start scanning with advanced camera constraints for maximum performance
         const constraints = {
           facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 60 },
           advanced: [
             { focusMode: 'continuous' },
             { focusDistance: 0 }
@@ -64,7 +71,16 @@ function QrScanner({ onScan, onError, className = '' }) {
         } catch (err) {
           // Fallback to basic constraints if advanced features are not supported
           console.log('Advanced camera features not supported, using basic constraints');
-          await scanner.start({ facingMode: 'environment' });
+          try {
+            await scanner.start({
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            });
+          } catch (err2) {
+            // Final fallback to minimal constraints
+            await scanner.start({ facingMode: 'environment' });
+          }
         }
 
         setIsScanning(true);

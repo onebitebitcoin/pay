@@ -1538,6 +1538,11 @@
   width: clamp(240px, 70vw, 400px);
   height: auto;
   display: block;
+  background: #ffffff;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .qr-logo-overlay {
@@ -1784,6 +1789,7 @@
 
   .receive-invoice .qr-image {
     width: clamp(240px, 75vw, 350px);
+    padding: 1rem;
   }
 
   .invoice-info-grid {
@@ -1866,6 +1872,7 @@
 
   .receive-invoice .qr-image {
     width: clamp(200px, 85vw, 300px);
+    padding: 0.875rem;
   }
 }
 
