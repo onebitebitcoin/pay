@@ -61,8 +61,9 @@ function QrScanner({ onScan, onError, className = '' }) {
           height: { ideal: 1080 },
           frameRate: { ideal: 60 },
           advanced: [
-            { focusMode: 'continuous' },
-            { focusDistance: 0 }
+            { focusMode: 'continuous' }
+            // Note: focusDistance removed to allow camera to auto-focus on close objects
+            // focusDistance: 0 means infinity, which causes blur at close range
           ]
         };
 
@@ -85,22 +86,36 @@ function QrScanner({ onScan, onError, className = '' }) {
 
         setIsScanning(true);
 
-        // Try to enable torch (flash) for better scanning in low light
+        // Try to optimize camera settings for QR scanning
         // This is optional and may not be supported on all devices
         try {
           const videoTrack = videoRef.current?.srcObject?.getVideoTracks?.()?.[0];
           if (videoTrack && videoTrack.getCapabilities) {
             const capabilities = videoTrack.getCapabilities();
-            if (capabilities.torch) {
-              // Torch is available but we won't turn it on by default
-              // Users can add a toggle button if needed
+            const constraintsToApply = { advanced: [] };
+
+            // Apply continuous autofocus for close-range scanning
+            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+              constraintsToApply.advanced.push({ focusMode: 'continuous' });
             }
 
-            // Apply autofocus if available
-            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
-              await videoTrack.applyConstraints({
-                advanced: [{ focusMode: 'continuous' }]
-              });
+            // Set focus distance for close-range QR codes if supported
+            // focusDistance: 0 = infinity, 1 = closest
+            // Using 0.5-0.8 range for optimal QR code scanning at typical distances
+            if (capabilities.focusDistance) {
+              const { min, max } = capabilities.focusDistance;
+              // Try to set focus to mid-close range (good for QR codes at 10-30cm)
+              const optimalDistance = Math.min(max, Math.max(min, 0.7));
+              try {
+                constraintsToApply.advanced.push({ focusDistance: optimalDistance });
+              } catch (e) {
+                // Focus distance might not work, continue without it
+              }
+            }
+
+            // Apply the constraints if we have any
+            if (constraintsToApply.advanced.length > 0) {
+              await videoTrack.applyConstraints(constraintsToApply);
             }
           }
         } catch (err) {
