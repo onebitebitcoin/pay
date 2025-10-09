@@ -74,7 +74,7 @@ function QrScanner({ onScan, onError, className = '' }) {
         </div>
       ) : (
         <div className="qr-scanner__viewport">
-          <video ref={videoRef} style={{ width: '100%', maxWidth: '100%' }} />
+          <video ref={videoRef} className="qr-scanner__video" />
           {!isScanning && (
             <div className="qr-scanner__hint">카메라를 시작하는 중...</div>
           )}
