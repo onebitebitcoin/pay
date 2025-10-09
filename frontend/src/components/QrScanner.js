@@ -32,12 +32,12 @@ function QrScanner({ onScan, onError, className = '' }) {
             returnDetailedScanResult: true,
             highlightScanRegion: true,
             highlightCodeOutline: true,
-            maxScansPerSecond: 25,
+            maxScansPerSecond: 40,
             preferredCamera: 'environment',
             calculateScanRegion: (video) => {
-              // Use a larger scan region for better recognition
+              // Use a very large scan region for maximum recognition
               const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-              const scanRegionSize = Math.round(0.7 * smallestDimension);
+              const scanRegionSize = Math.round(0.9 * smallestDimension);
               return {
                 x: Math.round((video.videoWidth - scanRegionSize) / 2),
                 y: Math.round((video.videoHeight - scanRegionSize) / 2),
