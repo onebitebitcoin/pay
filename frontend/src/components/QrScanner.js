@@ -32,16 +32,64 @@ function QrScanner({ onScan, onError, className = '' }) {
             returnDetailedScanResult: true,
             highlightScanRegion: true,
             highlightCodeOutline: true,
-            maxScansPerSecond: 10,
-            preferredCamera: 'environment'
+            maxScansPerSecond: 25,
+            preferredCamera: 'environment',
+            calculateScanRegion: (video) => {
+              // Use a larger scan region for better recognition
+              const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
+              const scanRegionSize = Math.round(0.7 * smallestDimension);
+              return {
+                x: Math.round((video.videoWidth - scanRegionSize) / 2),
+                y: Math.round((video.videoHeight - scanRegionSize) / 2),
+                width: scanRegionSize,
+                height: scanRegionSize,
+              };
+            }
           }
         );
 
         scannerRef.current = scanner;
 
-        // Start scanning
-        await scanner.start();
+        // Start scanning with advanced camera constraints
+        const constraints = {
+          facingMode: 'environment',
+          advanced: [
+            { focusMode: 'continuous' },
+            { focusDistance: 0 }
+          ]
+        };
+
+        try {
+          await scanner.start(constraints);
+        } catch (err) {
+          // Fallback to basic constraints if advanced features are not supported
+          console.log('Advanced camera features not supported, using basic constraints');
+          await scanner.start({ facingMode: 'environment' });
+        }
+
         setIsScanning(true);
+
+        // Try to enable torch (flash) for better scanning in low light
+        // This is optional and may not be supported on all devices
+        try {
+          const videoTrack = videoRef.current?.srcObject?.getVideoTracks?.()?.[0];
+          if (videoTrack && videoTrack.getCapabilities) {
+            const capabilities = videoTrack.getCapabilities();
+            if (capabilities.torch) {
+              // Torch is available but we won't turn it on by default
+              // Users can add a toggle button if needed
+            }
+
+            // Apply autofocus if available
+            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+              await videoTrack.applyConstraints({
+                advanced: [{ focusMode: 'continuous' }]
+              });
+            }
+          }
+        } catch (err) {
+          console.log('Could not apply advanced video constraints:', err);
+        }
       } catch (err) {
         let message = err?.message || '카메라를 시작할 수 없습니다.';
         if (err?.name === 'NotAllowedError' || message.includes('Permission')) {
