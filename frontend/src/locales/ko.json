@@ -118,6 +118,7 @@
     "invalid": "사용 불가",
     "scanQrToPayHint": "QR 코드를 스캔하여 결제하세요",
     "qrInstruction": "QR 코드가 프레임을 가득 채우도록 가까이 가져오세요.",
+    "tapToZoom": "클릭하여 크게 보기",
     "refocus": "초점 다시 맞추기",
     "torchOn": "플래시 켜기",
     "torchOff": "플래시 끄기",

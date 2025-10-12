@@ -1615,6 +1615,13 @@
   text-align: center;
 }
 
+.qr-zoom-hint {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .invoice-loading {
   display: flex;
   flex-direction: column;

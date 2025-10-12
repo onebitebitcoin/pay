@@ -118,6 +118,7 @@
     "invalid": "利用不可",
     "scanQrToPayHint": "QRコードをスキャンして決済してください",
     "qrInstruction": "QRコードが枠いっぱいになるように近づけてください。",
+    "tapToZoom": "クリックして拡大",
     "refocus": "再フォーカス",
     "torchOn": "ライトをオン",
     "torchOff": "ライトをオフ",

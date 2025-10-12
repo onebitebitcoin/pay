@@ -118,6 +118,7 @@
     "invalid": "Unavailable",
     "scanQrToPayHint": "Scan QR code to pay",
     "qrInstruction": "Move closer and centre the code inside the frame.",
+    "tapToZoom": "Click to enlarge",
     "refocus": "Refocus",
     "torchOn": "Turn torch on",
     "torchOff": "Turn torch off",

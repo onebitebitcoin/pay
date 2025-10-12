@@ -1923,6 +1923,7 @@ function Wallet() {
                             </div>
                           </div>
                           <div className="qr-amount-display">{formatAmount(receiveAmount)} sats</div>
+                          <div className="qr-zoom-hint">{t('wallet.tapToZoom')}</div>
                         </div>
                         <label>{t('wallet.tapToCopy')}</label>
                         <div className="invoice-input-wrapper">
