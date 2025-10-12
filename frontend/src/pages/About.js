@@ -68,7 +68,6 @@ function About() {
       <div className="hero">
         <div className="hero-content">
           <h1 className="hero-title">
-            <span className="bitcoin-icon"><Icon name="info" size={64} /></span>
             {t('about.title')}
           </h1>
           <p className="hero-subtitle">
@@ -126,7 +125,7 @@ function About() {
                         }}
                       >
                         <span>{faq.q}</span>
-                        <Icon name={isOpen ? 'close' : 'info'} size={20} />
+                        <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} />
                       </button>
                       {isOpen && (
                         <div
