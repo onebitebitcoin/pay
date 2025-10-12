@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL } from '../config';
 import './Settings.css';
 import Icon from '../components/Icon';
+import { applyTheme, normalizeTheme } from '../utils/theme';
 
 function Settings() {
   const { t, i18n } = useTranslation();
@@ -11,6 +12,7 @@ function Settings() {
   const [settings, setSettings] = useState({
     walletName: '',
     language: 'ko',
+    theme: 'light',
     currency: 'SATS',
     notifications: true,
     mintUrl: '',
@@ -54,6 +56,7 @@ function Settings() {
       const defaultSettings = {
         walletName: '',
         language: 'ko',
+        theme: 'light',
         currency: 'SATS',
         notifications: true,
         mintUrl: DEFAULT_MINT_URL,
@@ -67,18 +70,22 @@ function Settings() {
           ...defaultSettings,
           ...parsed,
           mintUrl: parsed.mintUrl || DEFAULT_MINT_URL,
-          backupMintUrl: parsed.backupMintUrl || ''
+          backupMintUrl: parsed.backupMintUrl || '',
+          theme: normalizeTheme(parsed.theme || defaultSettings.theme)
         };
         setSettings(merged);
+        applyTheme(merged.theme);
       } else {
         setSettings(defaultSettings);
         localStorage.setItem('app_settings', JSON.stringify(defaultSettings));
+        applyTheme(defaultSettings.theme);
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
       const fallback = {
         walletName: '',
         language: 'ko',
+        theme: 'light',
         currency: 'SATS',
         notifications: true,
         mintUrl: DEFAULT_MINT_URL,
@@ -87,6 +94,7 @@ function Settings() {
         pinEnabled: false
       };
       setSettings(fallback);
+      applyTheme(fallback.theme);
     }
   }, []);
 
@@ -100,16 +108,21 @@ function Settings() {
   };
 
   const handleSettingChange = (key, value) => {
+    const nextValue = key === 'theme' ? normalizeTheme(value) : value;
     const newSettings = {
       ...settings,
-      [key]: value
+      [key]: nextValue
     };
     setSettings(newSettings);
     saveSettings(newSettings);
 
     // Change language immediately when language setting changes
     if (key === 'language') {
-      i18n.changeLanguage(value);
+      i18n.changeLanguage(nextValue);
+    }
+
+    if (key === 'theme') {
+      applyTheme(nextValue);
     }
   };
 
@@ -229,16 +242,21 @@ function Settings() {
           localStorage.removeItem('cashu_backup_dismissed');
           localStorage.removeItem('app_pin');
 
+          const resetSettings = {
+            ...settings,
+            mintUrl: DEFAULT_MINT_URL,
+            pinEnabled: false,
+            theme: 'light'
+          };
+
           setSettings(prev => ({
             ...prev,
             mintUrl: DEFAULT_MINT_URL,
-            pinEnabled: false
+            pinEnabled: false,
+            theme: 'light'
           }));
-          saveSettings({
-            ...settings,
-            mintUrl: DEFAULT_MINT_URL,
-            pinEnabled: false
-          });
+          saveSettings(resetSettings);
+          applyTheme('light');
 
           addToast(t('messages.walletReset'), 'success');
           setTimeout(() => window.location.reload(), 1000);
@@ -298,6 +316,21 @@ function Settings() {
               <option value="ko">{t('settings.korean')}</option>
               <option value="en">{t('settings.english')}</option>
               <option value="ja">{t('settings.japanese')}</option>
+            </select>
+          </div>
+
+          <div className="setting-item">
+            <div className="setting-info">
+              <div className="setting-title">{t('settings.theme')}</div>
+              <div className="setting-description">{t('settings.themeDesc')}</div>
+            </div>
+            <select
+              value={settings.theme || 'light'}
+              onChange={(e) => handleSettingChange('theme', e.target.value)}
+              className="setting-select"
+            >
+              <option value="light">{t('settings.light')}</option>
+              <option value="dark">{t('settings.dark')}</option>
             </select>
           </div>
 

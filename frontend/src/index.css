@@ -5,7 +5,42 @@
 }
 
 :root {
-  color-scheme: light only;
+  color-scheme: light;
+  --bg: #f8fafc;
+  --bg-gradient: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 60%, #dbeafe 100%);
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --surface-bg: rgba(255, 255, 255, 0.85);
+  --text: #0f172a;
+  --muted: #475569;
+  --border: rgba(148, 163, 184, 0.35);
+  --primary: #2563eb;
+  --primary-600: #1d4ed8;
+  --primary-light: #60a5fa;
+  --primary-rgb: 37, 99, 235;
+  --secondary: #1e40af;
+  --secondary-600: #1e3a8a;
+  --secondary-rgb: 30, 64, 175;
+  --accent: #38bdf8;
+  --accent-600: #0ea5e9;
+  --accent-rgb: 56, 189, 248;
+  --success: #22c55e;
+  --success-rgb: 34, 197, 94;
+  --danger: #f87171;
+  --danger-rgb: 248, 113, 113;
+  --info: #38bdf8;
+  --info-rgb: 56, 189, 248;
+  --radius: 16px;
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.08);
+  --shadow-md: 0 8px 24px 0 rgb(15 23 42 / 0.12);
+  --shadow-lg: 0 20px 45px 0 rgb(15 23 42 / 0.16);
+}
+
+:root.light {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
   --bg: #0f172a;
   --bg-gradient: linear-gradient(180deg, #0f172a 0%, #111827 60%, #1f2937 100%);
   --card-bg: rgba(30, 41, 59, 0.88);

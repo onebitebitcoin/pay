@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import InstallPrompt from './components/InstallPrompt';
@@ -9,6 +9,8 @@ import Settings from './pages/Settings';
 import AddStore from './pages/AddStore';
 import TransactionDetail from './pages/TransactionDetail';
 import PaymentSuccess from './pages/PaymentSuccess';
+import { applyTheme, getStoredTheme } from './utils/theme';
+
 function AppContent() {
   return (
     <Router>
@@ -32,6 +34,31 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    const initialTheme = getStoredTheme();
+    applyTheme(initialTheme);
+
+    const handleStorage = (event) => {
+      if (event.key !== 'app_settings' || !event.newValue) {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(event.newValue);
+        if (parsed && parsed.theme) {
+          applyTheme(parsed.theme);
+        }
+      } catch (error) {
+        console.error('Failed to apply theme from storage', error);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
   return (
     <AppContent />
   );
