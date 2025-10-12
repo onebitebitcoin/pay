@@ -81,6 +81,13 @@ body {
   line-height: 1.6;
   transition: background-color 0.3s, color 0.3s;
   overflow-y: auto;
+  -ms-overflow-style: none; /* IE/Edge hide scrollbar */
+  scrollbar-width: none; /* Firefox hide scrollbar */
+}
+
+
+body::-webkit-scrollbar {
+  display: none; /* WebKit hide scrollbar */
 }
 
 
