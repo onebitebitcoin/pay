@@ -1,10 +1,57 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL } from '../config';
 import './Settings.css';
 import Icon from '../components/Icon';
 import { applyTheme, normalizeTheme } from '../utils/theme';
+
+const MIN_RECEIVE_SATS = 100;
+const MINT_QUOTE_TIMEOUT_MS = 7000;
+const MINT_QUOTE_UNIT = 'sat';
+
+const verifyMintOperational = async (normalizedUrl) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MINT_QUOTE_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${normalizedUrl}/v1/mint/quote/bolt11`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: MIN_RECEIVE_SATS, unit: MINT_QUOTE_UNIT }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const error = new Error('Mint quote failed');
+      error.code = 'QUOTE_HTTP_ERROR';
+      error.status = response.status;
+      try {
+        error.details = await response.text();
+      } catch (_) {
+        error.details = '';
+      }
+      throw error;
+    }
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+
+    if (!payload || (!payload.quote && !payload.quote_id)) {
+      const error = new Error('Mint quote invalid');
+      error.code = 'QUOTE_INVALID';
+      error.details = payload;
+      throw error;
+    }
+
+    return payload;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 function Settings() {
   const { t, i18n } = useTranslation();
@@ -35,9 +82,9 @@ function Settings() {
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
     { url: 'https://mint.coinos.io', name: 'Coinos', production: true },
-    { url: 'https://8333.space:3338', name: '8333.space', production: false },
     { url: 'https://mint.minibits.cash/Bitcoin', name: 'Minibits', production: true },
-    { url: 'https://testnut.cashu.space', name: 'Testnut', production: false }
+    { url: 'https://mint.cubabitcoin.org', name: 'CubaBitcoin', production: true },
+    { url: 'https://mint.mineracks.com', name: 'MineRacks', production: true }
   ];
 
   const addToast = (message, type = 'info') => {
@@ -47,6 +94,30 @@ function Settings() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3500);
   };
+
+  const mapMintError = useCallback((error) => {
+    if (!error) {
+      return t('messages.mintQuoteFailedGeneric');
+    }
+
+    if (error.name === 'AbortError') {
+      return t('messages.mintQuoteTimeout');
+    }
+
+    if (error.code === 'QUOTE_HTTP_ERROR') {
+      return t('messages.mintQuoteFailedStatus', { status: error.status || '???' });
+    }
+
+    if (error.code === 'QUOTE_INVALID') {
+      return t('messages.mintQuoteInvalid');
+    }
+
+    if (typeof error.message === 'string' && error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    return t('messages.mintQuoteFailedGeneric');
+  }, [t]);
 
   useEffect(() => {
     document.title = t('pageTitle.settings');
@@ -216,6 +287,8 @@ function Settings() {
         throw new Error(t('messages.notValidMint'));
       }
 
+      await verifyMintOperational(normalizedUrl);
+
       setMainUrlStatus({
         success: true,
         message: t('messages.connectionSuccessMint', { name: data.name || 'Cashu Mint' }),
@@ -225,7 +298,7 @@ function Settings() {
       console.error('Mint connection test failed:', error);
       setMainUrlStatus({
         success: false,
-        message: error.message || t('messages.connectionFailedGeneric')
+        message: mapMintError(error)
       });
     } finally {
       setTestingMainUrl(false);
@@ -240,29 +313,36 @@ function Settings() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-      const response = await fetch(`${normalizedUrl}/v1/info`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      let response;
+      try {
+        response = await fetch(`${normalizedUrl}/v1/info`, {
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
-        throw new Error('Connection failed');
+        throw new Error(t('messages.connectionFailedHttp', { status: response.status }));
       }
 
       const data = await response.json();
 
       if (!data.name && !data.version) {
-        throw new Error('Invalid mint');
+        throw new Error(t('messages.notValidMint'));
       }
+
+      await verifyMintOperational(normalizedUrl);
 
       setMintStatuses(prev => ({
         ...prev,
         [mintUrl]: { success: true, name: data.name || 'Unknown' }
       }));
     } catch (error) {
+      console.error('Recommended mint test failed:', error);
       setMintStatuses(prev => ({
         ...prev,
-        [mintUrl]: { success: false, error: error.message }
+        [mintUrl]: { success: false, error: mapMintError(error) }
       }));
     } finally {
       setTestingMints(prev => ({ ...prev, [mintUrl]: false }));
