@@ -95,8 +95,9 @@
     "invoiceAmount": "インボイス金額",
     "backToWallet": "ウォレットに戻る",
     "receiveSubtext": "受け取る金額を入力してビットコインを受け取りましょう",
-    "receiveAmountLimit": "{{limit}} sats 以上は入力できません",
-    "receiveLimitBeta": "現在のベータ版では {{limit}} sats 以上のインボイスは受け取れません",
+    "receiveAmountMinimum": "{{amount}} sats 以上を入力してください",
+    "receiveAmountMaximum": "{{amount}} sats 以下で入力してください",
+    "receiveMinBeta": "現在のベータ版では {{amount}} sats 以上から受け取り可能です",
     "fiatApprox": "概算 {{value}} ({{source}} 基準)",
     "fiatRateLoading": "為替レートを取得中...",
     "fiatRateUnavailable": "為替レートを取得できませんでした",
@@ -489,6 +490,7 @@
     "duplicateInputs": "重複した証明書（inputs）が含まれています。更新してから再試行してください。",
     "lightningReceive": "ライトニング受信",
     "lightningSend": "ライトニング送信",
-    "quoteDataMissing": "見積もりデータがありません"
+    "quoteDataMissing": "見積もりデータがありません",
+    "mintBackendError": "Mintサーバー ({{mintUrl}}) に問題が発生しました。Lightningバックエンドが応答せず、インボイスを生成できません。設定で別のMintに変更してください。"
   }
 }

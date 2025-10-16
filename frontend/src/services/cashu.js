@@ -113,7 +113,7 @@ export function importProofsFrom(any) {
 }
 
 // Verify proofs against Mint server and remove spent ones
-export async function syncProofsWithMint(apiBaseUrl) {
+export async function syncProofsWithMint(apiBaseUrl, mintUrl) {
   const proofs = loadProofs();
   if (proofs.length === 0) return { removed: 0, remaining: 0 };
 
@@ -122,7 +122,7 @@ export async function syncProofsWithMint(apiBaseUrl) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proofs })
+      body: JSON.stringify({ proofs, mintUrl })
     });
 
     if (!response.ok) {
@@ -173,7 +173,7 @@ export async function syncProofsWithMint(apiBaseUrl) {
 }
 
 // Swap all proofs for fresh ones (refresh proofs)
-export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signaturesToProofsFn) {
+export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signaturesToProofsFn, mintUrl) {
   const proofs = loadProofs();
   if (proofs.length === 0) return { success: false, error: '새로고침할 토큰이 없습니다' };
 
@@ -182,7 +182,7 @@ export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signatur
     const totalAmount = proofs.reduce((sum, p) => sum + Number(p?.amount || 0), 0);
 
     // Get mint keys
-    const keysResp = await fetch(`${apiBaseUrl}/api/cashu/keys`);
+    const keysResp = await fetch(`${apiBaseUrl}/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl || '')}`);
     if (!keysResp.ok) throw new Error('Mint 키 조회 실패');
     const mintKeys = await keysResp.json();
 
@@ -195,7 +195,8 @@ export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signatur
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         inputs: proofs,
-        outputs
+        outputs,
+        mintUrl
       })
     });
 

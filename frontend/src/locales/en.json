@@ -95,8 +95,9 @@
     "invoiceAmount": "Invoice Amount",
     "backToWallet": "Back to Wallet",
     "receiveSubtext": "Enter the amount to receive Bitcoin",
-    "receiveAmountLimit": "Invoices cannot exceed {{limit}} sats",
-    "receiveLimitBeta": "Beta notice: invoices of {{limit}} sats or more are not supported yet",
+    "receiveAmountMinimum": "Invoices must be at least {{amount}} sats",
+    "receiveAmountMaximum": "Maximum invoice amount is {{amount}} sats",
+    "receiveMinBeta": "Beta notice: Lightning receives start at {{amount}} sats",
     "fiatApprox": "Approx. {{value}} ({{source}})",
     "fiatRateLoading": "Fetching exchange rate...",
     "fiatRateUnavailable": "Exchange rate unavailable",
@@ -489,6 +490,7 @@
     "duplicateInputs": "Duplicate inputs detected. Please refresh and try again.",
     "lightningReceive": "Lightning Receive",
     "lightningSend": "Lightning Send",
-    "quoteDataMissing": "Quote data missing"
+    "quoteDataMissing": "Quote data missing",
+    "mintBackendError": "Mint server error ({{mintUrl}}): Lightning backend is not responding and unable to generate invoice. Please change to a different Mint in Settings."
   }
 }

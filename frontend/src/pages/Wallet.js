@@ -26,7 +26,8 @@ const normalizeQrValue = (rawValue = '') => {
   return compact;
 };
 
-const RECEIVE_AMOUNT_LIMIT = 100;
+const RECEIVE_MIN_AMOUNT = 1;
+const RECEIVE_MAX_AMOUNT = 999;
 
 const createInitialFiatState = (language = 'en') => {
   switch (language) {
@@ -140,6 +141,7 @@ function Wallet() {
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
+  const [receiveAmountTooLow, setReceiveAmountTooLow] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
   
@@ -351,7 +353,14 @@ function Wallet() {
 
   // Mint connection status
   const [isConnected, setIsConnected] = useState(false);
-  const [mintUrl, setMintUrl] = useState('');
+  const [mintUrl, setMintUrl] = useState(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+      return settings.mintUrl || DEFAULT_MINT_URL;
+    } catch {
+      return DEFAULT_MINT_URL;
+    }
+  });
   // Removed inline mint explainer (moved to About page)
 
   useEffect(() => {
@@ -469,7 +478,7 @@ function Wallet() {
       // Sync proofs with Mint server if requested
       if (syncWithMint) {
         try {
-          const syncResult = await syncProofsWithMint(API_BASE_URL);
+          const syncResult = await syncProofsWithMint(API_BASE_URL, mintUrl);
           if (syncResult.removed > 0) {
             showInfoMessage(t('messages.removedUsedTokens', { count: syncResult.removed }), 'info', 3000);
           }
@@ -484,7 +493,7 @@ function Wallet() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [showInfoMessage]);
+  }, [showInfoMessage, mintUrl]);
 
   const persistTransactions = useCallback((list) => {
     console.log('[persistTransactions] Saving to localStorage:', list?.length || 0, 'transactions');
@@ -566,7 +575,12 @@ function Wallet() {
   }, []);
 
   const stopAutoRedeem = useCallback(() => {
-    // Kept for compatibility - just resets state
+    // Stop polling if active
+    if (pollingCancelRef.current) {
+      console.log('[stopAutoRedeem] Cancelling active polling');
+      pollingCancelRef.current();
+      pollingCancelRef.current = null;
+    }
     setCheckingPayment(false);
   }, []);
 
@@ -578,7 +592,7 @@ function Wallet() {
       const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
       const backupUrl = settings.backupMintUrl;
 
-      let resp = await fetch(apiUrl('/api/cashu/info'));
+      let resp = await fetch(apiUrl(`/api/cashu/info?mintUrl=${encodeURIComponent(mintUrl)}`));
 
       // If main URL fails and backup URL exists, try backup
       if (!resp.ok && backupUrl) {
@@ -597,7 +611,7 @@ function Wallet() {
         localStorage.setItem('app_settings', JSON.stringify(newSettings));
 
         // Try backup URL
-        resp = await fetch(apiUrl('/api/cashu/info'));
+        resp = await fetch(apiUrl(`/api/cashu/info?mintUrl=${encodeURIComponent(backupUrl)}`));
 
         if (!resp.ok) {
           // Both failed, revert
@@ -632,7 +646,7 @@ function Wallet() {
     }
 
     try {
-      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
       if (!keysResp.ok) {
         return { ok: false, reason: 'mint_keys_failed' };
       }
@@ -761,7 +775,7 @@ function Wallet() {
 
       try {
         // Check quote state first
-        const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quoteId)}`));
+        const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(quoteId)}&mintUrl=${encodeURIComponent(mintUrl)}`));
         if (checkResp.ok) {
           const quoteData = await checkResp.json();
           const state = (quoteData?.state || '').toUpperCase();
@@ -819,18 +833,8 @@ function Wallet() {
   }, [apiUrl]);
 
   useEffect(() => {
-    // Load Mint URL from settings and auto-connect
-    try {
-      const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
-      const mainUrl = settings.mintUrl || DEFAULT_MINT_URL;
-      setMintUrl(mainUrl);
-
-      // Auto-connect by checking mint info with fallback
-      connectMint();
-    } catch {
-      setMintUrl(DEFAULT_MINT_URL);
-      connectMint();
-    }
+    // Auto-connect to mint on mount
+    connectMint();
 
     // Check for pending quote
     (async () => {
@@ -898,7 +902,7 @@ function Wallet() {
             setCheckingPayment(false);
           } else {
             // Check if there's still a valid quote to poll for
-            const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${lastQuote}`));
+            const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${lastQuote}&mintUrl=${encodeURIComponent(mintUrl)}`));
             if (checkResp.ok) {
               const quoteData = await checkResp.json();
               const state = (quoteData?.state || '').toUpperCase();
@@ -930,13 +934,65 @@ function Wallet() {
     };
   }, [isReceiveView, checkingPayment, processPaymentNotification]);
 
+  // Sync mintUrl from settings when page becomes visible
+  useEffect(() => {
+    const handleFocus = () => {
+      try {
+        const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
+        const savedMintUrl = settings.mintUrl || DEFAULT_MINT_URL;
+        if (savedMintUrl !== mintUrl) {
+          console.log('Mint URL changed in settings, updating:', savedMintUrl);
+          setMintUrl(savedMintUrl);
+        }
+      } catch (err) {
+        console.error('Failed to sync mintUrl from settings:', err);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [mintUrl]);
+
+  // Stop polling when invoice is cleared or component unmounts
+  useEffect(() => {
+    // If invoice is cleared, stop any active polling
+    if (!invoice && checkingPayment) {
+      console.log('[Invoice cleared] Stopping polling');
+      stopAutoRedeem();
+    }
+
+    // Handle page unload/navigation
+    const handleBeforeUnload = () => {
+      if (checkingPayment) {
+        console.log('[Page unloading] Stopping polling');
+        stopAutoRedeem();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup on unmount or navigation
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (checkingPayment) {
+        console.log('[Component unmounting] Stopping polling');
+        stopAutoRedeem();
+      }
+    };
+  }, [invoice, checkingPayment, stopAutoRedeem]);
+
   // Manual sync proofs with Mint
   const handleSyncProofs = async () => {
     try {
       setLoading(true);
       showInfoMessage(t('messages.syncingTokens'), 'info', 2000);
 
-      const syncResult = await syncProofsWithMint(API_BASE_URL);
+      const syncResult = await syncProofsWithMint(API_BASE_URL, mintUrl);
 
       if (syncResult.removed > 0) {
         showInfoMessage(t('messages.removedUsedTokens', { count: syncResult.removed }), 'success', 4000);
@@ -974,7 +1030,7 @@ function Wallet() {
 
 
       // Check quote state
-      const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}`));
+      const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}&mintUrl=${encodeURIComponent(mintUrl)}`));
       if (!checkResp.ok) throw new Error(t('messages.quoteCheckFailed'));
 
       const quoteData = await checkResp.json();
@@ -1015,7 +1071,7 @@ function Wallet() {
 
       // Fallback: request new outputs and redeem manually
       const amount = parseInt(quoteData?.amount || localStorage.getItem('cashu_last_mint_amount') || '0', 10);
-      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
       if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
       const mintKeys = await keysResp.json();
       const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
@@ -1023,7 +1079,7 @@ function Wallet() {
       const redeemResp = await fetch(apiUrl('/api/cashu/mint/redeem'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote: lastQuote, outputs })
+        body: JSON.stringify({ quote: lastQuote, outputs, mintUrl })
       });
 
       if (!redeemResp.ok) {
@@ -1293,17 +1349,20 @@ function Wallet() {
   const handleReceiveAmountChange = useCallback((value) => {
     setReceiveAmount(value);
     if (!value) {
+      setReceiveAmountTooLow(false);
       setReceiveAmountTooHigh(false);
       return;
     }
 
     const numeric = parseInt(value, 10);
     if (!Number.isFinite(numeric) || Number.isNaN(numeric)) {
+      setReceiveAmountTooLow(false);
       setReceiveAmountTooHigh(false);
       return;
     }
 
-    setReceiveAmountTooHigh(numeric >= RECEIVE_AMOUNT_LIMIT);
+    setReceiveAmountTooLow(numeric > 0 && numeric < RECEIVE_MIN_AMOUNT);
+    setReceiveAmountTooHigh(numeric > RECEIVE_MAX_AMOUNT);
   }, []);
 
   const generateInvoice = async () => {
@@ -1318,9 +1377,15 @@ function Wallet() {
       return;
     }
 
-    if (amount >= RECEIVE_AMOUNT_LIMIT) {
+    if (amount < RECEIVE_MIN_AMOUNT) {
+      setReceiveAmountTooLow(true);
+      showInfoMessage(t('wallet.receiveAmountMinimum', { amount: RECEIVE_MIN_AMOUNT }), 'error');
+      return;
+    }
+
+    if (amount > RECEIVE_MAX_AMOUNT) {
       setReceiveAmountTooHigh(true);
-      showInfoMessage(t('wallet.receiveAmountLimit', { limit: RECEIVE_AMOUNT_LIMIT }), 'error');
+      showInfoMessage(t('wallet.receiveAmountMaximum', { amount: RECEIVE_MAX_AMOUNT }), 'error');
       return;
     }
 
@@ -1329,9 +1394,10 @@ function Wallet() {
       setQrLoaded(false);
       setReceiveCompleted(false);
       setCheckingPayment(false);
+      setInvoiceError(''); // Clear any previous errors
       
       // Get mint keys and create blinded outputs first
-      const keysResp = await fetch(apiUrl('/api/cashu/keys'));
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
       if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
       const mintKeys = await keysResp.json();
       const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
@@ -1340,11 +1406,22 @@ function Wallet() {
       const resp = await fetch(apiUrl('/api/cashu/mint/quote'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, outputs })
+        body: JSON.stringify({ amount, outputs, mintUrl })
       });
       if (!resp.ok) {
         let msg = '인보이스 생성 실패';
-        try { const err = await resp.json(); if (err?.error) msg = translateErrorMessage(err.error); } catch {}
+        try {
+          const err = await resp.json();
+          // Check for mint backend error (code 20000)
+          if (err?.code === 20000) {
+            const displayMintUrl = mintUrl.replace('https://', '').replace('http://', '');
+            msg = t('messages.mintBackendError', { mintUrl: displayMintUrl });
+          } else {
+            if (err?.error) msg = translateErrorMessage(err.error);
+            else if (err?.detail) msg = err.detail;
+            if (err?.code) msg += ` (코드: ${err.code})`;
+          }
+        } catch {}
         throw new Error(msg);
       }
       const data = await resp.json();
@@ -1377,7 +1454,9 @@ function Wallet() {
       });
     } catch (error) {
       console.error('Failed to generate invoice:', error);
-      showInfoMessage(t('messages.invoiceGenerationFailed'), 'error');
+      // Show the actual error message on screen
+      const errorMessage = error.message || t('messages.invoiceGenerationFailed');
+      setInvoiceError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1396,7 +1475,7 @@ function Wallet() {
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setReceiveAmount('');
-    setReceiveAmountTooHigh(false);
+    setReceiveAmountTooLow(false);
     const target = receiveOriginRef.current || '/wallet';
     navigate(target, { replace: true });
   }, [navigate, stopAutoRedeem]);
@@ -1411,7 +1490,7 @@ function Wallet() {
     setReceivedAmount(0);
     setCheckingPayment(false);
     setReceiveAmount('');
-    setReceiveAmountTooHigh(false);
+    setReceiveAmountTooLow(false);
     navigate('/wallet/receive', { state: { from: fallback } });
   }, [location.pathname, navigate, stopAutoRedeem]);
 
@@ -1556,7 +1635,7 @@ function Wallet() {
         const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ request: bolt11, invoice: bolt11 })
+          body: JSON.stringify({ request: bolt11, invoice: bolt11, mintUrl })
         });
 
         if (!q.ok) {
@@ -1660,7 +1739,7 @@ function Wallet() {
         const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ request: bolt11, invoice: bolt11 })
+          body: JSON.stringify({ request: bolt11, invoice: bolt11, mintUrl })
         });
 
         if (!q.ok) throw new Error('견적 요청 실패');
@@ -1687,7 +1766,7 @@ function Wallet() {
       const change = Math.max(0, Number(total) - Number(need));
 
       if (change > 0) {
-        const kr = await fetch(apiUrl('/api/cashu/keys'));
+        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
         if (!kr.ok) throw new Error('Mint keys 조회 실패');
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
@@ -1703,7 +1782,8 @@ function Wallet() {
         body: JSON.stringify({
           quote: quoteData?.quote || quoteData?.quote_id,
           inputs: uniquePicked,
-          outputs: changeOutputs
+          outputs: changeOutputs,
+          mintUrl
         })
       });
 
@@ -1748,7 +1828,7 @@ function Wallet() {
       const signatures = md?.change || md?.signatures || md?.promises || [];
 
       if (Array.isArray(signatures) && signatures.length && changeOutputDatas) {
-        const kr2 = await fetch(apiUrl('/api/cashu/keys'));
+        const kr2 = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
         const mintKeys2 = kr2.ok ? await kr2.json() : null;
         if (mintKeys2) {
           changeProofs = await signaturesToProofs(signatures, mintKeys2, changeOutputDatas);
@@ -1808,7 +1888,7 @@ function Wallet() {
       let changeOutputDatas = undefined;
       const change = Math.max(0, Number(total) - Number(need));
       if (change > 0) {
-      const kr = await fetch(apiUrl('/api/cashu/keys'));
+      const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
         if (!kr.ok) throw new Error('Mint keys 조회 실패');
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
@@ -1819,7 +1899,7 @@ function Wallet() {
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
       const m = await fetch(apiUrl('/api/cashu/melt'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: uniquePicked, outputs: changeOutputs })
+        body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: uniquePicked, outputs: changeOutputs, mintUrl })
       });
       if (!m.ok) {
         let msg = '송금 실패';
@@ -1862,7 +1942,7 @@ function Wallet() {
       let changeProofs = [];
       const signatures = md?.change || md?.signatures || md?.promises || [];
       if (Array.isArray(signatures) && signatures.length && changeOutputDatas) {
-        const kr2 = await fetch(apiUrl('/api/cashu/keys'));
+        const kr2 = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
         const mintKeys2 = kr2.ok ? await kr2.json() : null;
         if (mintKeys2) {
           changeProofs = await signaturesToProofs(signatures, mintKeys2, changeOutputDatas);
@@ -2061,7 +2141,7 @@ function Wallet() {
                 <>
                   <div className="warning-banner warning">
                     <div className="warning-content">
-                      {t('wallet.receiveLimitBeta', { limit: RECEIVE_AMOUNT_LIMIT })}
+                      {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
                     </div>
                   </div>
                   {!invoice ? (
@@ -2078,17 +2158,33 @@ function Wallet() {
                           value={receiveAmount}
                           onChange={(e) => handleReceiveAmountChange(e.target.value)}
                           placeholder="10000"
-                          min="1"
-                          max={RECEIVE_AMOUNT_LIMIT - 1}
+                          min={RECEIVE_MIN_AMOUNT}
+                          max={RECEIVE_MAX_AMOUNT}
                           disabled={!isConnected}
                         />
                       </div>
-                      {receiveAmountTooHigh && (
+                      {receiveAmountTooLow && (
                         <div className="receive-error">
-                          {t('wallet.receiveAmountLimit', { limit: RECEIVE_AMOUNT_LIMIT })}
+                          {t('wallet.receiveAmountMinimum', { amount: RECEIVE_MIN_AMOUNT })}
                         </div>
                       )}
-                      {!receiveAmountTooHigh && receiveFiatDisplay && (
+                      {receiveAmountTooHigh && (
+                        <div className="receive-error">
+                          {t('wallet.receiveAmountMaximum', { amount: RECEIVE_MAX_AMOUNT })}
+                        </div>
+                      )}
+                      {invoiceError && (
+                        <div className="receive-error" style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          padding: '0.75rem',
+                          borderRadius: '0.5rem',
+                          marginTop: '0.5rem'
+                        }}>
+                          {invoiceError}
+                        </div>
+                      )}
+                      {!receiveAmountTooLow && !receiveAmountTooHigh && receiveFiatDisplay && (
                         <div className="fiat-hint">
                           {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
                         </div>
@@ -2097,7 +2193,7 @@ function Wallet() {
                         <button
                           onClick={generateInvoice}
                           className="primary-btn"
-                          disabled={loading || !receiveAmount || receiveAmountTooHigh || !isConnected}
+                          disabled={loading || !receiveAmount || receiveAmountTooLow || receiveAmountTooHigh || !isConnected}
                         >
                           {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
@@ -2144,6 +2240,9 @@ function Wallet() {
                               {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
                             </div>
                           )}
+                          <div className="qr-mint-display" style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
+                            Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                          </div>
                           <div className="qr-zoom-hint">{t('wallet.tapToZoom')}</div>
                         </div>
                         <label>{t('wallet.tapToCopy')}</label>
@@ -2233,7 +2332,7 @@ function Wallet() {
 
       <div className="warning-banner warning">
         <div className="warning-content">
-          {t('wallet.receiveLimitBeta', { limit: RECEIVE_AMOUNT_LIMIT })}
+          {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
         </div>
       </div>
 
@@ -2850,6 +2949,9 @@ function Wallet() {
                   </div>
                 </div>
               </div>
+              <p className="qr-mint-info" style={{ fontSize: '0.875rem', color: 'var(--muted)', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+              </p>
               <p className="qr-modal-hint">{t('wallet.scanQrToPayHint')}</p>
             </div>
           </div>

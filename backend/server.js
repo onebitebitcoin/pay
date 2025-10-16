@@ -180,7 +180,7 @@ function cacheRedeemedQuote(quoteId, data) {
 }
 
 // Monitor quote status and auto-redeem when paid
-async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys) {
+async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys, mintUrl) {
   const maxAttempts = 60; // 2 minutes at 2s interval
   let attempts = 0;
 
@@ -195,13 +195,13 @@ async function monitorQuote(quoteId, amount, outputs, outputDatas, mintKeys) {
       }
 
       // Check quote state
-      const checkResp = await cashu.checkMintQuote({ quote: quoteId });
+      const checkResp = await cashu.checkMintQuote({ quote: quoteId, mintUrl });
       const state = (checkResp?.state || '').toUpperCase();
 
       if (state === 'PAID' || state === 'ISSUED') {
         // Quote is paid, proceed with redemption
         try {
-          const redeemResult = await cashu.mintBolt11({ quote: quoteId, outputs });
+          const redeemResult = await cashu.mintBolt11({ quote: quoteId, outputs }, mintUrl);
           const signatures = redeemResult?.signatures || redeemResult?.promises || [];
 
           if (Array.isArray(signatures) && signatures.length > 0) {
@@ -499,22 +499,28 @@ app.get('/health', (req, res) => {
 // Lightning routes removed - using Cashu only
 
 
-// Cashu Mint proxy (uses CASHU_MINT_URL). Minimal subset for LN mint/melt.
+// Cashu Mint proxy (uses client-provided mintUrl or fallback to env). Minimal subset for LN mint/melt.
 app.get('/api/cashu/info', async (req, res) => {
-  try { res.json(await cashu.getInfo()); } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
+  try {
+    const mintUrl = req.query.mintUrl;
+    res.json(await cashu.getInfo(mintUrl));
+  } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
 
 app.get('/api/cashu/keys', async (req, res) => {
-  try { res.json(await cashu.getKeys()); } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
+  try {
+    const mintUrl = req.query.mintUrl;
+    res.json(await cashu.getKeys(mintUrl));
+  } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
 
 app.post('/api/cashu/mint/quote', async (req, res) => {
   try {
-    const { amount, outputs } = req.body || {};
-    console.log('Quote request received:', { amount, hasOutputs: !!outputs, outputsLength: outputs?.length });
+    const { amount, outputs, mintUrl } = req.body || {};
+    console.log('Quote request received:', { amount, hasOutputs: !!outputs, outputsLength: outputs?.length, mintUrl });
 
     if (!amount || amount <= 0) return res.status(400).json({ error: 'amount 필요' });
-    const out = await cashu.mintQuoteBolt11({ amount: parseInt(amount, 10) });
+    const out = await cashu.mintQuoteBolt11({ amount: parseInt(amount, 10), mintUrl });
 
     // If client provides outputs, start server-side monitoring
     const quoteId = out?.quote || out?.quote_id;
@@ -522,8 +528,8 @@ app.post('/api/cashu/mint/quote', async (req, res) => {
 
     if (quoteId && outputs && Array.isArray(outputs) && outputs.length > 0) {
       // Get mint keys for monitoring
-      const mintKeys = await cashu.getKeys();
-      monitorQuote(quoteId, parseInt(amount, 10), outputs, null, mintKeys);
+      const mintKeys = await cashu.getKeys(mintUrl);
+      monitorQuote(quoteId, parseInt(amount, 10), outputs, null, mintKeys, mintUrl);
       console.log(`✓ Started monitoring quote: ${quoteId} with ${outputs.length} outputs`);
     } else {
       console.log(`✗ NOT monitoring quote ${quoteId} - missing outputs or invalid`);
@@ -532,15 +538,26 @@ app.post('/api/cashu/mint/quote', async (req, res) => {
     res.json(out);
   } catch (e) {
     console.error('Quote creation error:', e);
-    res.status(e.status || 500).json({ error: e.data || e.message });
+    // Try to parse error data if it's a JSON string
+    let errorResponse = { error: e.message };
+    if (e.data) {
+      try {
+        const parsed = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        errorResponse = parsed;
+      } catch {
+        errorResponse = { error: e.data };
+      }
+    }
+    res.status(e.status || 500).json(errorResponse);
   }
 });
 
 app.get('/api/cashu/mint/quote/check', async (req, res) => {
   try {
     const quote = req.query.quote;
+    const mintUrl = req.query.mintUrl;
     if (!quote) return res.status(400).json({ error: 'quote 필요' });
-    const out = await cashu.checkMintQuote({ quote });
+    const out = await cashu.checkMintQuote({ quote, mintUrl });
     res.json(out);
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
@@ -559,13 +576,13 @@ app.get('/api/cashu/mint/result', (req, res) => {
 
 app.post('/api/cashu/mint/redeem', async (req, res) => {
   try {
-    const { quote, outputs } = req.body || {};
+    const { quote, outputs, mintUrl } = req.body || {};
     if (!quote) return res.status(400).json({ error: 'quote 필요' });
     if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
       return res.status(400).json({ error: 'outputs 배열 필요 (블라인드 출력)' });
     }
     // Forward full payload to support mints that require additional fields
-    const out = await cashu.mintBolt11(req.body);
+    const out = await cashu.mintBolt11(req.body, mintUrl);
 
     // Note: WebSocket notifications are now handled by server-side monitoring
     // This endpoint is kept for backwards compatibility or manual redemption
@@ -576,25 +593,25 @@ app.post('/api/cashu/mint/redeem', async (req, res) => {
 
 app.post('/api/cashu/melt/quote', async (req, res) => {
   try {
-    const { invoice, request } = req.body || {};
+    const { invoice, request, mintUrl } = req.body || {};
     let bolt11 = (request || invoice || '').toString().trim();
     if (bolt11.toLowerCase().startsWith('lightning:')) {
       bolt11 = bolt11.slice('lightning:'.length);
     }
     if (!bolt11) return res.status(400).json({ error: 'request 필요' });
-    const out = await cashu.meltQuoteBolt11({ request: bolt11 });
+    const out = await cashu.meltQuoteBolt11({ request: bolt11, mintUrl });
     res.json(out);
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
 
 app.post('/api/cashu/melt', async (req, res) => {
   try {
-    const { quote, inputs, proofs } = req.body || {};
+    const { quote, inputs, proofs, mintUrl } = req.body || {};
     if (!quote) return res.status(400).json({ error: 'quote 필요' });
     if ((!inputs || !Array.isArray(inputs)) && (!proofs || !Array.isArray(proofs))) {
       return res.status(400).json({ error: 'inputs 또는 proofs 배열 필요' });
     }
-    const out = await cashu.meltBolt11(req.body);
+    const out = await cashu.meltBolt11(req.body, mintUrl);
     res.json(out);
   } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
 });
@@ -602,11 +619,11 @@ app.post('/api/cashu/melt', async (req, res) => {
 // Check proof states (spent/unspent)
 app.post('/api/cashu/check', async (req, res) => {
   try {
-    const { proofs } = req.body || {};
+    const { proofs, mintUrl } = req.body || {};
     if (!proofs || !Array.isArray(proofs) || proofs.length === 0) {
       return res.status(400).json({ error: 'proofs 배열 필요' });
     }
-    const result = await cashu.checkProofsState({ proofs });
+    const result = await cashu.checkProofsState({ proofs, mintUrl });
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.data || e.message });
@@ -616,14 +633,14 @@ app.post('/api/cashu/check', async (req, res) => {
 // Swap proofs for fresh ones
 app.post('/api/cashu/swap', async (req, res) => {
   try {
-    const { inputs, outputs } = req.body || {};
+    const { inputs, outputs, mintUrl } = req.body || {};
     if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
       return res.status(400).json({ error: 'inputs 배열 필요' });
     }
     if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
       return res.status(400).json({ error: 'outputs 배열 필요' });
     }
-    const result = await cashu.swap({ inputs, outputs });
+    const result = await cashu.swap({ inputs, outputs, mintUrl });
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.data || e.message });

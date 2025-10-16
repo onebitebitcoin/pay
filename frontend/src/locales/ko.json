@@ -95,8 +95,9 @@
     "invoiceAmount": "인보이스 금액",
     "backToWallet": "지갑으로 돌아가기",
     "receiveSubtext": "받을 금액을 입력하고 비트코인을 받아보세요",
-    "receiveAmountLimit": "{{limit}} sats 이상은 입력할 수 없어요",
-    "receiveLimitBeta": "현재 베타 버전에서는 {{limit}} sats 이상은 받을 수 없어요",
+    "receiveAmountMinimum": "최소 {{amount}} sats 이상 입력해야 해요",
+    "receiveAmountMaximum": "최대 {{amount}} sats 이하로 입력해주세요",
+    "receiveMinBeta": "현재 베타 버전에서는 {{amount}} sats 이상부터 라이트닝 결제를 받을 수 있어요",
     "fiatApprox": "대략 {{value}} ({{source}} 기준)",
     "fiatRateLoading": "환율 정보를 불러오는 중...",
     "fiatRateUnavailable": "환율 정보를 불러오지 못했습니다",
@@ -489,6 +490,7 @@
     "duplicateInputs": "중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.",
     "lightningReceive": "라이트닝 받기",
     "lightningSend": "라이트닝 보내기",
-    "quoteDataMissing": "견적 정보가 없습니다"
+    "quoteDataMissing": "견적 정보가 없습니다",
+    "mintBackendError": "Mint 서버 ({{mintUrl}})에 문제가 발생했습니다. Lightning 백엔드가 응답하지 않아 인보이스를 생성할 수 없습니다. 설정에서 다른 Mint로 변경해주세요."
   }
 }

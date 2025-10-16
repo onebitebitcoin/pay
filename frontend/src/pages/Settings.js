@@ -29,13 +29,15 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [mintStatuses, setMintStatuses] = useState({});
+  const [testingMints, setTestingMints] = useState({});
   const showStoreManagement = false; // Temporarily hide store registration UI
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
-    'https://mint.cubabitcoin.org',
-    'https://mint.minibits.cash/Bitcoin',
-    'https://mint.coinos.io',
-    'https://mint.lnvoltz.com'
+    { url: 'https://mint.coinos.io', name: 'Coinos', production: true },
+    { url: 'https://8333.space:3338', name: '8333.space', production: false },
+    { url: 'https://mint.minibits.cash/Bitcoin', name: 'Minibits', production: true },
+    { url: 'https://testnut.cashu.space', name: 'Testnut', production: false }
   ];
 
   const addToast = (message, type = 'info') => {
@@ -230,6 +232,50 @@ function Settings() {
     }
   };
 
+  const testRecommendedMint = async (mintUrl) => {
+    try {
+      setTestingMints(prev => ({ ...prev, [mintUrl]: true }));
+
+      const normalizedUrl = mintUrl.trim().replace(/\/$/, '');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${normalizedUrl}/v1/info`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Connection failed');
+      }
+
+      const data = await response.json();
+
+      if (!data.name && !data.version) {
+        throw new Error('Invalid mint');
+      }
+
+      setMintStatuses(prev => ({
+        ...prev,
+        [mintUrl]: { success: true, name: data.name || 'Unknown' }
+      }));
+    } catch (error) {
+      setMintStatuses(prev => ({
+        ...prev,
+        [mintUrl]: { success: false, error: error.message }
+      }));
+    } finally {
+      setTestingMints(prev => ({ ...prev, [mintUrl]: false }));
+    }
+  };
+
+  // Auto-test recommended mints on mount
+  useEffect(() => {
+    RECOMMENDED_MINTS.forEach(mint => {
+      testRecommendedMint(mint.url);
+    });
+  }, []);
+
   const handleResetWallet = () => {
     if (window.confirm(t('messages.confirmResetWallet'))) {
       if (window.confirm(t('messages.confirmBackupCheck'))) {
@@ -423,29 +469,83 @@ function Settings() {
                 <div style={{ fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: 'var(--muted)' }}>
                   {t('settings.recommendedMints')}:
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {RECOMMENDED_MINTS.map((mintUrl) => (
-                    <button
-                      key={mintUrl}
-                      onClick={() => {
-                        handleSettingChange('mintUrl', mintUrl);
-                        setMainUrlStatus(null);
-                      }}
-                      className="mint-suggestion-btn"
-                      style={{
-                        padding: '0.375rem 0.75rem',
-                        fontSize: '0.8125rem',
-                        background: settings.mintUrl === mintUrl ? 'rgba(var(--primary-rgb), 0.15)' : 'var(--surface-bg)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '0.375rem',
-                        color: settings.mintUrl === mintUrl ? 'var(--primary)' : 'var(--text)',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      {mintUrl.replace('https://', '')}
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {RECOMMENDED_MINTS.map((mint) => {
+                    const status = mintStatuses[mint.url];
+                    const isTesting = testingMints[mint.url];
+                    const isSelected = settings.mintUrl === mint.url;
+
+                    return (
+                      <button
+                        key={mint.url}
+                        onClick={() => {
+                          handleSettingChange('mintUrl', mint.url);
+                          setMainUrlStatus(null);
+                        }}
+                        className="mint-suggestion-btn"
+                        style={{
+                          padding: '0.625rem 0.875rem',
+                          fontSize: '0.8125rem',
+                          background: isSelected ? 'rgba(var(--primary-rgb), 0.15)' : 'var(--surface-bg)',
+                          border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                          borderRadius: '0.5rem',
+                          color: isSelected ? 'var(--primary)' : 'var(--text)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          textAlign: 'left',
+                          gap: '0.75rem'
+                        }}
+                      >
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500' }}>
+                            <span>{mint.name}</span>
+                            {!mint.production && (
+                              <span style={{
+                                fontSize: '0.6875rem',
+                                padding: '0.125rem 0.375rem',
+                                background: 'rgba(251, 191, 36, 0.15)',
+                                color: '#f59e0b',
+                                borderRadius: '0.25rem',
+                                fontWeight: '600'
+                              }}>
+                                TEST
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                            {mint.url.replace('https://', '')}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {isTesting ? (
+                            <div style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: '#94a3b8',
+                              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                            }} />
+                          ) : status ? (
+                            <div
+                              style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                background: status.success ? '#22c55e' : '#ef4444',
+                                boxShadow: status.success
+                                  ? '0 0 8px rgba(34, 197, 94, 0.5)'
+                                  : '0 0 8px rgba(239, 68, 68, 0.5)'
+                              }}
+                              title={status.success ? `Connected: ${status.name}` : `Error: ${status.error}`}
+                            />
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
