@@ -95,6 +95,8 @@
     "invoiceAmount": "인보이스 금액",
     "backToWallet": "지갑으로 돌아가기",
     "receiveSubtext": "받을 금액을 입력하고 비트코인을 받아보세요",
+    "receiveAmountLimit": "{{limit}} sats 이상은 입력할 수 없어요",
+    "receiveLimitBeta": "현재 베타 버전에서는 {{limit}} sats 이상은 받을 수 없어요",
     "networkDisconnected": "네트워크 연결이 끊겼습니다. Mint 연결이 필요합니다. 새로고침하세요.",
     "mintConnection": "연결",
     "invoicePlaceholder": "lnbc... 또는 user@domain",

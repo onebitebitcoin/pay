@@ -26,6 +26,8 @@ const normalizeQrValue = (rawValue = '') => {
   return compact;
 };
 
+const RECEIVE_AMOUNT_LIMIT = 100;
+
 function Wallet() {
   const { t, i18n } = useTranslation();
   useEffect(() => {
@@ -103,6 +105,7 @@ function Wallet() {
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
+  const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   
 
 
@@ -1126,9 +1129,37 @@ function Wallet() {
     showInfoMessage(message, 'error', 3500);
   }, [showInfoMessage]);
 
+  const handleReceiveAmountChange = useCallback((value) => {
+    setReceiveAmount(value);
+    if (!value) {
+      setReceiveAmountTooHigh(false);
+      return;
+    }
+
+    const numeric = parseInt(value, 10);
+    if (!Number.isFinite(numeric) || Number.isNaN(numeric)) {
+      setReceiveAmountTooHigh(false);
+      return;
+    }
+
+    setReceiveAmountTooHigh(numeric >= RECEIVE_AMOUNT_LIMIT);
+  }, []);
+
   const generateInvoice = async () => {
-    if (!receiveAmount || receiveAmount <= 0) {
+    if (!receiveAmount) {
       showInfoMessage(t('messages.enterValidAmount'), 'error');
+      return;
+    }
+
+    const amount = parseInt(receiveAmount, 10);
+    if (!Number.isFinite(amount) || Number.isNaN(amount) || amount <= 0) {
+      showInfoMessage(t('messages.enterValidAmount'), 'error');
+      return;
+    }
+
+    if (amount >= RECEIVE_AMOUNT_LIMIT) {
+      setReceiveAmountTooHigh(true);
+      showInfoMessage(t('wallet.receiveAmountLimit', { limit: RECEIVE_AMOUNT_LIMIT }), 'error');
       return;
     }
 
@@ -1142,7 +1173,6 @@ function Wallet() {
       const keysResp = await fetch(apiUrl('/api/cashu/keys'));
       if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
       const mintKeys = await keysResp.json();
-      const amount = parseInt(receiveAmount, 10);
       const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
 
       // Create quote with outputs - server will start monitoring automatically
@@ -1204,6 +1234,8 @@ function Wallet() {
     setInvoice('');
     setReceiveCompleted(false);
     setReceivedAmount(0);
+    setReceiveAmount('');
+    setReceiveAmountTooHigh(false);
     const target = receiveOriginRef.current || '/wallet';
     navigate(target, { replace: true });
   }, [navigate, stopAutoRedeem]);
@@ -1217,6 +1249,8 @@ function Wallet() {
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setCheckingPayment(false);
+    setReceiveAmount('');
+    setReceiveAmountTooHigh(false);
     navigate('/wallet/receive', { state: { from: fallback } });
   }, [location.pathname, navigate, stopAutoRedeem]);
 
@@ -1859,6 +1893,11 @@ function Wallet() {
               
               {!receiveCompleted ? (
                 <>
+                  <div className="warning-banner warning">
+                    <div className="warning-content">
+                      {t('wallet.receiveLimitBeta', { limit: RECEIVE_AMOUNT_LIMIT })}
+                    </div>
+                  </div>
                   {!invoice ? (
                     <>
                       {!isConnected ? (
@@ -1871,17 +1910,23 @@ function Wallet() {
                         <input
                           type="number"
                           value={receiveAmount}
-                          onChange={(e) => setReceiveAmount(e.target.value)}
+                          onChange={(e) => handleReceiveAmountChange(e.target.value)}
                           placeholder="10000"
                           min="1"
+                          max={RECEIVE_AMOUNT_LIMIT - 1}
                           disabled={!isConnected}
                         />
                       </div>
+                      {receiveAmountTooHigh && (
+                        <div className="receive-error">
+                          {t('wallet.receiveAmountLimit', { limit: RECEIVE_AMOUNT_LIMIT })}
+                        </div>
+                      )}
                       <div className="receive-actions">
                         <button
                           onClick={generateInvoice}
                           className="primary-btn"
-                          disabled={loading || !receiveAmount || !isConnected}
+                          disabled={loading || !receiveAmount || receiveAmountTooHigh || !isConnected}
                         >
                           {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
@@ -2003,6 +2048,12 @@ function Wallet() {
         <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
         <p className="wallet-subtitle">{t('wallet.subtitle')}</p>
         {walletName && <h2 className="wallet-name-title">{t('wallet.walletTitle', { name: walletName })}</h2>}
+      </div>
+
+      <div className="warning-banner warning">
+        <div className="warning-content">
+          {t('wallet.receiveLimitBeta', { limit: RECEIVE_AMOUNT_LIMIT })}
+        </div>
       </div>
 
       {/* Storage warning banners */}

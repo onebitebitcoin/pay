@@ -95,6 +95,8 @@
     "invoiceAmount": "Invoice Amount",
     "backToWallet": "Back to Wallet",
     "receiveSubtext": "Enter the amount to receive Bitcoin",
+    "receiveAmountLimit": "Invoices cannot exceed {{limit}} sats",
+    "receiveLimitBeta": "Beta notice: invoices of {{limit}} sats or more are not supported yet",
     "networkDisconnected": "Network disconnected. Mint connection required. Please refresh.",
     "mintConnection": "connection",
     "invoicePlaceholder": "lnbc... or user@domain",

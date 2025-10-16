@@ -1448,6 +1448,12 @@
   padding: 0.75rem 1rem;
 }
 
+.receive-error {
+  margin-top: -0.25rem;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
 .receive-helper {
   display: flex;
   align-items: center;
