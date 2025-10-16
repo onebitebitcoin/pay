@@ -241,6 +241,38 @@
   color: var(--muted);
 }
 
+.fiat-approx {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.fiat-approx.error {
+  color: var(--danger);
+}
+
+.fiat-approx.muted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.fiat-hint {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.qr-fiat-display {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.success-amount.fiat {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .balance-btc {
   font-size: 1.1rem;
   opacity: 0.8;

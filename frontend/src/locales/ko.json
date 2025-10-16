@@ -97,6 +97,13 @@
     "receiveSubtext": "받을 금액을 입력하고 비트코인을 받아보세요",
     "receiveAmountLimit": "{{limit}} sats 이상은 입력할 수 없어요",
     "receiveLimitBeta": "현재 베타 버전에서는 {{limit}} sats 이상은 받을 수 없어요",
+    "fiatApprox": "대략 {{value}} ({{source}} 기준)",
+    "fiatRateLoading": "환율 정보를 불러오는 중...",
+    "fiatRateUnavailable": "환율 정보를 불러오지 못했습니다",
+    "rateSource": {
+      "upbit": "업비트",
+      "coingecko": "코인게코"
+    },
     "networkDisconnected": "네트워크 연결이 끊겼습니다. Mint 연결이 필요합니다. 새로고침하세요.",
     "mintConnection": "연결",
     "invoicePlaceholder": "lnbc... 또는 user@domain",

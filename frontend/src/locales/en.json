@@ -97,6 +97,13 @@
     "receiveSubtext": "Enter the amount to receive Bitcoin",
     "receiveAmountLimit": "Invoices cannot exceed {{limit}} sats",
     "receiveLimitBeta": "Beta notice: invoices of {{limit}} sats or more are not supported yet",
+    "fiatApprox": "Approx. {{value}} ({{source}})",
+    "fiatRateLoading": "Fetching exchange rate...",
+    "fiatRateUnavailable": "Exchange rate unavailable",
+    "rateSource": {
+      "upbit": "Upbit",
+      "coingecko": "CoinGecko"
+    },
     "networkDisconnected": "Network disconnected. Mint connection required. Please refresh.",
     "mintConnection": "connection",
     "invoicePlaceholder": "lnbc... or user@domain",

@@ -97,6 +97,13 @@
     "receiveSubtext": "受け取る金額を入力してビットコインを受け取りましょう",
     "receiveAmountLimit": "{{limit}} sats 以上は入力できません",
     "receiveLimitBeta": "現在のベータ版では {{limit}} sats 以上のインボイスは受け取れません",
+    "fiatApprox": "概算 {{value}} ({{source}} 基準)",
+    "fiatRateLoading": "為替レートを取得中...",
+    "fiatRateUnavailable": "為替レートを取得できませんでした",
+    "rateSource": {
+      "upbit": "アップビット",
+      "coingecko": "コインゲッコー"
+    },
     "networkDisconnected": "ネットワーク接続が切断されました。Mint接続が必要です。リロードしてください。",
     "mintConnection": "接続",
     "invoicePlaceholder": "lnbc... または user@domain",

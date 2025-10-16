@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
@@ -8,7 +8,7 @@ import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deseria
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
-
+const SATS_PER_BTC = 100000000;
 
 const normalizeQrValue = (rawValue = '') => {
   if (!rawValue) return '';
@@ -27,6 +27,41 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 const RECEIVE_AMOUNT_LIMIT = 100;
+
+const createInitialFiatState = (language = 'en') => {
+  switch (language) {
+    case 'ko':
+      return {
+        currency: 'KRW',
+        symbol: '₩',
+        rate: null,
+        sourceKey: 'upbit',
+        loading: false,
+        error: '',
+        lastUpdated: null,
+      };
+    case 'ja':
+      return {
+        currency: 'JPY',
+        symbol: '¥',
+        rate: null,
+        sourceKey: 'coingecko',
+        loading: false,
+        error: '',
+        lastUpdated: null,
+      };
+    default:
+      return {
+        currency: 'USD',
+        symbol: '$',
+        rate: null,
+        sourceKey: 'coingecko',
+        loading: false,
+        error: '',
+        lastUpdated: null,
+      };
+  }
+};
 
 function Wallet() {
   const { t, i18n } = useTranslation();
@@ -106,6 +141,7 @@ function Wallet() {
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
+  const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
   
 
 
@@ -120,6 +156,131 @@ function Wallet() {
   const isSendView = location.pathname === '/wallet/send';
 
   const networkDisconnectedMessage = t('wallet.networkDisconnected');
+  const locale = i18n.language === 'ko' ? 'ko-KR' : i18n.language === 'ja' ? 'ja-JP' : 'en-US';
+
+  useEffect(() => {
+    let active = true;
+    const defaults = createInitialFiatState(i18n.language);
+    setFiatRate(() => ({
+      ...defaults,
+      rate: null,
+      lastUpdated: null,
+    }));
+
+    const fetchFiatRate = async () => {
+      try {
+        if (!active) {
+          return;
+        }
+        setFiatRate((prev) => ({ ...prev, loading: true, error: '' }));
+
+        let rate = null;
+        let sourceKey = defaults.sourceKey;
+
+        if (i18n.language === 'ko') {
+          try {
+            const response = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC');
+            if (!response.ok) {
+              throw new Error(`Upbit responded with ${response.status}`);
+            }
+            const data = await response.json();
+            const tradePrice = Number(data?.[0]?.trade_price);
+            if (!Number.isFinite(tradePrice)) {
+              throw new Error('Upbit trade price missing');
+            }
+            rate = tradePrice;
+            sourceKey = 'upbit';
+          } catch (error) {
+            console.warn('Failed to fetch Upbit rate, falling back to CoinGecko:', error);
+          }
+        }
+
+        if (rate === null) {
+          const vsCurrency = i18n.language === 'ja' ? 'jpy' : i18n.language === 'ko' ? 'krw' : 'usd';
+          const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${vsCurrency}`);
+          if (!response.ok) {
+            throw new Error(`CoinGecko responded with ${response.status}`);
+          }
+          const data = await response.json();
+          const price = Number(data?.bitcoin?.[vsCurrency]);
+          if (!Number.isFinite(price)) {
+            throw new Error('CoinGecko price missing');
+          }
+          rate = price;
+          sourceKey = i18n.language === 'ko' && sourceKey === 'upbit' ? 'upbit' : 'coingecko';
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setFiatRate({
+          currency: defaults.currency,
+          symbol: defaults.symbol,
+          rate,
+          sourceKey,
+          loading: false,
+          error: '',
+          lastUpdated: Date.now(),
+        });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        console.error('Failed to load fiat rate:', error);
+        setFiatRate((prev) => ({
+          ...prev,
+          rate: null,
+          loading: false,
+          error: error?.message || 'Rate fetch failed',
+        }));
+      }
+    };
+
+    fetchFiatRate();
+    const interval = setInterval(fetchFiatRate, 60 * 1000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [i18n.language]);
+
+  const fiatFormatter = useMemo(() => {
+    const fractionDigits = fiatRate.currency === 'USD' ? 2 : 0;
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: fiatRate.currency,
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: fractionDigits === 0 ? 0 : 2,
+    });
+  }, [fiatRate.currency, locale]);
+
+  const formatFiatAmount = useCallback((sats) => {
+    if (!fiatRate.rate) {
+      return null;
+    }
+    const numeric = Number(sats);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return null;
+    }
+    const fiatValue = (numeric / SATS_PER_BTC) * fiatRate.rate;
+    if (!Number.isFinite(fiatValue)) {
+      return null;
+    }
+    try {
+      return fiatFormatter.format(fiatValue);
+    } catch (error) {
+      console.warn('Failed to format fiat amount', { fiatValue, error });
+      return null;
+    }
+  }, [fiatRate.rate, fiatFormatter]);
+
+  const rateSourceLabel = fiatRate.sourceKey ? t(`wallet.rateSource.${fiatRate.sourceKey}`) : '';
+  const balanceFiatDisplay = formatFiatAmount(ecashBalance);
+  const receiveFiatDisplay = formatFiatAmount(receiveAmount);
+  const receivedFiatDisplay = formatFiatAmount(receivedAmount);
+  const sendFiatDisplay = formatFiatAmount(sendAmount);
 
   const clearPendingMint = useCallback(() => {
     pendingMintRef.current = null;
@@ -1840,6 +2001,11 @@ function Wallet() {
                     disabled={!isConnected}
                   />
                   <small>{t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}</small>
+                  {sendFiatDisplay && (
+                    <div className="fiat-hint">
+                      {t('wallet.fiatApprox', { value: sendFiatDisplay, source: rateSourceLabel })}
+                    </div>
+                  )}
                 </div>
               )}
               {invoiceQuote && (
@@ -1922,6 +2088,11 @@ function Wallet() {
                           {t('wallet.receiveAmountLimit', { limit: RECEIVE_AMOUNT_LIMIT })}
                         </div>
                       )}
+                      {!receiveAmountTooHigh && receiveFiatDisplay && (
+                        <div className="fiat-hint">
+                          {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
+                        </div>
+                      )}
                       <div className="receive-actions">
                         <button
                           onClick={generateInvoice}
@@ -1968,6 +2139,11 @@ function Wallet() {
                             </div>
                           </div>
                           <div className="qr-amount-display">{formatAmount(receiveAmount)} sats</div>
+                          {receiveFiatDisplay && (
+                            <div className="qr-fiat-display">
+                              {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
+                            </div>
+                          )}
                           <div className="qr-zoom-hint">{t('wallet.tapToZoom')}</div>
                         </div>
                         <label>{t('wallet.tapToCopy')}</label>
@@ -2032,6 +2208,11 @@ function Wallet() {
                     <p className="success-amount">
                       <span className="amount-value">{formatAmount(receivedAmount)}</span> sats
                     </p>
+                    {receivedFiatDisplay && (
+                      <p className="success-amount fiat">
+                        {t('wallet.fiatApprox', { value: receivedFiatDisplay, source: rateSourceLabel })}
+                      </p>
+                    )}
                     <p className="success-message">{t('wallet.receiveSuccess')}</p>
                   </div>
                   <div className="receive-actions">
@@ -2091,6 +2272,17 @@ function Wallet() {
               <div className="balance-amount">
                 {formatAmount(ecashBalance)} <span className="unit">sats</span>
               </div>
+              {fiatRate.loading && !balanceFiatDisplay && (
+                <div className="fiat-approx muted">{t('wallet.fiatRateLoading')}</div>
+              )}
+              {fiatRate.error && !fiatRate.loading && (
+                <div className="fiat-approx error">{t('wallet.fiatRateUnavailable')}</div>
+              )}
+              {balanceFiatDisplay && !fiatRate.error && (
+                <div className="fiat-approx">
+                  {t('wallet.fiatApprox', { value: balanceFiatDisplay, source: rateSourceLabel })}
+                </div>
+              )}
             </div>
             <div className="balance-manage">
               <button className="icon-btn" onClick={checkPendingQuote} title={t('wallet.checkPending')} disabled={loading}>
@@ -2200,6 +2392,11 @@ function Wallet() {
                     max={ecashBalance}
                   />
                   <small>{t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}</small>
+                {sendFiatDisplay && (
+                  <div className="fiat-hint">
+                    {t('wallet.fiatApprox', { value: sendFiatDisplay, source: rateSourceLabel })}
+                  </div>
+                )}
                 </div>
               )}
               {invoiceQuote && (
