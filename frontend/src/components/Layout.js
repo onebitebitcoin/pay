@@ -14,7 +14,6 @@ const Layout = ({ children }) => {
 
   const navigation = [
     { name: t('nav.wallet'), path: '/', icon: 'bitcoin' },
-    { name: t('nav.map'), path: '/map', icon: 'map' },
     { name: t('nav.faq'), path: '/about', icon: 'info' },
     { name: t('nav.settings'), path: '/settings', icon: 'settings' }
   ];

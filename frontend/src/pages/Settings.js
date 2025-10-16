@@ -29,6 +29,7 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const showStoreManagement = false; // Temporarily hide store registration UI
   // Recommended mint URLs
   const RECOMMENDED_MINTS = [
     'https://mint.cubabitcoin.org',
@@ -469,24 +470,26 @@ function Settings() {
         </div>
 
         {/* Store Management */}
-        <div className="settings-section">
-          <h2>{t('settings.storeManagement')}</h2>
+        {showStoreManagement && (
+          <div className="settings-section">
+            <h2>{t('settings.storeManagement')}</h2>
 
-          <div className="setting-item">
-            <div className="setting-info">
-              <div className="setting-title">{t('settings.registerStore')}</div>
-              <div className="setting-description">
-                {t('settings.registerStoreDesc')}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-title">{t('settings.registerStore')}</div>
+                <div className="setting-description">
+                  {t('settings.registerStoreDesc')}
+                </div>
               </div>
+              <button
+                onClick={() => navigate('/settings/add-store')}
+                className="setting-button"
+              >
+                {t('settings.addStore')}
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/settings/add-store')}
-              className="setting-button"
-            >
-              {t('settings.addStore')}
-            </button>
           </div>
-        </div>
+        )}
 
         {/* Danger Zone */}
         <div className="settings-section danger-section">
