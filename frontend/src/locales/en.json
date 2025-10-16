@@ -97,7 +97,7 @@
     "receiveSubtext": "Enter the amount to receive Bitcoin",
     "receiveAmountMinimum": "Invoices must be at least {{amount}} sats",
     "receiveAmountMaximum": "Maximum invoice amount is {{amount}} sats",
-    "receiveMinBeta": "Beta notice: Lightning receives start at {{amount}} sats",
+    "receiveMinBeta": "Beta notice: You can receive payments up to 1000 sats only",
     "fiatApprox": "Approx. {{value}} ({{source}})",
     "fiatRateLoading": "Fetching exchange rate...",
     "fiatRateUnavailable": "Exchange rate unavailable",

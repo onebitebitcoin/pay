@@ -97,7 +97,7 @@
     "receiveSubtext": "受け取る金額を入力してビットコインを受け取りましょう",
     "receiveAmountMinimum": "{{amount}} sats 以上を入力してください",
     "receiveAmountMaximum": "{{amount}} sats 以下で入力してください",
-    "receiveMinBeta": "現在のベータ版では {{amount}} sats 以上から受け取り可能です",
+    "receiveMinBeta": "現在のベータ版では最大 1000 sats までしか受け取れません",
     "fiatApprox": "概算 {{value}} ({{source}} 基準)",
     "fiatRateLoading": "為替レートを取得中...",
     "fiatRateUnavailable": "為替レートを取得できませんでした",
