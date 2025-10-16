@@ -103,16 +103,15 @@ function QrScanner({ onScan, onError, className = '' }) {
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
             const enhancementConstraints = { advanced: [] };
 
+            // Prioritize continuous autofocus for QR scanning
             if (capabilities.focusMode?.includes('continuous')) {
               enhancementConstraints.advanced.push({ focusMode: 'continuous' });
-            }
-
-            if (capabilities.focusMode?.includes('manual') && capabilities.focusDistance) {
-              const { max = 1 } = capabilities.focusDistance;
-              enhancementConstraints.advanced.push({ focusMode: 'manual' });
-              enhancementConstraints.advanced.push({ focusDistance: max ?? 1 });
               setFocusSupported(true);
-            } else if (capabilities.focusMode?.includes('continuous')) {
+            } else if (capabilities.focusMode?.includes('manual') && capabilities.focusDistance) {
+              // Use minimum distance (close-up focus) for QR codes
+              const { min = 0 } = capabilities.focusDistance;
+              enhancementConstraints.advanced.push({ focusMode: 'manual' });
+              enhancementConstraints.advanced.push({ focusDistance: min ?? 0 });
               setFocusSupported(true);
             }
 
@@ -146,15 +145,17 @@ function QrScanner({ onScan, onError, className = '' }) {
                 photoCapabilitiesRef.current = photoCaps;
 
                 const focusModes = photoCaps.focusMode || [];
-                if (focusModes.includes('manual') && photoCaps.focusDistance) {
+                // Prioritize continuous autofocus for better QR code scanning
+                if (focusModes.includes('continuous')) {
+                  setFocusSupported(true);
+                  await imageCapture.setOptions({ focusMode: 'continuous' });
+                } else if (focusModes.includes('manual') && photoCaps.focusDistance) {
+                  // Use minimum distance (close-up focus) for QR codes
                   setFocusSupported(true);
                   await imageCapture.setOptions({
                     focusMode: 'manual',
-                    focusDistance: photoCaps.focusDistance.max ?? 1
+                    focusDistance: photoCaps.focusDistance.min ?? 0
                   });
-                } else if (focusModes.includes('continuous')) {
-                  setFocusSupported(true);
-                  await imageCapture.setOptions({ focusMode: 'continuous' });
                 }
 
                 const torchAvailable = (photoCaps.fillLightMode || []).includes('torch') || photoCaps.torch;
@@ -231,11 +232,13 @@ function QrScanner({ onScan, onError, className = '' }) {
         const manualSupported = focusMode.includes('manual') && focusDistance;
         const constraints = { advanced: [] };
 
-        if (manualSupported) {
-          constraints.advanced.push({ focusMode: 'manual' });
-          constraints.advanced.push({ focusDistance: focusDistance.max ?? 1 });
-        } else if (focusMode.includes('continuous')) {
+        // Prioritize continuous autofocus for QR code scanning
+        if (focusMode.includes('continuous')) {
           constraints.advanced.push({ focusMode: 'continuous' });
+        } else if (manualSupported) {
+          // Use minimum distance (close-up focus) for QR codes
+          constraints.advanced.push({ focusMode: 'manual' });
+          constraints.advanced.push({ focusDistance: focusDistance.min ?? 0 });
         }
 
         if (constraints.advanced.length > 0) {
@@ -245,13 +248,15 @@ function QrScanner({ onScan, onError, className = '' }) {
 
       if (imageCaptureRef.current && photoCapabilitiesRef.current) {
         const caps = photoCapabilitiesRef.current;
-        if ((caps.focusMode || []).includes('manual') && caps.focusDistance) {
+        // Prioritize continuous autofocus for QR code scanning
+        if ((caps.focusMode || []).includes('continuous')) {
+          await imageCaptureRef.current.setOptions({ focusMode: 'continuous' });
+        } else if ((caps.focusMode || []).includes('manual') && caps.focusDistance) {
+          // Use minimum distance (close-up focus) for QR codes
           await imageCaptureRef.current.setOptions({
             focusMode: 'manual',
-            focusDistance: caps.focusDistance.max ?? 1
+            focusDistance: caps.focusDistance.min ?? 0
           });
-        } else if ((caps.focusMode || []).includes('continuous')) {
-          await imageCaptureRef.current.setOptions({ focusMode: 'continuous' });
         }
       }
     } catch (err) {
