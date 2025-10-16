@@ -39,14 +39,14 @@ function QrScanner({ onScan, onError, className = '' }) {
           {
             // Maximum performance scanning settings
             returnDetailedScanResult: true,
-            highlightScanRegion: true,
-            highlightCodeOutline: true,
-            maxScansPerSecond: 60, // Maximum scan rate for highest performance
+            highlightScanRegion: false,
+            highlightCodeOutline: false,
+            maxScansPerSecond: 24,
             preferredCamera: 'environment',
             calculateScanRegion: (video) => {
-              // Use a very large scan region for maximum recognition
+              // Use a balanced scan region (70% of shorter side) for better autofocus
               const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-              const scanRegionSize = Math.round(0.95 * smallestDimension);
+              const scanRegionSize = Math.round(0.7 * smallestDimension);
               return {
                 x: Math.round((video.videoWidth - scanRegionSize) / 2),
                 y: Math.round((video.videoHeight - scanRegionSize) / 2),
@@ -67,10 +67,9 @@ function QrScanner({ onScan, onError, className = '' }) {
         // Request highest possible resolution and frame rate for crisp QR scanning
         const constraints = {
           facingMode: 'environment',
-          width: { ideal: 3840, min: 1280 },  // Request 4K, minimum 720p
-          height: { ideal: 2160, min: 720 },
-          frameRate: { ideal: 60, min: 30 },
-          aspectRatio: { ideal: 16/9 },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          frameRate: { ideal: 30, min: 24 },
           advanced: [
             { focusMode: 'continuous' },
             { exposureMode: 'continuous' },
@@ -81,28 +80,14 @@ function QrScanner({ onScan, onError, className = '' }) {
         try {
           await scanner.start(constraints);
         } catch (err) {
-          // Fallback to high-quality constraints if ultra-high not supported
-          console.log('4K camera not supported, trying Full HD');
-          try {
-            await scanner.start({
-              facingMode: 'environment',
-              width: { ideal: 1920, min: 1280 },
-              height: { ideal: 1080, min: 720 },
-              frameRate: { ideal: 60, min: 30 },
-              advanced: [
-                { focusMode: 'continuous' },
-                { exposureMode: 'continuous' }
-              ]
-            });
-          } catch (err2) {
-            // Final fallback to minimal constraints
-            console.log('Advanced camera features not supported, using basic constraints');
-            await scanner.start({
-              facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            });
-          }
+          console.log('High-resolution constraints failed, falling back to HD');
+          await scanner.start({
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, min: 24 },
+            advanced: [{ focusMode: 'continuous' }]
+          });
         }
 
         setIsScanning(true);
@@ -143,14 +128,6 @@ function QrScanner({ onScan, onError, className = '' }) {
 
             if (capabilities.whiteBalanceMode?.includes('continuous')) {
               enhancementConstraints.advanced.push({ whiteBalanceMode: 'continuous' });
-            }
-
-            if (capabilities.zoom) {
-              const { min = 1, max = 1 } = capabilities.zoom;
-              const slightZoom = Math.min(max, Math.max(min, 1.2));
-              if (slightZoom > min) {
-                enhancementConstraints.advanced.push({ zoom: slightZoom });
-              }
             }
 
             if (enhancementConstraints.advanced.length > 0) {
@@ -297,9 +274,6 @@ function QrScanner({ onScan, onError, className = '' }) {
             <div className="qr-scanner__corner qr-scanner__corner--tr" />
             <div className="qr-scanner__corner qr-scanner__corner--bl" />
             <div className="qr-scanner__corner qr-scanner__corner--br" />
-            <div className="qr-scanner__instruction">
-              {t('wallet.qrInstruction')}
-            </div>
             <div className="qr-scanner__controls">
               {focusSupported && (
                 <button type="button" className="qr-scanner__control-btn" onClick={refocusCamera}>
