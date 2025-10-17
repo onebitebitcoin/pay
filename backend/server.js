@@ -601,7 +601,46 @@ app.post('/api/cashu/melt/quote', async (req, res) => {
     if (!bolt11) return res.status(400).json({ error: 'request 필요' });
     const out = await cashu.meltQuoteBolt11({ request: bolt11, mintUrl });
     res.json(out);
-  } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
+  } catch (e) {
+    // Try to parse and clean up error message from mint server
+    let errorMsg = e.data || e.message;
+    let errorCode = e.code || e.status;
+
+    // If error data is a JSON string, try to parse it
+    if (typeof errorMsg === 'string') {
+      try {
+        const parsed = JSON.parse(errorMsg);
+        if (parsed.detail) {
+          errorMsg = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
+        } else if (parsed.message) {
+          errorMsg = parsed.message;
+        } else if (parsed.error) {
+          errorMsg = parsed.error;
+        }
+        if (parsed.code) errorCode = parsed.code;
+      } catch {
+        // If parsing fails, use the original string
+      }
+    }
+
+    // Check if error message is meaningless (hex string, very short, etc.)
+    const isMeaningless = typeof errorMsg === 'string' && (
+      /^[0-9a-f]{8,}$/i.test(errorMsg.trim()) || // Hex string
+      errorMsg.trim().length < 3 || // Too short
+      /^[0-9]+$/.test(errorMsg.trim()) // Just numbers
+    );
+
+    // Use a default message if the error is meaningless
+    if (isMeaningless) {
+      errorMsg = '유효하지 않은 인보이스입니다';
+    }
+
+    const response = { error: errorMsg };
+    if (errorCode) response.code = errorCode;
+
+    console.error('Melt quote error:', { originalError: e.data || e.message, code: errorCode, sentToClient: errorMsg });
+    res.status(e.status || 500).json(response);
+  }
 });
 
 app.post('/api/cashu/melt', async (req, res) => {
@@ -613,7 +652,46 @@ app.post('/api/cashu/melt', async (req, res) => {
     }
     const out = await cashu.meltBolt11(req.body, mintUrl);
     res.json(out);
-  } catch (e) { res.status(e.status || 500).json({ error: e.data || e.message }); }
+  } catch (e) {
+    // Try to parse and clean up error message from mint server
+    let errorMsg = e.data || e.message;
+    let errorCode = e.code || e.status;
+
+    // If error data is a JSON string, try to parse it
+    if (typeof errorMsg === 'string') {
+      try {
+        const parsed = JSON.parse(errorMsg);
+        if (parsed.detail) {
+          errorMsg = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
+        } else if (parsed.message) {
+          errorMsg = parsed.message;
+        } else if (parsed.error) {
+          errorMsg = parsed.error;
+        }
+        if (parsed.code) errorCode = parsed.code;
+      } catch {
+        // If parsing fails, use the original string
+      }
+    }
+
+    // Check if error message is meaningless (hex string, very short, etc.)
+    const isMeaningless = typeof errorMsg === 'string' && (
+      /^[0-9a-f]{8,}$/i.test(errorMsg.trim()) || // Hex string
+      errorMsg.trim().length < 3 || // Too short
+      /^[0-9]+$/.test(errorMsg.trim()) // Just numbers
+    );
+
+    // Use a default message if the error is meaningless
+    if (isMeaningless) {
+      errorMsg = '송금 실패';
+    }
+
+    const response = { error: errorMsg };
+    if (errorCode) response.code = errorCode;
+
+    console.error('Melt error:', { originalError: e.data || e.message, code: errorCode, sentToClient: errorMsg });
+    res.status(e.status || 500).json(response);
+  }
 });
 
 // Check proof states (spent/unspent)

@@ -1643,13 +1643,61 @@ function Wallet() {
           try {
             const err = await q.json();
             if (err?.error) {
-              try {
-                const inner = JSON.parse(err.error);
-                if (inner?.detail?.[0]?.msg) msg = inner.detail[0].msg;
-                else msg = err.error;
-              } catch { msg = err.error; }
+              // Try to extract meaningful error message
+              let errorMsg = err.error;
+
+              // If error is a JSON string, try to parse it
+              if (typeof errorMsg === 'string') {
+                try {
+                  const inner = JSON.parse(errorMsg);
+                  if (inner?.detail?.[0]?.msg) {
+                    errorMsg = inner.detail[0].msg;
+                  } else if (inner?.detail && typeof inner.detail === 'string') {
+                    errorMsg = inner.detail;
+                  } else if (inner?.message) {
+                    errorMsg = inner.message;
+                  }
+                } catch {
+                  // If parsing fails, use the string as-is
+                }
+              }
+
+              // Check if error message is meaningless (hex string, very short, etc.)
+              const isMeaningless = typeof errorMsg === 'string' && (
+                /^[0-9a-f]{8,}$/i.test(errorMsg.trim()) || // Hex string
+                errorMsg.trim().length < 3 || // Too short
+                /^[0-9]+$/.test(errorMsg.trim()) // Just numbers
+              );
+
+              msg = isMeaningless ? '유효하지 않은 인보이스입니다' : errorMsg;
+            } else if (err?.detail) {
+              // Some errors come with detail field directly
+              let detailMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+
+              // Check if detail is meaningless
+              const isMeaningless = typeof detailMsg === 'string' && (
+                /^[0-9a-f]{8,}$/i.test(detailMsg.trim()) ||
+                detailMsg.trim().length < 3 ||
+                /^[0-9]+$/.test(detailMsg.trim())
+              );
+
+              msg = isMeaningless ? '유효하지 않은 인보이스입니다' : detailMsg;
+            } else if (err?.message) {
+              msg = err.message;
             }
-          } catch {}
+
+            // Log error details for debugging
+            if (err?.code !== undefined || err?.detail || err?.error) {
+              console.error('Invoice quote error:', {
+                code: err.code,
+                detail: err.detail,
+                error: err.error,
+                displayMessage: msg
+              });
+            }
+          } catch (parseErr) {
+            console.error('Failed to parse error response:', parseErr);
+          }
           setInvoiceError(translateErrorMessage(msg));
           setInvoiceQuote(null);
           setFetchingQuote(false);
