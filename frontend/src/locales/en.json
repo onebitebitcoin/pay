@@ -487,6 +487,8 @@
     "invoiceRequired": "Please enter Lightning invoice (lnbc...) or Lightning address (user@domain)",
     "amountRequired": "Amount is required",
     "addressInvoiceError": "Failed to issue address invoice",
+    "lightningAddressRejected": "The Lightning address provider rejected the request",
+    "errorCodeSuffix": "Code: {{code}}",
     "invoiceIssueFailed": "Invoice issuance failed",
     "quoteError": "Quote request failed",
     "invoiceOrAddressRequired": "Invoice or address required",

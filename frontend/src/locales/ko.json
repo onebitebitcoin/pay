@@ -487,6 +487,8 @@
     "invoiceRequired": "라이트닝 인보이스(lnbc...) 또는 라이트닝 주소(user@domain)를 입력하세요",
     "amountRequired": "금액이 필요합니다",
     "addressInvoiceError": "주소 인보이스 발급 실패",
+    "lightningAddressRejected": "라이트닝 주소 제공자가 결제를 거부했습니다",
+    "errorCodeSuffix": "코드: {{code}}",
     "invoiceIssueFailed": "인보이스 발급 실패",
     "quoteError": "견적 요청 실패",
     "invoiceOrAddressRequired": "인보이스 또는 주소를 입력하세요",

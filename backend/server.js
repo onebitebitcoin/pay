@@ -733,7 +733,24 @@ app.post('/api/lightningaddr/quote', async (req, res) => {
     const out = await lnaddr.requestInvoice(address, parseInt(amount, 10));
     res.json(out);
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message || '라이트닝 주소 인보이스 발급 실패' });
+    const status = e.status || 500;
+    const errorMessage = e.message || '라이트닝 주소 인보이스 발급 실패';
+    const payload = { error: errorMessage };
+
+    // Surface raw provider reason when available for debugging in client logs
+    const providerReason = e.reason || e.data;
+    if (providerReason && typeof providerReason === 'string' && providerReason.trim()) {
+      payload.reason = providerReason.trim();
+    }
+
+    console.error('Lightning address invoice error:', {
+      status,
+      message: errorMessage,
+      reason: e.reason || e.data,
+      stack: e.stack,
+    });
+
+    res.status(status).json(payload);
   }
 });
 

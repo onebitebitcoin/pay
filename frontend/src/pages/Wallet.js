@@ -1566,6 +1566,13 @@ function Wallet() {
     return s.replace(/\s+/g, '').toLowerCase();
   };
 
+  const isMeaninglessErrorCode = (value) => {
+    if (!value || typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    return /^[0-9a-f]{8,}$/i.test(trimmed) || /^[0-9]{6,}$/.test(trimmed);
+  };
+
   const translateErrorMessage = (errorMsg) => {
     if (!errorMsg || typeof errorMsg !== 'string') return errorMsg;
 
@@ -1613,6 +1620,34 @@ function Wallet() {
 
     // Return original message if no match
     return errorMsg;
+  };
+
+  const buildLightningAddressErrorMessage = (err) => {
+    const fallback = t('messages.addressInvoiceError');
+    const providerFallback = t('messages.lightningAddressRejected');
+
+    const candidates = [];
+    if (err?.error) candidates.push(err.error);
+    if (err?.reason) candidates.push(err.reason);
+
+    for (const raw of candidates) {
+      if (!raw) continue;
+      const text = typeof raw === 'string' ? raw.trim() : JSON.stringify(raw);
+      if (!text) continue;
+
+      const translated = translateErrorMessage(text);
+      if (translated && translated !== text) {
+        return translated;
+      }
+
+      if (isMeaninglessErrorCode(text)) {
+        return `${providerFallback} (${t('messages.errorCodeSuffix', { code: text })})`;
+      }
+
+      return `${providerFallback}: ${text}`;
+    }
+
+    return fallback;
   };
 
   // Auto-fetch quote when invoice is entered
@@ -1750,7 +1785,7 @@ function Wallet() {
     const hasAddress = isLightningAddress(sendAddress);
 
     if (!hasInvoice && !hasAddress) {
-      setInvoiceError('라이트닝 인보이스(lnbc...) 또는 라이트닝 주소(user@domain)를 입력하세요');
+      setInvoiceError(t('messages.invoiceRequired'));
       return;
     }
 
@@ -1763,7 +1798,7 @@ function Wallet() {
         ({ quoteData, bolt11, invoiceAmount, feeReserve, need } = invoiceQuote);
       } else if (hasAddress) {
         const amt = parseInt(sendAmount, 10);
-        if (!amt || amt <= 0) throw new Error('금액이 필요합니다');
+        if (!amt || amt <= 0) throw new Error(t('messages.amountRequired'));
 
         const rq = await fetch(apiUrl('/api/lightningaddr/quote'), {
           method: 'POST',
@@ -1772,17 +1807,23 @@ function Wallet() {
         });
 
         if (!rq.ok) {
-          let msg = '주소 인보이스 발급 실패';
+          let msg = t('messages.addressInvoiceError');
           try {
             const err = await rq.json();
-            if (err?.error) msg = translateErrorMessage(err.error);
+            msg = buildLightningAddressErrorMessage(err);
           } catch {}
           throw new Error(msg);
         }
 
         const rqj = await rq.json();
+        if (rqj && typeof rqj === 'object' && String(rqj.status || '').toUpperCase() === 'ERROR') {
+          throw new Error(buildLightningAddressErrorMessage({
+            error: rqj.reason || rqj.error || rqj.message,
+            reason: rqj.reason || rqj.error || rqj.message,
+          }));
+        }
         bolt11 = rqj?.request;
-        if (!bolt11) throw new Error('인보이스 발급 실패');
+        if (!bolt11) throw new Error(t('messages.invoiceIssueFailed'));
 
         const q = await fetch(apiUrl('/api/cashu/melt/quote'), {
           method: 'POST',
@@ -1790,14 +1831,14 @@ function Wallet() {
           body: JSON.stringify({ request: bolt11, invoice: bolt11, mintUrl })
         });
 
-        if (!q.ok) throw new Error('견적 요청 실패');
+        if (!q.ok) throw new Error(t('messages.quoteError'));
 
         quoteData = await q.json();
         invoiceAmount = Number(quoteData?.amount || 0);
         feeReserve = Number(quoteData?.fee_reserve || quoteData?.fee || 0);
         need = invoiceAmount + feeReserve;
       } else {
-        throw new Error('인보이스 또는 주소를 입력하세요');
+        throw new Error(t('messages.invoiceOrAddressRequired'));
       }
 
       const available = getBalanceSats();
@@ -1815,7 +1856,7 @@ function Wallet() {
 
       if (change > 0) {
         const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-        if (!kr.ok) throw new Error('Mint keys 조회 실패');
+        if (!kr.ok) throw new Error(t('messages.mintKeysFetchError'));
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
         changeOutputs = built.outputs;
@@ -1836,7 +1877,7 @@ function Wallet() {
       });
 
       if (!m.ok) {
-        let msg = '송금 실패';
+        let msg = t('messages.sendFailed');
         try {
           const err = await m.json();
           if (err?.error) {
@@ -1849,7 +1890,7 @@ function Wallet() {
               try {
                 const inner = JSON.parse(err.error);
                 if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
-                  msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
+                  msg = t('messages.duplicateInputs');
                 } else if (inner?.detail?.[0]?.msg) msg = translateErrorMessage(inner.detail[0].msg);
                 else msg = translateErrorMessage(err.error);
               } catch { msg = translateErrorMessage(err.error); }
@@ -1925,7 +1966,7 @@ function Wallet() {
     try {
       setLoading(true);
       const { quoteData } = sendCtxRef.current || {};
-      if (!quoteData) throw new Error('견적 정보가 없습니다');
+      if (!quoteData) throw new Error(t('messages.quoteDataMissing'));
       const invoiceAmount = Number(quoteData?.amount || 0);
       const feeReserve = Number(quoteData?.fee_reserve || quoteData?.fee || 0);
       const need = invoiceAmount + feeReserve;
@@ -1937,7 +1978,7 @@ function Wallet() {
       const change = Math.max(0, Number(total) - Number(need));
       if (change > 0) {
       const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-        if (!kr.ok) throw new Error('Mint keys 조회 실패');
+        if (!kr.ok) throw new Error(t('messages.mintKeysFetchError'));
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
         changeOutputs = built.outputs;
@@ -1950,7 +1991,7 @@ function Wallet() {
         body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: uniquePicked, outputs: changeOutputs, mintUrl })
       });
       if (!m.ok) {
-        let msg = '송금 실패';
+        let msg = t('messages.sendFailed');
         try {
           const err = await m.json();
           if (err?.error) {
@@ -1963,7 +2004,7 @@ function Wallet() {
               try {
                 const inner = JSON.parse(err.error);
                 if (inner?.code === 11007 || /duplicate inputs?/i.test(inner?.detail || '')) {
-                  msg = '중복된 증명서(inputs)가 포함되었습니다. 새로고침 후 다시 시도하세요.';
+                  msg = t('messages.duplicateInputs');
                 } else if (inner?.detail?.[0]?.msg) msg = translateErrorMessage(inner.detail[0].msg);
                 else msg = translateErrorMessage(err.error);
               } catch { msg = translateErrorMessage(err.error); }
