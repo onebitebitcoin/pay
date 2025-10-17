@@ -3,7 +3,7 @@
 export const DEFAULT_MINT_URL =
   process.env.REACT_APP_MINT_URL ||
   // Cashu Mint URL
-  'https://mint.minibits.cash/Bitcoin';
+  'https://mint.coinos.io';
 
 // Lightning Network configuration
 export const LIGHTNING_CONFIG = {

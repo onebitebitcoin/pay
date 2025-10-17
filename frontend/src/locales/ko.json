@@ -159,7 +159,6 @@
     "mintSettings": "Cashu Mint 설정",
     "mintUrl": "Mint URL",
     "mintUrlDesc": "사용할 Cashu Mint 서버 (변경 후 페이지 새로고침 필요)",
-    "recommendedMints": "추천 Mint",
     "testConnection": "연결 테스트",
     "testing": "테스트 중...",
     "connectionSuccess": "연결 성공",

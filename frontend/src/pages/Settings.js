@@ -76,16 +76,7 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [mintStatuses, setMintStatuses] = useState({});
-  const [testingMints, setTestingMints] = useState({});
   const showStoreManagement = false; // Temporarily hide store registration UI
-  // Recommended mint URLs
-  const RECOMMENDED_MINTS = [
-    { url: 'https://mint.coinos.io', name: 'Coinos', production: true },
-    { url: 'https://mint.minibits.cash/Bitcoin', name: 'Minibits', production: true },
-    { url: 'https://mint.cubabitcoin.org', name: 'CubaBitcoin', production: true },
-    { url: 'https://mint.mineracks.com', name: 'MineRacks', production: true }
-  ];
 
   const addToast = (message, type = 'info') => {
     const id = Date.now();
@@ -305,57 +296,6 @@ function Settings() {
     }
   };
 
-  const testRecommendedMint = async (mintUrl) => {
-    try {
-      setTestingMints(prev => ({ ...prev, [mintUrl]: true }));
-
-      const normalizedUrl = mintUrl.trim().replace(/\/$/, '');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-      let response;
-      try {
-        response = await fetch(`${normalizedUrl}/v1/info`, {
-          signal: controller.signal
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      if (!response.ok) {
-        throw new Error(t('messages.connectionFailedHttp', { status: response.status }));
-      }
-
-      const data = await response.json();
-
-      if (!data.name && !data.version) {
-        throw new Error(t('messages.notValidMint'));
-      }
-
-      await verifyMintOperational(normalizedUrl);
-
-      setMintStatuses(prev => ({
-        ...prev,
-        [mintUrl]: { success: true, name: data.name || 'Unknown' }
-      }));
-    } catch (error) {
-      console.error('Recommended mint test failed:', error);
-      setMintStatuses(prev => ({
-        ...prev,
-        [mintUrl]: { success: false, error: mapMintError(error) }
-      }));
-    } finally {
-      setTestingMints(prev => ({ ...prev, [mintUrl]: false }));
-    }
-  };
-
-  // Auto-test recommended mints on mount
-  useEffect(() => {
-    RECOMMENDED_MINTS.forEach(mint => {
-      testRecommendedMint(mint.url);
-    });
-  }, []);
-
   const handleResetWallet = () => {
     if (window.confirm(t('messages.confirmResetWallet'))) {
       if (window.confirm(t('messages.confirmBackupCheck'))) {
@@ -542,91 +482,6 @@ function Settings() {
                     <Icon name="check-circle" size={20} />
                   )}
                 </button>
-              </div>
-
-              {/* Recommended Mints */}
-              <div style={{ marginTop: '0.75rem' }}>
-                <div style={{ fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: 'var(--muted)' }}>
-                  {t('settings.recommendedMints')}:
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {RECOMMENDED_MINTS.map((mint) => {
-                    const status = mintStatuses[mint.url];
-                    const isTesting = testingMints[mint.url];
-                    const isSelected = settings.mintUrl === mint.url;
-
-                    return (
-                      <button
-                        key={mint.url}
-                        onClick={() => {
-                          handleSettingChange('mintUrl', mint.url);
-                          setMainUrlStatus(null);
-                        }}
-                        className="mint-suggestion-btn"
-                        style={{
-                          padding: '0.625rem 0.875rem',
-                          fontSize: '0.8125rem',
-                          background: isSelected ? 'rgba(var(--primary-rgb), 0.15)' : 'var(--surface-bg)',
-                          border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
-                          borderRadius: '0.5rem',
-                          color: isSelected ? 'var(--primary)' : 'var(--text)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          textAlign: 'left',
-                          gap: '0.75rem'
-                        }}
-                      >
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500' }}>
-                            <span>{mint.name}</span>
-                            {!mint.production && (
-                              <span style={{
-                                fontSize: '0.6875rem',
-                                padding: '0.125rem 0.375rem',
-                                background: 'rgba(251, 191, 36, 0.15)',
-                                color: '#f59e0b',
-                                borderRadius: '0.25rem',
-                                fontWeight: '600'
-                              }}>
-                                TEST
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                            {mint.url.replace('https://', '')}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {isTesting ? (
-                            <div style={{
-                              width: '8px',
-                              height: '8px',
-                              borderRadius: '50%',
-                              background: '#94a3b8',
-                              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                            }} />
-                          ) : status ? (
-                            <div
-                              style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                background: status.success ? '#22c55e' : '#ef4444',
-                                boxShadow: status.success
-                                  ? '0 0 8px rgba(34, 197, 94, 0.5)'
-                                  : '0 0 8px rgba(239, 68, 68, 0.5)'
-                              }}
-                              title={status.success ? `Connected: ${status.name}` : `Error: ${status.error}`}
-                            />
-                          ) : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               {mainUrlStatus && (

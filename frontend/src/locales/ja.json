@@ -159,7 +159,6 @@
     "mintSettings": "Cashu Mint設定",
     "mintUrl": "Mint URL",
     "mintUrlDesc": "使用するCashu Mintサーバー（変更後ページ更新が必要）",
-    "recommendedMints": "おすすめMint",
     "testConnection": "接続テスト",
     "testing": "テスト中...",
     "connectionSuccess": "接続成功",

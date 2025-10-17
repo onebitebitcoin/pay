@@ -159,7 +159,6 @@
     "mintSettings": "Cashu Mint Settings",
     "mintUrl": "Mint URL",
     "mintUrlDesc": "Cashu Mint server to use (requires page refresh after change)",
-    "recommendedMints": "Recommended Mints",
     "testConnection": "Test Connection",
     "testing": "Testing...",
     "connectionSuccess": "Connection Successful",
