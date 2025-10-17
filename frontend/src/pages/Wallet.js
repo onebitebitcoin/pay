@@ -93,7 +93,11 @@ function Wallet() {
     try {
       const raw = localStorage.getItem('cashu_tx_v1');
       const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
+      if (!Array.isArray(arr)) return [];
+      return arr.map((tx) => ({
+        ...tx,
+        mintUrl: typeof tx?.mintUrl === 'string' ? tx.mintUrl.trim() : '',
+      }));
     } catch {
       return [];
     }
@@ -496,9 +500,15 @@ function Wallet() {
   }, [showInfoMessage, mintUrl]);
 
   const persistTransactions = useCallback((list) => {
-    console.log('[persistTransactions] Saving to localStorage:', list?.length || 0, 'transactions');
+    const sanitizedList = Array.isArray(list)
+      ? list.map((tx) => ({
+          ...tx,
+          mintUrl: typeof tx?.mintUrl === 'string' ? tx.mintUrl.trim() : '',
+        }))
+      : [];
+    console.log('[persistTransactions] Saving to localStorage:', sanitizedList.length, 'transactions');
     try {
-      const data = JSON.stringify(list || []);
+      const data = JSON.stringify(sanitizedList);
       localStorage.setItem(TX_STORAGE_KEY, data);
       // Verify save
       const saved = localStorage.getItem(TX_STORAGE_KEY);
@@ -521,7 +531,15 @@ function Wallet() {
   }, [TX_STORAGE_KEY]);
 
   const addTransaction = useCallback((tx) => {
-    console.log('[addTransaction] Adding transaction:', tx);
+    const normalizedTx = {
+      ...tx,
+      mintUrl:
+        typeof tx?.mintUrl === 'string' && tx.mintUrl.trim()
+          ? tx.mintUrl.trim()
+          : (typeof mintUrl === 'string' ? mintUrl.trim() : ''),
+    };
+
+    console.log('[addTransaction] Adding transaction:', normalizedTx);
     console.log('[addTransaction] setTransactions will be called');
 
     // Create a new transaction array immediately to ensure we have the latest data
@@ -533,27 +551,27 @@ function Wallet() {
 
       // Check for duplicate transactions (within 1 second, same type, amount, and description)
       const isDuplicate = prevArray.some(existing =>
-        existing.type === tx.type &&
-        existing.amount === tx.amount &&
-        existing.description === tx.description &&
-        Math.abs(new Date(existing.timestamp).getTime() - new Date(tx.timestamp).getTime()) < 1000
+        existing.type === normalizedTx.type &&
+        existing.amount === normalizedTx.amount &&
+        existing.description === normalizedTx.description &&
+        Math.abs(new Date(existing.timestamp).getTime() - new Date(normalizedTx.timestamp).getTime()) < 1000
       );
 
       if (isDuplicate) {
-        console.log('[addTransaction - INSIDE setTransactions] Duplicate transaction detected, skipping:', tx);
+        console.log('[addTransaction - INSIDE setTransactions] Duplicate transaction detected, skipping:', normalizedTx);
         return prev;
       }
 
-      const next = [tx, ...prevArray];
+      const next = [normalizedTx, ...prevArray];
       console.log('[addTransaction - INSIDE setTransactions] Will save:', next.length, 'transactions');
       persistTransactions(next);
       console.log('[addTransaction - INSIDE setTransactions] Transaction added successfully. New count:', next.length);
       return next;
     });
-    
+
     // Increment counter to force UI update on transaction changes
     setTxUpdateCounter(prev => prev + 1);
-  }, [persistTransactions]);
+  }, [persistTransactions, mintUrl]);
 
   const hasQuoteRedeemed = useCallback((q) => {
     try {
@@ -734,7 +752,8 @@ function Wallet() {
         status: 'confirmed',
         description: t('wallet.lightningReceive'),
         memo: detail?.memo || '',
-        quoteId: quote
+        quoteId: quote,
+        mintUrl
       });
     } else {
       console.log('[processPaymentNotification] Adding pending transaction with amount:', amount);
@@ -746,14 +765,15 @@ function Wallet() {
         status: 'pending',
         description: t('wallet.lightningReceive'),
         memo: detail?.memo || '',
-        quoteId: quote
+        quoteId: quote,
+        mintUrl
       });
     }
 
     console.log('[processPaymentNotification] Loading wallet data...');
     await loadWalletData();
     console.log('[processPaymentNotification] Completed');
-  }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem]);
+  }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem, mintUrl]);
 
   // Polling function to check invoice status
   const startInvoicePolling = useCallback((quoteId, amount) => {
@@ -1052,15 +1072,16 @@ function Wallet() {
             markQuoteRedeemed(lastQuote);
             setReceiveCompleted(true);
             setReceivedAmount(applied.added);
-            addTransaction({
-              id: Date.now(),
-              type: 'receive',
-              amount: applied.added,
-              timestamp: new Date().toISOString(),
-              status: 'confirmed',
-              description: t('wallet.lightningReceive'),
-              memo: ''
-            });
+        addTransaction({
+          id: Date.now(),
+          type: 'receive',
+          amount: applied.added,
+          timestamp: new Date().toISOString(),
+          status: 'confirmed',
+          description: t('wallet.lightningReceive'),
+          memo: '',
+          mintUrl
+        });
 
             showInfoMessage(t('messages.recoveredSuccess', { amount: formatAmount(applied.added) }), 'success');
             await loadWalletData();
@@ -1113,7 +1134,8 @@ function Wallet() {
           timestamp: new Date().toISOString(),
           status: 'confirmed',
           description: t('wallet.lightningReceive'),
-          memo: ''
+          memo: '',
+          mintUrl
         });
         
 
@@ -1947,7 +1969,8 @@ function Wallet() {
         timestamp: new Date().toISOString(),
         status: 'confirmed',
         description: t('wallet.lightningSend'),
-        memo: ''
+        memo: '',
+        mintUrl
       });
 
       let changeProofs = [];
@@ -2065,7 +2088,8 @@ function Wallet() {
         timestamp: new Date().toISOString(),
         status: 'confirmed',
         description: t('wallet.lightningSend'),
-        memo: ''
+        memo: '',
+        mintUrl
       });
 
       // Process change promises if any
@@ -2913,6 +2937,15 @@ function Wallet() {
                       <p className="tx-status-badge">{selectedTx.status === 'confirmed' ? t('messages.statusConfirmed') : t('messages.statusPending')}</p>
                     </div>
                   </div>
+                  {(selectedTx.type === 'receive' || selectedTx.type === 'send') && (selectedTx?.mintUrl || '').trim() && (
+                    <div className="tx-detail-item">
+                      <Icon name="globe" size={18} />
+                      <div>
+                        <strong>{t('wallet.mintLabel')}</strong>
+                        <p>{formatMintLabel(selectedTx.mintUrl)}</p>
+                      </div>
+                    </div>
+                  )}
                   {selectedTx.actualAmount && (
                     <>
                       <div className="tx-detail-item">
@@ -2979,6 +3012,11 @@ function Wallet() {
                        tx.description}
                     </div>
                     {tx.memo && <div className="tx-memo">{tx.memo}</div>}
+                    {(tx.type === 'receive' || tx.type === 'send') && (tx?.mintUrl || '').trim() && (
+                      <div className="tx-mint" style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        {t('wallet.mintLabel')}: {formatMintLabel(tx.mintUrl)}
+                      </div>
+                    )}
                     <div className="tx-date">{formatDate(tx.timestamp)}</div>
                   </div>
                   <div className={`tx-amount ${tx.type === 'send' ? 'negative' : 'positive'}`}>

@@ -70,6 +70,7 @@
     "noTransactions": "取引履歴がありません",
     "loadingTransactions": "取引履歴を読み込み中...",
     "loadMore": "もっと見る（残り{{count}}件）",
+    "mintLabel": "Mint",
     "lightningReceive": "ライトニング受け取り",
     "lightningSend": "ライトニング送信",
     "mintStatus": "Mint接続済み",
