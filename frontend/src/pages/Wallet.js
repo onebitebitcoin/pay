@@ -1566,6 +1566,11 @@ function Wallet() {
     return s.replace(/\s+/g, '').toLowerCase();
   };
 
+  const normalizeMintForCompare = useCallback((url) => {
+    if (!url || typeof url !== 'string') return '';
+    return url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
+  }, []);
+
   const isMeaninglessErrorCode = (value) => {
     if (!value || typeof value !== 'string') return false;
     const trimmed = value.trim();
@@ -1618,9 +1623,35 @@ function Wallet() {
       return t('messages.networkError');
     }
 
+    if (msg.includes('keyset') || msg.includes('wrong mint') || msg.includes('other mint') || msg.includes('different mint') || msg.includes('unknown mint') || msg.includes('not from this mint')) {
+      return t('messages.mintMismatchSendShort');
+    }
+
     // Return original message if no match
     return errorMsg;
   };
+
+  const formatMintLabel = useCallback((url) => {
+    if (!url || typeof url !== 'string') return t('messages.mintUnknown');
+    const trimmed = url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    return trimmed || t('messages.mintUnknown');
+  }, [t]);
+
+  const getMintMismatchMessage = useCallback((proofs) => {
+    if (!Array.isArray(proofs) || proofs.length === 0) return '';
+    const currentMint = normalizeMintForCompare(mintUrl);
+    if (!currentMint) return '';
+    const mismatch = proofs.find((p) => {
+      const proofMint = normalizeMintForCompare(p?.mintUrl);
+      if (!proofMint) return false;
+      return proofMint !== currentMint;
+    });
+    if (!mismatch) return '';
+    return t('messages.mintMismatchSend', {
+      storedMint: formatMintLabel(mismatch?.mintUrl),
+      currentMint: formatMintLabel(mintUrl),
+    });
+  }, [mintUrl, formatMintLabel, normalizeMintForCompare, t]);
 
   const buildLightningAddressErrorMessage = (err) => {
     const fallback = t('messages.addressInvoiceError');
@@ -1849,6 +1880,12 @@ function Wallet() {
       // Execute send directly
       const { ok, picked, total } = selectProofsForAmount(need);
       if (!ok) throw new Error(t('messages.insufficientBalance'));
+      const mintMismatchMessage = getMintMismatchMessage(picked);
+      if (mintMismatchMessage) {
+        setInvoiceError(mintMismatchMessage);
+        showInfoMessage(mintMismatchMessage, 'error');
+        throw new Error(mintMismatchMessage);
+      }
 
       let changeOutputs = undefined;
       let changeOutputDatas = undefined;
@@ -1955,7 +1992,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendAddress, invoiceQuote, enableSendScanner, setEnableSendScanner, setInvoiceError, addToast, t, apiUrl, getBalanceSats, selectProofsForAmount, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setInvoiceQuote, navigate, translateErrorMessage, formatAmount, formatDate]);
+  }, [sendAddress, invoiceQuote, enableSendScanner, setEnableSendScanner, setInvoiceError, addToast, t, apiUrl, getBalanceSats, selectProofsForAmount, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setInvoiceQuote, navigate, translateErrorMessage, formatAmount, formatDate, mintUrl, getMintMismatchMessage, showInfoMessage]);
 
   const [pendingSendDetails, setPendingSendDetails] = useState(null);
   
@@ -1972,6 +2009,10 @@ function Wallet() {
       const need = invoiceAmount + feeReserve;
       const { ok, picked, total } = selectProofsForAmount(need);
       if (!ok) throw new Error(t('messages.insufficientBalance'));
+      const mintMismatchMessage = getMintMismatchMessage(picked);
+      if (mintMismatchMessage) {
+        throw new Error(mintMismatchMessage);
+      }
       // Prepare change outputs if necessary
       let changeOutputs = undefined;
       let changeOutputDatas = undefined;
@@ -2065,7 +2106,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendCtxRef, t, selectProofsForAmount, apiUrl, createBlindedOutputs, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setEnableSendScanner, setShowSendConfirm, setPendingSendDetails, navigate, pendingSendDetails, translateErrorMessage, formatAmount, formatDate]);
+  }, [sendCtxRef, t, selectProofsForAmount, apiUrl, createBlindedOutputs, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setEnableSendScanner, setShowSendConfirm, setPendingSendDetails, navigate, pendingSendDetails, translateErrorMessage, formatAmount, formatDate, mintUrl, getMintMismatchMessage]);
 
   const convertFunds = useCallback(async () => {
     if (!convertAmount || convertAmount <= 0) {
