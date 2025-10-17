@@ -9,6 +9,10 @@ import { applyTheme, normalizeTheme } from '../utils/theme';
 const MIN_RECEIVE_SATS = 100;
 const MINT_QUOTE_TIMEOUT_MS = 7000;
 const MINT_QUOTE_UNIT = 'sat';
+const LEGACY_DEFAULT_MINTS = [
+  'https://mint.minibits.cash/Bitcoin',
+  'https://mint.minibits.cash/bitcoin'
+];
 
 const verifyMintOperational = async (normalizedUrl) => {
   const controller = new AbortController();
@@ -131,15 +135,21 @@ function Settings() {
       };
       if (saved) {
         const parsed = JSON.parse(saved);
+        const rawSavedMint = typeof parsed.mintUrl === 'string' ? parsed.mintUrl.trim() : '';
+        const needsMintMigration = !rawSavedMint || LEGACY_DEFAULT_MINTS.includes(rawSavedMint);
+        const resolvedMint = needsMintMigration ? DEFAULT_MINT_URL : rawSavedMint;
         const merged = {
           ...defaultSettings,
           ...parsed,
-          mintUrl: parsed.mintUrl || DEFAULT_MINT_URL,
+          mintUrl: resolvedMint,
           backupMintUrl: parsed.backupMintUrl || '',
           theme: normalizeTheme(parsed.theme || defaultSettings.theme)
         };
         setSettings(merged);
         applyTheme(merged.theme);
+        if (needsMintMigration) {
+          localStorage.setItem('app_settings', JSON.stringify(merged));
+        }
       } else {
         setSettings(defaultSettings);
         localStorage.setItem('app_settings', JSON.stringify(defaultSettings));
