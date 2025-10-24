@@ -80,7 +80,7 @@ function Settings() {
   const [testingMainUrl, setTestingMainUrl] = useState(false);
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const showStoreManagement = false; // Temporarily hide store registration UI
+  const showStoreManagement = true;
 
   const addToast = (message, type = 'info') => {
     const id = Date.now();
