@@ -283,23 +283,34 @@ function StoreFinder() {
 
   const fetchStores = async () => {
     try {
+      console.log('[StoreFinder] Fetching stores from API...');
       const response = await fetch(apiUrl('/api/stores'));
       const data = await response.json();
+      console.log('[StoreFinder] ✅ Fetched', data.length, 'stores:', data);
+
+      // Log stores with invalid coordinates
+      const invalidStores = data.filter(s => s.lat == null || s.lng == null);
+      if (invalidStores.length > 0) {
+        console.warn('[StoreFinder] ⚠️ Stores with missing coordinates:', invalidStores);
+      }
+
       setStores(data);
     } catch (error) {
-      console.error('Failed to fetch stores:', error);
+      console.error('[StoreFinder] ❌ Failed to fetch stores:', error);
     }
   };
 
   const initKakaoMap = () => {
+    console.log('[StoreFinder] Initializing Kakao Map...');
     if (!window.kakao || !window.kakao.maps) {
-      console.error('Kakao Map API not loaded');
+      console.error('[StoreFinder] ❌ Kakao Map API not loaded');
       return;
     }
 
     window.kakao.maps.load(() => {
       const container = mapRef.current;
       if (!container) {
+        console.error('[StoreFinder] ❌ Map container not found');
         return;
       }
       container.innerHTML = '';
@@ -309,13 +320,21 @@ function StoreFinder() {
       };
 
       kakaoMapRef.current = new window.kakao.maps.Map(container, options);
+      console.log('[StoreFinder] ✅ Kakao Map initialized');
+      console.log('[StoreFinder] Updating markers with', latestFilteredStoresRef.current.length, 'stores');
       updateMapMarkers(latestFilteredStoresRef.current);
     });
   };
 
   const updateKakaoMarkers = (storeData) => {
-    if (!kakaoMapRef.current || !window.kakao) return;
+    console.log('[StoreFinder] Updating Kakao markers with', storeData.length, 'stores');
 
+    if (!kakaoMapRef.current || !window.kakao) {
+      console.warn('[StoreFinder] ⚠️ Kakao map not ready, skipping marker update');
+      return;
+    }
+
+    // Clear existing markers
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
     infowindowsRef.current = [];
@@ -324,8 +343,18 @@ function StoreFinder() {
     const imageOption = { offset: new window.kakao.maps.Point(15, 40) };
     const markerImage = new window.kakao.maps.MarkerImage(STORE_MARKER_ICON, imageSize, imageOption);
 
+    let validMarkers = 0;
+    let invalidMarkers = 0;
+
     storeData.forEach(store => {
+      if (store.lat == null || store.lng == null) {
+        console.warn('[StoreFinder] ⚠️ Skipping store with invalid coordinates:', store);
+        invalidMarkers++;
+        return;
+      }
+
       const markerPosition = new window.kakao.maps.LatLng(store.lat, store.lng);
+      validMarkers++;
 
       const storeName = getStoreName(store);
       const storeAddress = getStoreAddress(store);
@@ -400,17 +429,26 @@ function StoreFinder() {
       infowindowsRef.current.push({ storeId: store.id, marker, infowindow });
     });
 
+    console.log('[StoreFinder] ✅ Kakao markers created -', validMarkers, 'valid,', invalidMarkers, 'invalid');
+
     if (storeData.length > 0 && !sortByDistance) {
-      const bounds = new window.kakao.maps.LatLngBounds();
-      storeData.forEach(store => {
-        bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
-      });
-      kakaoMapRef.current.setBounds(bounds);
+      const validStores = storeData.filter(s => s.lat != null && s.lng != null);
+      if (validStores.length > 0) {
+        const bounds = new window.kakao.maps.LatLngBounds();
+        validStores.forEach(store => {
+          bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
+        });
+        kakaoMapRef.current.setBounds(bounds);
+        console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+      }
     }
   };
 
   const updateLeafletMarkers = (storeData) => {
+    console.log('[StoreFinder] Updating Leaflet markers with', storeData.length, 'stores');
+
     if (!leafletMapRef.current) {
+      console.warn('[StoreFinder] ⚠️ Leaflet map not ready, skipping marker update');
       return;
     }
 
@@ -423,7 +461,16 @@ function StoreFinder() {
       popupAnchor: [0, -32],
     });
 
+    let validMarkers = 0;
+    let invalidMarkers = 0;
+
     storeData.forEach(store => {
+      if (store.lat == null || store.lng == null) {
+        console.warn('[StoreFinder] ⚠️ Skipping store with invalid coordinates:', store);
+        invalidMarkers++;
+        return;
+      }
+      validMarkers++;
       const storeName = getStoreName(store);
       const storeAddress = getStoreAddress(store);
       const storeCategory = getStoreCategory(store);
@@ -492,9 +539,15 @@ function StoreFinder() {
       leafletMarkersRef.current.push({ storeId: store.id, marker });
     });
 
+    console.log('[StoreFinder] ✅ Leaflet markers created -', validMarkers, 'valid,', invalidMarkers, 'invalid');
+
     if (storeData.length > 0 && !sortByDistance) {
-      const bounds = L.latLngBounds(storeData.map(store => [store.lat, store.lng]));
-      leafletMapRef.current.fitBounds(bounds, { padding: [40, 40] });
+      const validStores = storeData.filter(s => s.lat != null && s.lng != null);
+      if (validStores.length > 0) {
+        const bounds = L.latLngBounds(validStores.map(store => [store.lat, store.lng]));
+        leafletMapRef.current.fitBounds(bounds, { padding: [40, 40] });
+        console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+      }
     }
   };
 
@@ -507,11 +560,13 @@ function StoreFinder() {
   };
 
   const filterStores = () => {
+    console.log('[StoreFinder] Filtering stores - Total:', stores.length);
     let filtered = stores;
 
     // Category filter
     if (selectedCategory !== null) {
       filtered = filtered.filter(store => store.category === selectedCategory);
+      console.log('[StoreFinder] After category filter:', filtered.length, 'stores');
     }
 
     // Search filter
@@ -521,6 +576,7 @@ function StoreFinder() {
         store.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
         store.address.toLowerCase().includes(searchQuery.toLowerCase())
       );
+      console.log('[StoreFinder] After search filter:', filtered.length, 'stores');
     }
 
     // Add distance and sort if user location is available
@@ -529,8 +585,10 @@ function StoreFinder() {
         ...store,
         distance: calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng)
       })).sort((a, b) => a.distance - b.distance);
+      console.log('[StoreFinder] Sorted by distance from user location');
     }
 
+    console.log('[StoreFinder] Final filtered stores:', filtered.length);
     setFilteredStores(filtered);
     latestFilteredStoresRef.current = filtered;
     updateMapMarkers(filtered);

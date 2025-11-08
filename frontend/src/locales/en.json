@@ -240,6 +240,9 @@
     "addressNotFound": "Address not found. Please try a different search.",
     "addressSearchNotReady": "Address search script not yet loaded. Please try again in a moment.",
     "getCoordinates": "Get Coordinates",
+    "coordinatesLoading": "Fetching the address location...",
+    "coordinatesFound": "Coordinates found",
+    "coordinatesNotFound": "Unable to retrieve coordinates",
     "phone": "Phone",
     "phonePlaceholder": "e.g., 02-123-4567",
     "hours": "Hours",
@@ -257,7 +260,12 @@
     "error": "Failed to add store",
     "submitError": "An error occurred while adding the store",
     "requiredFields": "Please enter name, category, and address",
-    "geocoding": "Finding location based on address. Please save again."
+    "geocoding": "Finding location based on address. Please save again.",
+    "passwordGateTitle": "Admin Access",
+    "passwordGateDescription": "This beta is limited to admins. Only approved users can add stores.",
+    "passwordPlaceholder": "Enter the password",
+    "passwordSubmit": "Continue",
+    "passwordError": "Incorrect password."
   },
   "about": {
     "title": "FAQ",

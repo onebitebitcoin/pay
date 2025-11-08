@@ -240,6 +240,9 @@
     "addressNotFound": "住所が見つかりません。別の表現で試してください。",
     "addressSearchNotReady": "住所検索スクリプトがまだ読み込まれていません。しばらく待ってから再試行してください。",
     "getCoordinates": "座標を取得",
+    "coordinatesLoading": "住所の位置を取得しています...",
+    "coordinatesFound": "座標を確認しました",
+    "coordinatesNotFound": "座標を取得できません",
     "phone": "電話番号",
     "phonePlaceholder": "例：03-1234-5678",
     "hours": "営業時間",
@@ -257,7 +260,12 @@
     "error": "店舗登録に失敗しました",
     "submitError": "店舗登録中にエラーが発生しました",
     "requiredFields": "名前、カテゴリー、住所を入力してください",
-    "geocoding": "住所に基づいて位置を検索中です。もう一度保存を押してください。"
+    "geocoding": "住所に基づいて位置を検索中です。もう一度保存を押してください。",
+    "passwordGateTitle": "管理者アクセス",
+    "passwordGateDescription": "ベータ版のため、現在は管理者のみが店舗を追加できます。",
+    "passwordPlaceholder": "パスワードを入力してください",
+    "passwordSubmit": "続行",
+    "passwordError": "パスワードが正しくありません。"
   },
   "about": {
     "title": "FAQ",

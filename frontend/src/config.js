@@ -52,16 +52,43 @@ export const apiUrl = (path = '/') => {
 };
 
 export const KAKAO_APP_KEY = process.env.REACT_APP_KAKAO_APP_KEY || 'b6df438d2c946f441b6ff06cd87868ba';
-export const KAKAO_SDK_URL = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+export const KAKAO_SDK_URL = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services&autoload=false`;
 
 let kakaoLoaderPromise = null;
+
+const waitForKakaoLoadFunction = (maxRetries = 30, delay = 100) =>
+  new Promise((resolve, reject) => {
+    let attempt = 0;
+
+    const verify = () => {
+      attempt += 1;
+      const hasLoadFn = Boolean(window.kakao && window.kakao.maps && typeof window.kakao.maps.load === 'function');
+      console.log(`[loadKakaoSdk] Waiting for kakao.maps.load (attempt ${attempt}/${maxRetries})...`, 'hasLoadFn:', hasLoadFn);
+
+      if (hasLoadFn) {
+        resolve();
+        return;
+      }
+
+      if (attempt >= maxRetries) {
+        reject(new Error('kakao.maps.load not available'));
+        return;
+      }
+
+      setTimeout(verify, delay);
+    };
+
+    verify();
+  });
 
 export const loadKakaoSdk = () => {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Not in browser environment'));
   }
 
-  if (window.kakao && window.kakao.maps) {
+  // Check if already loaded with services
+  if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    console.log('[loadKakaoSdk] ✅ Already loaded with services');
     return Promise.resolve(window.kakao);
   }
 
@@ -75,30 +102,53 @@ export const loadKakaoSdk = () => {
         document.querySelector('script[src*="dapi.kakao.com/v2/maps/sdk.js"]');
 
       const handleLoad = () => {
-        if (window.kakao && window.kakao.maps) {
-          resolve(window.kakao);
-        } else {
-          reject(new Error('Kakao SDK loaded but window.kakao is not available'));
-        }
+        console.log('[loadKakaoSdk] Script loaded, waiting for kakao.maps.load...');
+
+        waitForKakaoLoadFunction()
+          .then(() => {
+            console.log('[loadKakaoSdk] Calling kakao.maps.load to finalize services');
+            window.kakao.maps.load(() => {
+              const servicesReady = Boolean(window.kakao && window.kakao.maps && window.kakao.maps.services);
+              console.log('[loadKakaoSdk] Services ready after load:', servicesReady);
+
+              if (servicesReady) {
+                console.log('[loadKakaoSdk] ✅ All services loaded via kakao.maps.load');
+                resolve(window.kakao);
+              } else {
+                console.error('[loadKakaoSdk] ❌ Kakao services missing even after load');
+                kakaoLoaderPromise = null;
+                reject(new Error('Kakao services not available after kakao.maps.load'));
+              }
+            });
+          })
+          .catch((err) => {
+            console.error('[loadKakaoSdk] ❌ Failed while waiting for kakao.maps.load:', err);
+            kakaoLoaderPromise = null;
+            reject(err);
+          });
       };
 
       const handleError = () => {
+        console.error('[loadKakaoSdk] ❌ Failed to load script');
+        kakaoLoaderPromise = null;
         reject(new Error('Failed to load Kakao SDK script'));
       };
 
       if (existing) {
+        console.log('[loadKakaoSdk] Found existing script');
         existing.addEventListener('load', handleLoad, { once: true });
         existing.addEventListener('error', handleError, { once: true });
         if (existing.readyState === 'complete' || existing.readyState === 'loaded') {
+          console.log('[loadKakaoSdk] Script already complete');
           handleLoad();
         }
         return;
       }
 
+      console.log('[loadKakaoSdk] Creating new script');
+      console.log('[loadKakaoSdk] URL:', KAKAO_SDK_URL);
       const script = document.createElement('script');
       script.src = KAKAO_SDK_URL;
-      script.async = true;
-      script.defer = true;
       script.dataset.kakaoSdk = 'true';
       script.onload = handleLoad;
       script.onerror = handleError;

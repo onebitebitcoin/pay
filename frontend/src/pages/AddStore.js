@@ -9,6 +9,10 @@ function AddStore() {
   const { t, i18n } = useTranslation();
   const [submitLoading, setSubmitLoading] = useState(false);
   const isKorean = i18n.language === 'ko';
+  const [geocodeStatus, setGeocodeStatus] = useState('idle');
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     document.title = t('pageTitle.addStore');
@@ -27,8 +31,28 @@ function AddStore() {
   const geocoderRef = useRef(null);
   const geocodeAbortRef = useRef(null);
 
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+
+    if (passwordInput === '0000') {
+      setIsAuthorized(true);
+      setPasswordError('');
+      setPasswordInput('');
+      return;
+    }
+
+    setPasswordError(t('addStore.passwordError'));
+  };
+
   useEffect(() => {
+    console.log('[AddStore] Language changed, isKorean:', isKorean);
+
+    if (!isAuthorized) {
+      return undefined;
+    }
+
     if (!isKorean) {
+      console.log('[AddStore] Not Korean language, skipping Kakao SDK');
       geocoderRef.current = null;
       if (geocodeAbortRef.current) {
         geocodeAbortRef.current.abort();
@@ -38,16 +62,66 @@ function AddStore() {
     }
 
     let cancelled = false;
+    console.log('[AddStore] Loading Kakao SDK...');
+
+    const initializeGeocoder = () => {
+      if (cancelled) {
+        console.log('[AddStore] Initialization cancelled');
+        return;
+      }
+
+      console.log('[AddStore] Checking Kakao availability...');
+      console.log('[AddStore] window.kakao:', !!window.kakao);
+      console.log('[AddStore] window.kakao.maps:', !!(window.kakao && window.kakao.maps));
+      console.log('[AddStore] window.kakao.maps.services:', !!(window.kakao && window.kakao.maps && window.kakao.maps.services));
+
+      if (!window.kakao || !window.kakao.maps) {
+        console.error('[AddStore] ❌ Kakao maps not available yet');
+        return;
+      }
+
+      // Wait for kakao.maps.load to be ready
+      if (typeof window.kakao.maps.load !== 'function') {
+        console.error('[AddStore] ❌ kakao.maps.load is not a function');
+        return;
+      }
+
+      console.log('[AddStore] Calling kakao.maps.load...');
+      window.kakao.maps.load(() => {
+        if (cancelled) {
+          console.log('[AddStore] Geocoder init cancelled during load');
+          return;
+        }
+
+        console.log('[AddStore] Inside kakao.maps.load callback');
+        console.log('[AddStore] window.kakao.maps.services:', !!window.kakao.maps.services);
+
+        if (!window.kakao.maps.services) {
+          console.error('[AddStore] ❌ services not available even after load');
+          return;
+        }
+
+        try {
+          geocoderRef.current = new window.kakao.maps.services.Geocoder();
+          console.log('[AddStore] ✅ Kakao Geocoder initialized successfully');
+        } catch (err) {
+          console.error('[AddStore] ❌ Failed to create Geocoder:', err);
+        }
+      });
+    };
+
     loadKakaoSdk()
       .then(() => {
-        if (!cancelled && window.kakao && window.kakao.maps && window.kakao.maps.services) {
-          window.kakao.maps.load(() => {
-            geocoderRef.current = new window.kakao.maps.services.Geocoder();
-          });
-        }
+        console.log('[AddStore] Kakao SDK promise resolved');
+        // Give a small delay to ensure services are loaded
+        setTimeout(() => {
+          if (!cancelled) {
+            initializeGeocoder();
+          }
+        }, 100);
       })
       .catch((err) => {
-        console.error('Kakao Map SDK loading failed:', err);
+        console.error('[AddStore] Kakao Map SDK loading failed:', err);
       });
 
     return () => {
@@ -57,27 +131,79 @@ function AddStore() {
         geocodeAbortRef.current = null;
       }
     };
-  }, [isKorean]);
+  }, [isKorean, isAuthorized]);
 
-  const geocodeAddress = async () => {
+  const geocodeAddress = async (retryCount = 0) => {
     const addressQuery = (newStore.address || '').trim();
-    if (!addressQuery) return;
+    console.log('[Geocode] Starting geocode for address:', addressQuery, 'retry:', retryCount);
+
+    if (!addressQuery) {
+      console.log('[Geocode] Empty address, skipping');
+      setGeocodeStatus('idle');
+      return;
+    }
+
+    setGeocodeStatus('loading');
 
     if (isKorean) {
-      if (!geocoderRef.current) return;
+      console.log('[Geocode] Using Kakao geocoder');
+
+      // Wait for Kakao SDK to be ready
+      if (!geocoderRef.current) {
+        console.warn('[Geocode] Kakao geocoder not initialized yet, attempting to initialize...');
+
+        // Try to initialize if SDK is loaded but geocoder isn't
+        if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+          try {
+            await new Promise((resolve) => {
+              window.kakao.maps.load(() => {
+                geocoderRef.current = new window.kakao.maps.services.Geocoder();
+                console.log('[Geocode] Kakao Geocoder initialized on-demand');
+                resolve();
+              });
+            });
+          } catch (err) {
+            console.error('[Geocode] Failed to initialize Kakao Geocoder:', err);
+            setGeocodeStatus('error');
+          }
+        }
+
+        // Retry after a short delay if still not ready
+        if (!geocoderRef.current && retryCount < 3) {
+          console.log('[Geocode] Retrying after 500ms... (attempt', retryCount + 1, 'of 3)');
+          setTimeout(() => geocodeAddress(retryCount + 1), 500);
+          return;
+        }
+
+        if (!geocoderRef.current) {
+          console.error('[Geocode] ❌ Kakao geocoder still not available after retries');
+          alert(t('messages.addressSearchNotReady'));
+          setGeocodeStatus('error');
+          return;
+        }
+      }
+
+      console.log('[Geocode] Calling Kakao addressSearch with:', addressQuery);
       geocoderRef.current.addressSearch(addressQuery, (result, status) => {
+        console.log('[Geocode] Kakao response - Status:', status, 'Result:', result);
+
         if (status === window.kakao.maps.services.Status.OK && result && result.length) {
           const { x, y } = result[0];
           const lat = parseFloat(y);
           const lng = parseFloat(x);
+          console.log('[Geocode] ✅ Kakao geocoding SUCCESS - Lat:', lat, 'Lng:', lng);
           setNewStore((prev) => ({ ...prev, lat, lng }));
+          setGeocodeStatus('success');
         } else {
+          console.error('[Geocode] ❌ Kakao geocoding FAILED - Status:', status);
           alert(t('messages.addressNotFound'));
+          setGeocodeStatus('error');
         }
       });
       return;
     }
 
+    console.log('[Geocode] Using OpenStreetMap geocoder');
     try {
       if (geocodeAbortRef.current) {
         geocodeAbortRef.current.abort();
@@ -90,7 +216,10 @@ function AddStore() {
         addressdetails: '0',
         q: addressQuery,
       });
-      const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+      const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+      console.log('[Geocode] Fetching from OSM:', url);
+
+      const resp = await fetch(url, {
         headers: {
           'Accept-Language': i18n.language,
           'Accept': 'application/json',
@@ -98,22 +227,35 @@ function AddStore() {
         signal: controller.signal,
       });
       geocodeAbortRef.current = null;
+
       if (!resp.ok) {
         throw new Error('Geocoding failed');
       }
+
       const data = await resp.json();
+      console.log('[Geocode] OSM response:', data);
+
       if (Array.isArray(data) && data.length) {
         const { lat, lon } = data[0];
-        setNewStore((prev) => ({ ...prev, lat: parseFloat(lat), lng: parseFloat(lon) }));
+        const parsedLat = parseFloat(lat);
+        const parsedLng = parseFloat(lon);
+        console.log('[Geocode] ✅ OSM geocoding SUCCESS - Lat:', parsedLat, 'Lng:', parsedLng);
+        setNewStore((prev) => ({ ...prev, lat: parsedLat, lng: parsedLng }));
+        setGeocodeStatus('success');
       } else {
+        console.error('[Geocode] ❌ OSM geocoding FAILED - No results');
         alert(t('messages.addressNotFound'));
+        setGeocodeStatus('error');
       }
     } catch (error) {
       if (error.name === 'AbortError') {
+        console.log('[Geocode] Request aborted');
+        setGeocodeStatus('idle');
         return;
       }
-      console.error('OpenStreetMap geocoding failed:', error);
+      console.error('[Geocode] ❌ OSM geocoding ERROR:', error);
       alert(t('messages.addressSearchNotReady'));
+      setGeocodeStatus('error');
     }
   };
 
@@ -132,9 +274,15 @@ function AddStore() {
       const postcode = new window.daum.Postcode({
         oncomplete: function(data) {
           const addr = data.roadAddress || data.jibunAddress || '';
+          console.log('[AddStore] Daum address selected:', addr);
           if (addr) {
             setNewStore((prev) => ({ ...prev, address: addr, lat: null, lng: null }));
-            setTimeout(() => geocodeAddress(), 0);
+            // Give more time for Kakao SDK to initialize
+            console.log('[AddStore] Waiting 300ms before geocoding...');
+            setTimeout(() => {
+              console.log('[AddStore] Now calling geocodeAddress()');
+              geocodeAddress();
+            }, 300);
           }
         }
       });
@@ -192,6 +340,32 @@ function AddStore() {
     }
   };
 
+  if (!isAuthorized) {
+    return (
+      <div className="add-store-page">
+        <div className="password-gate">
+          <div className="password-card">
+            <h1>{t('addStore.passwordGateTitle')}</h1>
+            <p>{t('addStore.passwordGateDescription')}</p>
+            <form onSubmit={handlePasswordSubmit}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setPasswordError('');
+                }}
+                placeholder={t('addStore.passwordPlaceholder')}
+              />
+              {passwordError && <div className="password-error">{passwordError}</div>}
+              <button type="submit">{t('addStore.passwordSubmit')}</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="add-store-page">
       <div className="add-store-header">
@@ -248,7 +422,11 @@ function AddStore() {
                 <input
                   type="text"
                   value={newStore.address}
-                  onChange={(e) => setNewStore((prev) => ({ ...prev, address: e.target.value, lat: null, lng: null }))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewStore((prev) => ({ ...prev, address: value, lat: null, lng: null }));
+                    setGeocodeStatus('idle');
+                  }}
                   onBlur={geocodeAddress}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); geocodeAddress(); } }}
                   placeholder={t('addStore.addressPlaceholder')}
@@ -257,6 +435,43 @@ function AddStore() {
                   {t('addStore.searchAddress')}
                 </button>
               </div>
+              {geocodeStatus === 'loading' && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}>
+                  {t('addStore.coordinatesLoading')}
+                </div>
+              )}
+              {geocodeStatus === 'success' && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  {t('addStore.coordinatesFound')}
+                </div>
+              )}
+              {geocodeStatus === 'error' && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: '#f97316',
+                  color: 'white',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}>
+                  {t('addStore.coordinatesNotFound')}
+                </div>
+              )}
             </label>
 
             <label className="col-span-2">
