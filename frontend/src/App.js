@@ -9,6 +9,7 @@ import Settings from './pages/Settings';
 import AddStore from './pages/AddStore';
 import TransactionDetail from './pages/TransactionDetail';
 import PaymentSuccess from './pages/PaymentSuccess';
+import StoreManagement from './pages/StoreManagement';
 import { applyTheme, getStoredTheme } from './utils/theme';
 
 function AppContent() {
@@ -26,6 +27,8 @@ function AppContent() {
           <Route path="/about" element={<About />} />
           <Route path="/map" element={<StoreFinder />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/admin/stores" element={<StoreManagement />} />
+          <Route path="/admin/stores/add" element={<AddStore />} />
           <Route path="/settings/add-store" element={<AddStore />} />
         </Routes>
       </Layout>

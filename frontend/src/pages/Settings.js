@@ -527,10 +527,10 @@ function Settings() {
                 </div>
               </div>
               <button
-                onClick={() => navigate('/settings/add-store')}
+                onClick={() => navigate('/admin/stores')}
                 className="setting-button"
               >
-                {t('settings.addStore')}
+                {t('settings.openStoreManagement')}
               </button>
             </div>
           </div>

@@ -2,17 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiUrl, loadKakaoSdk } from '../config';
+import AdminGate from '../components/AdminGate';
 import './AddStore.css';
 
-function AddStore() {
+function AddStoreForm() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const [submitLoading, setSubmitLoading] = useState(false);
   const isKorean = i18n.language === 'ko';
   const [geocodeStatus, setGeocodeStatus] = useState('idle');
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     document.title = t('pageTitle.addStore');
@@ -28,28 +26,50 @@ function AddStore() {
     lng: null,
   });
   const [newStore, setNewStore] = useState(createEmptyStore);
+  const [hoursRange, setHoursRange] = useState({ open: '', close: '' });
   const geocoderRef = useRef(null);
   const geocodeAbortRef = useRef(null);
 
-  const handlePasswordSubmit = (e) => {
-    e.preventDefault();
-
-    if (passwordInput === '0000') {
-      setIsAuthorized(true);
-      setPasswordError('');
-      setPasswordInput('');
-      return;
+  const parseHoursRange = (value = '') => {
+    if (!value || typeof value !== 'string') {
+      return { open: '', close: '' };
     }
+    const parts = value.split(/~|-/).map((part) => part.trim());
+    return {
+      open: parts[0] || '',
+      close: parts[1] || '',
+    };
+  };
 
-    setPasswordError(t('addStore.passwordError'));
+  useEffect(() => {
+    const parsed = parseHoursRange(newStore.hours);
+    if (parsed.open !== hoursRange.open || parsed.close !== hoursRange.close) {
+      setHoursRange(parsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newStore.hours]);
+
+  const handleHoursChange = (field) => (event) => {
+    const value = event.target.value;
+    const nextRange = {
+      ...hoursRange,
+      [field]: value,
+    };
+    setHoursRange(nextRange);
+
+    setNewStore((prev) => ({
+      ...prev,
+      hours:
+        nextRange.open && nextRange.close
+          ? `${nextRange.open} ~ ${nextRange.close}`
+          : nextRange.open || nextRange.close
+            ? `${nextRange.open}${nextRange.open && !nextRange.close ? ' ~' : ''}${nextRange.close}`
+            : '',
+    }));
   };
 
   useEffect(() => {
     console.log('[AddStore] Language changed, isKorean:', isKorean);
-
-    if (!isAuthorized) {
-      return undefined;
-    }
 
     if (!isKorean) {
       console.log('[AddStore] Not Korean language, skipping Kakao SDK');
@@ -131,7 +151,7 @@ function AddStore() {
         geocodeAbortRef.current = null;
       }
     };
-  }, [isKorean, isAuthorized]);
+  }, [isKorean]);
 
   const geocodeAddress = async (retryCount = 0) => {
     const addressQuery = (newStore.address || '').trim();
@@ -340,32 +360,6 @@ function AddStore() {
     }
   };
 
-  if (!isAuthorized) {
-    return (
-      <div className="add-store-page">
-        <div className="password-gate">
-          <div className="password-card">
-            <h1>{t('addStore.passwordGateTitle')}</h1>
-            <p>{t('addStore.passwordGateDescription')}</p>
-            <form onSubmit={handlePasswordSubmit}>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => {
-                  setPasswordInput(e.target.value);
-                  setPasswordError('');
-                }}
-                placeholder={t('addStore.passwordPlaceholder')}
-              />
-              {passwordError && <div className="password-error">{passwordError}</div>}
-              <button type="submit">{t('addStore.passwordSubmit')}</button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="add-store-page">
       <div className="add-store-header">
@@ -408,12 +402,19 @@ function AddStore() {
 
             <label>
               <span>{t('addStore.hours')}</span>
-              <input
-                type="text"
-                value={newStore.hours}
-                onChange={(e) => setNewStore((prev) => ({ ...prev, hours: e.target.value }))}
-                placeholder={t('addStore.hoursPlaceholder')}
-              />
+              <div className="hours-input-row">
+                <input
+                  type="time"
+                  value={hoursRange.open}
+                  onChange={handleHoursChange('open')}
+                />
+                <span className="hours-separator">~</span>
+                <input
+                  type="time"
+                  value={hoursRange.close}
+                  onChange={handleHoursChange('close')}
+                />
+              </div>
             </label>
 
             <label className="col-span-2">
@@ -496,6 +497,14 @@ function AddStore() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AddStore() {
+  return (
+    <AdminGate>
+      <AddStoreForm />
+    </AdminGate>
   );
 }
 

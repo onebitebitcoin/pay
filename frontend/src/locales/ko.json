@@ -4,7 +4,8 @@
     "map": "한입만 - 지도",
     "settings": "한입만 - 설정",
     "faq": "한입만 - FAQ",
-    "addStore": "한입만 - 매장 등록"
+    "addStore": "한입만 - 매장 등록",
+    "storeManagement": "한입만 - 매장 관리"
   },
   "common": {
     "confirm": "확인",
@@ -168,6 +169,7 @@
     "registerStore": "비트코인 결제 가능 매장 등록",
     "registerStoreDesc": "비트코인/라이트닝 결제를 받는 매장을 지도에 등록할 수 있습니다",
     "addStore": "매장 등록하기",
+    "openStoreManagement": "매장 관리 열기",
     "dangerZone": "위험 구역",
     "resetWallet": "지갑 초기화",
     "resetWalletDesc": "모든 지갑 데이터를 삭제하고 처음부터 시작합니다. 이 작업은 되돌릴 수 없습니다.",
@@ -266,6 +268,67 @@
     "passwordPlaceholder": "비밀번호를 입력하세요",
     "passwordSubmit": "확인",
     "passwordError": "비밀번호가 올바르지 않습니다."
+  },
+  "adminAccess": {
+    "title": "관리자 인증",
+    "description": "관리자만 매장 정보를 관리할 수 있습니다.",
+    "placeholder": "관리자 비밀번호를 입력하세요",
+    "submit": "잠금 해제",
+    "invalidPassword": "비밀번호가 올바르지 않습니다."
+  },
+  "storeManagementPage": {
+    "eyebrow": "관리자 전용",
+    "title": "매장 관리",
+    "subtitle": "등록된 매장을 확인하고 지도를 최신 상태로 유지하세요.",
+    "refresh": "새로고침",
+    "addStore": "매장 추가",
+    "totalStores": "등록된 매장: {{count}}곳",
+    "lastUpdated": "{{value}} 기준",
+    "loading": "매장을 불러오는 중...",
+    "loadError": "매장 정보를 불러오지 못했습니다. 다시 시도해주세요.",
+    "noStores": "아직 등록된 매장이 없습니다.",
+    "notAvailable": "제공되지 않음",
+    "deleteConfirm": "\"{{name}}\" 매장을 삭제할까요?",
+    "deleteSuccess": "매장이 삭제되었습니다.",
+    "deleteError": "매장을 삭제하지 못했습니다.",
+    "updateSuccess": "매장 정보가 저장되었습니다.",
+    "updateError": "매장 정보를 저장하지 못했습니다.",
+    "validationError": "매장명, 카테고리, 주소, 위도/경도를 모두 입력해주세요.",
+    "fields": {
+      "address": "주소",
+      "phone": "전화번호",
+      "hours": "영업시간",
+      "description": "설명",
+      "coordinates": "위도/경도",
+      "unnamed": "이름 없는 매장",
+      "uncategorized": "분류 없음"
+    },
+    "summary": {
+      "total": "전체 매장",
+      "updated": "마지막 업데이트"
+    },
+    "table": {
+      "id": "ID",
+      "name": "매장명",
+      "category": "카테고리",
+      "address": "주소",
+      "phone": "전화번호",
+      "hours": "영업시간",
+      "actions": "관리"
+    },
+    "actions": {
+      "edit": "수정",
+      "delete": "삭제",
+      "deleting": "삭제 중...",
+      "save": "변경 내용 저장",
+      "saving": "저장 중...",
+      "cancel": "취소"
+    },
+    "editPanel": {
+      "title": "매장 정보 수정",
+      "subtitle": "매장 정보를 최신 상태로 유지하세요.",
+      "coordinatesHint": "위도/경도는 소수점 형태로 입력하세요. 예) 37.5665"
+    }
   },
   "about": {
     "title": "FAQ",

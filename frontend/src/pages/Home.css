@@ -4,7 +4,7 @@
 
 /* Hero Section */
 .hero {
-  background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08) 0%, rgba(var(--secondary-rgb), 0.08) 100%);
+  background: rgba(var(--primary-rgb), 0.06);
   color: var(--text);
   padding: 4rem 1.5rem;
   text-align: center;
@@ -71,7 +71,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  background: var(--primary);
   transform: scaleX(0);
   transition: transform 0.3s ease;
 }
@@ -133,6 +133,92 @@
   max-width: 1200px;
   margin: 0 auto;
   text-align: center;
+}
+
+/* FAQ Styles */
+.faq-category {
+  margin-bottom: 2.5rem;
+  text-align: left;
+}
+
+.faq-category-title {
+  margin-bottom: 1.25rem;
+  font-size: 1.5rem;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.faq-item {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.faq-item:hover {
+  border-color: rgba(var(--primary-rgb), 0.4);
+  box-shadow: var(--shadow-md);
+}
+
+.faq-item.open {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.faq-question {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.975rem;
+  font-weight: 600;
+  color: var(--text);
+  transition: all 0.2s;
+}
+
+.faq-question:hover {
+  color: var(--primary);
+}
+
+.faq-question span {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.faq-answer {
+  padding: 0.875rem 1.25rem 1rem 1.25rem;
+  background: rgba(var(--primary-rgb), 0.04);
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.925rem;
+  line-height: 1.65;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .info-content h2 {

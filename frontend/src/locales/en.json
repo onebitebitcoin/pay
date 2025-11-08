@@ -4,7 +4,8 @@
     "map": "Hanibman - Map",
     "settings": "Hanibman - Settings",
     "faq": "Hanibman - FAQ",
-    "addStore": "Hanibman - Add Store"
+    "addStore": "Hanibman - Add Store",
+    "storeManagement": "Hanibman - Store Management"
   },
   "common": {
     "confirm": "Confirm",
@@ -168,6 +169,7 @@
     "registerStore": "Register Bitcoin-Accepting Store",
     "registerStoreDesc": "You can register stores that accept Bitcoin/Lightning payments on the map",
     "addStore": "Add Store",
+    "openStoreManagement": "Open Store Manager",
     "dangerZone": "Danger Zone",
     "resetWallet": "Reset Wallet",
     "resetWalletDesc": "Delete all wallet data and start fresh. This action cannot be undone.",
@@ -266,6 +268,67 @@
     "passwordPlaceholder": "Enter the password",
     "passwordSubmit": "Continue",
     "passwordError": "Incorrect password."
+  },
+  "adminAccess": {
+    "title": "Admin Access",
+    "description": "Only administrators can manage store data.",
+    "placeholder": "Enter the admin password",
+    "submit": "Unlock",
+    "invalidPassword": "Incorrect password. Try again."
+  },
+  "storeManagementPage": {
+    "eyebrow": "Admin Only",
+    "title": "Manage Stores",
+    "subtitle": "Review all registered stores and keep the Bitcoin map accurate.",
+    "refresh": "Refresh",
+    "addStore": "Add New Store",
+    "totalStores": "Registered stores: {{count}}",
+    "lastUpdated": "Updated {{value}}",
+    "loading": "Loading stores...",
+    "loadError": "Failed to load stores. Please try again.",
+    "noStores": "No stores have been registered yet.",
+    "notAvailable": "Not provided",
+    "deleteConfirm": "Delete \"{{name}}\"?",
+    "deleteSuccess": "Store deleted.",
+    "deleteError": "Failed to delete store.",
+    "updateSuccess": "Store updated.",
+    "updateError": "Failed to update store.",
+    "validationError": "Please provide name, category, address, latitude, and longitude.",
+    "fields": {
+      "address": "Address",
+      "phone": "Phone",
+      "hours": "Hours",
+      "description": "Description",
+      "coordinates": "Coordinates",
+      "unnamed": "Unnamed Store",
+      "uncategorized": "Uncategorized"
+    },
+    "summary": {
+      "total": "Total Stores",
+      "updated": "Last Updated"
+    },
+    "table": {
+      "id": "ID",
+      "name": "Store Name",
+      "category": "Category",
+      "address": "Address",
+      "phone": "Phone",
+      "hours": "Hours",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "cancel": "Cancel"
+    },
+    "editPanel": {
+      "title": "Edit store",
+      "subtitle": "Update store information and keep details accurate.",
+      "coordinatesHint": "Use decimal latitude/longitude (e.g., 37.5665)."
+    }
   },
   "about": {
     "title": "FAQ",

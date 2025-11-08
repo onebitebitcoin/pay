@@ -79,16 +79,11 @@ function About() {
       <div className="info-section">
         <div className="info-content">
           {faqs.map((category, catIndex) => (
-            <div key={catIndex} style={{ marginBottom: '3rem' }}>
-              <h2 style={{
-                marginBottom: '1.5rem',
-                fontSize: '1.75rem',
-                color: 'var(--primary)',
-                fontWeight: '700'
-              }}>
+            <div key={catIndex} className="faq-category">
+              <h2 className="faq-category-title">
                 {category.category}
               </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="faq-list">
                 {category.items.map((faq, index) => {
                   const globalIndex = `${catIndex}-${index}`;
                   const isOpen = openIndex === globalIndex;
@@ -96,49 +91,17 @@ function About() {
                   return (
                     <div
                       key={index}
-                      style={{
-                        background: 'var(--card-bg)',
-                        backdropFilter: 'blur(10px)',
-                        border: '2px solid var(--border)',
-                        borderRadius: 'var(--radius)',
-                        overflow: 'hidden',
-                        transition: 'all 0.3s',
-                        boxShadow: isOpen ? 'var(--shadow-md)' : 'var(--shadow-sm)'
-                      }}
+                      className={`faq-item ${isOpen ? 'open' : ''}`}
                     >
                       <button
                         onClick={() => toggleFAQ(globalIndex)}
-                        style={{
-                          width: '100%',
-                          padding: '1.25rem 1.5rem',
-                          background: 'transparent',
-                          border: 'none',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: '1rem',
-                          fontSize: '1.1rem',
-                          fontWeight: '600',
-                          color: 'var(--text)'
-                        }}
+                        className="faq-question"
                       >
                         <span>{faq.q}</span>
                         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} />
                       </button>
                       {isOpen && (
-                        <div
-                          style={{
-                            padding: '1rem 1.5rem 1.25rem 1.5rem',
-                            background: 'rgba(var(--primary-rgb), 0.03)',
-                            borderTop: '1px solid var(--border)',
-                            color: 'var(--text)',
-                            lineHeight: '1.8',
-                            textAlign: 'left',
-                            animation: 'fadeIn 0.3s ease-out'
-                          }}
-                        >
+                        <div className="faq-answer">
                           {faq.a}
                         </div>
                       )}

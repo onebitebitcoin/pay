@@ -182,6 +182,12 @@ const paths = {
       <circle cx="12" cy="20" r="1" />
     </>
   ),
+  edit: (
+    <>
+      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+      <path d="M18.37 8.38l1.41-1.41a2 2 0 0 0 0-2.83l-1.92-1.92a2 2 0 0 0-2.83 0l-1.41 1.41" />
+    </>
+  ),
 };
 
 function Icon({ name, size = 20, className = '', title }) {

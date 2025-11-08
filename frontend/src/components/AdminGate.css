@@ -1,0 +1,72 @@
+.admin-gate {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.admin-gate-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+}
+
+.admin-gate-card h1 {
+  margin-bottom: 0.5rem;
+  font-size: 1.75rem;
+  color: var(--text);
+}
+
+.admin-gate-card p {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.admin-gate-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-gate-card input {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-bg);
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.admin-gate-card input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1);
+}
+
+.admin-gate-card button {
+  padding: 0.9rem;
+  border-radius: 10px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.admin-gate-card button:hover {
+  background: var(--primary-600);
+}
+
+.admin-gate-error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}

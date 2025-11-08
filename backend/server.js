@@ -473,6 +473,69 @@ app.post('/api/stores', (req, res) => {
   }
 });
 
+app.put('/api/stores/:id', (req, res) => {
+  try {
+    const storeId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(storeId)) {
+      return res.status(400).json({ error: '유효한 매장 ID가 필요합니다' });
+    }
+
+    const existing = db.get(storeId);
+    if (!existing) {
+      return res.status(404).json({ error: '매장을 찾을 수 없습니다' });
+    }
+
+    const {
+      name,
+      category,
+      address,
+      lat,
+      lng,
+      phone,
+      hours,
+      description,
+      name_en,
+      address_en,
+      category_en,
+    } = req.body || {};
+
+    const nextName = typeof name === 'string' ? name.trim() : existing.name;
+    const nextCategory = typeof category === 'string' ? category.trim() : existing.category;
+    const nextAddress = typeof address === 'string' ? address.trim() : existing.address;
+    const nextLat = lat !== undefined ? parseFloat(lat) : existing.lat;
+    const nextLng = lng !== undefined ? parseFloat(lng) : existing.lng;
+
+    if (
+      !nextName ||
+      !nextCategory ||
+      !nextAddress ||
+      !Number.isFinite(nextLat) ||
+      !Number.isFinite(nextLng)
+    ) {
+      return res.status(400).json({ error: '유효하지 않은 입력입니다. name, category, address, lat, lng 필수' });
+    }
+
+    const updated = db.update(storeId, {
+      name: nextName,
+      category: nextCategory,
+      address: nextAddress,
+      lat: nextLat,
+      lng: nextLng,
+      phone: phone !== undefined ? (phone ? String(phone).trim() : null) : existing.phone,
+      hours: hours !== undefined ? (hours ? String(hours).trim() : null) : existing.hours,
+      description: description !== undefined ? (description ? String(description).trim() : null) : existing.description,
+      name_en: name_en !== undefined ? (name_en ? String(name_en).trim() : null) : existing.name_en,
+      address_en: address_en !== undefined ? (address_en ? String(address_en).trim() : null) : existing.address_en,
+      category_en: category_en !== undefined ? (category_en ? String(category_en).trim() : null) : existing.category_en,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('매장 업데이트 오류:', error);
+    res.status(500).json({ error: '서버 내부 오류' });
+  }
+});
+
 app.delete('/api/stores/:id', (req, res) => {
   try {
     const storeId = parseInt(req.params.id, 10);

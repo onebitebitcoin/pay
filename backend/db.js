@@ -191,4 +191,44 @@ module.exports = {
     writeJsonStores(next);
     return true;
   },
+  update(id, updates = {}) {
+    if (!Number.isInteger(id)) return null;
+    const current = this.get(id);
+    if (!current) return null;
+    const next = {
+      ...current,
+      ...updates,
+    };
+
+    if (mode === 'sqlite') {
+      sql.prepare(
+        `UPDATE stores
+         SET name = ?, category = ?, address = ?, lat = ?, lng = ?, phone = ?, hours = ?, description = ?, name_en = ?, address_en = ?, category_en = ?
+         WHERE id = ?`
+      ).run(
+        next.name,
+        next.category,
+        next.address,
+        next.lat,
+        next.lng,
+        next.phone || null,
+        next.hours || null,
+        next.description || null,
+        next.name_en || null,
+        next.address_en || null,
+        next.category_en || null,
+        id
+      );
+      return this.get(id);
+    }
+
+    const stores = readJsonStores();
+    const idx = stores.findIndex((s) => s.id === id);
+    if (idx === -1) {
+      return null;
+    }
+    stores[idx] = { ...stores[idx], ...next };
+    writeJsonStores(stores);
+    return stores[idx];
+  },
 };

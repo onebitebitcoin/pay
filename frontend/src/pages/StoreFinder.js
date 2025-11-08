@@ -856,15 +856,7 @@ function StoreFinder() {
             </div>
           </div>
           <div className="sf-modal-actions">
-            <button
-              type="button"
-              className="sf-btn danger"
-              disabled={deleteLoadingId === selectedStore.id}
-              onClick={() => handleDeleteStore(selectedStore)}
-            >
-              <Icon name="trash" size={16} /> {deleteLoadingId === selectedStore.id ? t('storeFinder.deleting') : t('common.delete')}
-            </button>
-            <button type="button" className="sf-btn" onClick={closeStoreDetail}>{t('common.close')}</button>
+            <button type="button" className="sf-btn primary" onClick={closeStoreDetail}>{t('common.close')}</button>
           </div>
         </div>
       </div>
