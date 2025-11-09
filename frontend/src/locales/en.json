@@ -253,6 +253,8 @@
     "websitePlaceholder": "https://example.com",
     "description": "Description",
     "descriptionPlaceholder": "e.g., Specialty coffee shop that accepts Bitcoin and Lightning payments.",
+    "website": "Website",
+    "websitePlaceholder": "e.g. https://example.com",
     "latitude": "Latitude",
     "longitude": "Longitude",
     "mapTip": "Click on the map or enter an address to set location",

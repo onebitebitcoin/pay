@@ -249,8 +249,6 @@
     "phonePlaceholder": "예: 02-123-4567",
     "hours": "영업시간",
     "hoursPlaceholder": "예: 매일 09:00~21:00",
-    "website": "웹사이트",
-    "websitePlaceholder": "https://example.com",
     "description": "매장 설명",
     "descriptionPlaceholder": "예: 비트코인·라이트닝 결제가 가능한 스페셜티 커피 전문점입니다.",
     "website": "공식 사이트",
