@@ -15,6 +15,7 @@ const emptyForm = {
   phone: '',
   hours: '',
   description: '',
+  website: '',
 };
 
 function StoreManagementContent() {
@@ -709,6 +710,16 @@ function StoreManagementContent() {
                   rows={3}
                   value={formValues.description}
                   onChange={handleInputChange('description')}
+                />
+              </label>
+
+              <label className="full-width">
+                <span>{t('addStore.website')}</span>
+                <input
+                  type="url"
+                  value={formValues.website}
+                  onChange={handleInputChange('website')}
+                  placeholder={t('addStore.websitePlaceholder')}
                 />
               </label>
             </div>

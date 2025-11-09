@@ -22,6 +22,7 @@ function AddStoreForm() {
     phone: '',
     hours: '',
     description: '',
+    website: '',
     lat: null,
     lng: null,
   });
@@ -342,6 +343,7 @@ function AddStoreForm() {
         phone: phone.trim() ? phone.trim() : null,
         hours: hours.trim() ? hours.trim() : null,
         description: description.trim() ? description.trim() : null,
+        website: newStore.website.trim() ? newStore.website.trim() : null,
       };
       const resp = await fetch(apiUrl('/api/stores'), {
         method: 'POST',
@@ -480,6 +482,16 @@ function AddStoreForm() {
                 value={newStore.description}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, description: e.target.value }))}
                 placeholder={t('addStore.descriptionPlaceholder')}
+              />
+            </label>
+
+            <label className="col-span-2">
+              <span>{t('addStore.website')}</span>
+              <input
+                type="url"
+                value={newStore.website}
+                onChange={(e) => setNewStore((prev) => ({ ...prev, website: e.target.value }))}
+                placeholder={t('addStore.websitePlaceholder')}
               />
             </label>
           </div>

@@ -55,6 +55,7 @@ try {
   ensureColumn('phone', 'TEXT');
   ensureColumn('hours', 'TEXT');
   ensureColumn('description', 'TEXT');
+  ensureColumn('website', 'TEXT');
   ensureColumn('name_en', 'TEXT');
   ensureColumn('address_en', 'TEXT');
   ensureColumn('category_en', 'TEXT');
@@ -106,7 +107,7 @@ module.exports = {
   list() {
     if (mode === 'sqlite') {
       return sql
-        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores ORDER BY id ASC')
+        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, website, name_en, address_en, category_en FROM stores ORDER BY id ASC')
         .all();
     }
     return readJsonStores();
@@ -127,7 +128,7 @@ module.exports = {
       const like = `%${q.toLowerCase()}%`;
       return sql
         .prepare(
-          'SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores WHERE LOWER(name) LIKE ? OR LOWER(category) LIKE ? OR LOWER(address) LIKE ? OR LOWER(name_en) LIKE ? OR LOWER(address_en) LIKE ? OR LOWER(category_en) LIKE ? ORDER BY id ASC'
+          'SELECT id, name, category, address, lat, lng, phone, hours, description, website, name_en, address_en, category_en FROM stores WHERE LOWER(name) LIKE ? OR LOWER(category) LIKE ? OR LOWER(address) LIKE ? OR LOWER(name_en) LIKE ? OR LOWER(address_en) LIKE ? OR LOWER(category_en) LIKE ? ORDER BY id ASC'
         )
         .all(like, like, like, like, like, like);
     }
@@ -145,18 +146,18 @@ module.exports = {
   get(id) {
     if (mode === 'sqlite') {
       return sql
-        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en FROM stores WHERE id = ?')
+        .prepare('SELECT id, name, category, address, lat, lng, phone, hours, description, website, name_en, address_en, category_en FROM stores WHERE id = ?')
         .get(id);
     }
     return readJsonStores().find((s) => s.id === id);
   },
-  add({ name, category, address, lat, lng, phone = null, hours = null, description = null, name_en = null, address_en = null, category_en = null }) {
+  add({ name, category, address, lat, lng, phone = null, hours = null, description = null, website = null, name_en = null, address_en = null, category_en = null }) {
     if (mode === 'sqlite') {
       const info = sql
         .prepare(
-          'INSERT INTO stores (name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO stores (name, category, address, lat, lng, phone, hours, description, website, name_en, address_en, category_en) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )
-        .run(name, category, address, lat, lng, phone, hours, description, name_en, address_en, category_en);
+        .run(name, category, address, lat, lng, phone, hours, description, website, name_en, address_en, category_en);
       return this.get(info.lastInsertRowid);
     }
     const stores = readJsonStores();
@@ -171,6 +172,7 @@ module.exports = {
       phone: phone || null,
       hours: hours || null,
       description: description || null,
+      website: website || null,
       name_en: name_en || null,
       address_en: address_en || null,
       category_en: category_en || null,
@@ -203,7 +205,7 @@ module.exports = {
     if (mode === 'sqlite') {
       sql.prepare(
         `UPDATE stores
-         SET name = ?, category = ?, address = ?, lat = ?, lng = ?, phone = ?, hours = ?, description = ?, name_en = ?, address_en = ?, category_en = ?
+         SET name = ?, category = ?, address = ?, lat = ?, lng = ?, phone = ?, hours = ?, description = ?, website = ?, name_en = ?, address_en = ?, category_en = ?
          WHERE id = ?`
       ).run(
         next.name,
@@ -214,6 +216,7 @@ module.exports = {
         next.phone || null,
         next.hours || null,
         next.description || null,
+        next.website || null,
         next.name_en || null,
         next.address_en || null,
         next.category_en || null,

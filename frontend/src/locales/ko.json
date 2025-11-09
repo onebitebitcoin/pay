@@ -253,6 +253,8 @@
     "websitePlaceholder": "https://example.com",
     "description": "매장 설명",
     "descriptionPlaceholder": "예: 비트코인·라이트닝 결제가 가능한 스페셜티 커피 전문점입니다.",
+    "website": "공식 사이트",
+    "websitePlaceholder": "예) https://example.com",
     "latitude": "위도",
     "longitude": "경도",
     "mapTip": "지도를 클릭하거나 주소를 입력하여 위치를 지정하세요",
