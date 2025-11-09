@@ -300,6 +300,7 @@ function AddStoreForm() {
           console.log('[AddStore] Daum address selected:', addr);
           if (addr) {
             setNewStore((prev) => ({ ...prev, address: addr, lat: null, lng: null }));
+            setGeocodeStatus('loading');
             // Give more time for Kakao SDK to initialize
             console.log('[AddStore] Waiting 300ms before geocoding...');
             setTimeout(() => {

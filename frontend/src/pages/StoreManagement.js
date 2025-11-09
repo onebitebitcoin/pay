@@ -34,6 +34,8 @@ function StoreManagementContent() {
   const [status, setStatus] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editHoursRange, setEditHoursRange] = useState({ open: '', close: '' });
+  const [geocodeStatus, setGeocodeStatus] = useState('idle');
+  const geocoderRef = useRef(null);
 
   // Filter and pagination states
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,12 +114,17 @@ function StoreManagementContent() {
   useEffect(() => {
     const isKorean = i18n.language === 'ko';
     if (!isKorean) {
+      geocoderRef.current = null;
       return;
     }
 
     loadKakaoSdk()
       .then(() => {
         console.log('[StoreManagement] Kakao SDK loaded successfully');
+        if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+          geocoderRef.current = new window.kakao.maps.services.Geocoder();
+          console.log('[StoreManagement] Kakao Geocoder initialized');
+        }
       })
       .catch((err) => {
         console.error('[StoreManagement] Failed to load Kakao SDK:', err);
@@ -247,6 +254,33 @@ function StoreManagementContent() {
     }));
   };
 
+  const geocodeAddress = async () => {
+    const addressQuery = (formValues.address || '').trim();
+    if (!addressQuery) {
+      return;
+    }
+
+    const isKorean = i18n.language === 'ko';
+
+    if (isKorean && geocoderRef.current) {
+      console.log('[StoreManagement] Using Kakao geocoder for:', addressQuery);
+      setGeocodeStatus('loading');
+      geocoderRef.current.addressSearch(addressQuery, (result, status) => {
+        if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+          const { y: lat, x: lng } = result[0];
+          const parsedLat = parseFloat(lat);
+          const parsedLng = parseFloat(lng);
+          console.log('[StoreManagement] Kakao geocoding SUCCESS - Lat:', parsedLat, 'Lng:', parsedLng);
+          setFormValues((prev) => ({ ...prev, lat: parsedLat, lng: parsedLng }));
+          setGeocodeStatus('success');
+        } else {
+          console.error('[StoreManagement] Kakao geocoding FAILED - Status:', status);
+          setGeocodeStatus('error');
+        }
+      });
+    }
+  };
+
   const openAddressSearch = () => {
     const isKorean = i18n.language === 'ko';
 
@@ -267,6 +301,10 @@ function StoreManagementContent() {
         console.log('[StoreManagement] Daum address selected:', addr);
         if (addr) {
           setFormValues((prev) => ({ ...prev, address: addr }));
+          setGeocodeStatus('loading');
+          setTimeout(() => {
+            geocodeAddress();
+          }, 300);
         }
       }
     });
@@ -679,6 +717,43 @@ function StoreManagementContent() {
                     {t('addStore.searchAddress')}
                   </button>
                 </div>
+                {geocodeStatus === 'loading' && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}>
+                    {t('addStore.coordinatesLoading')}
+                  </div>
+                )}
+                {geocodeStatus === 'success' && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    {t('addStore.coordinatesFound')}
+                  </div>
+                )}
+                {geocodeStatus === 'error' && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}>
+                    {t('addStore.coordinatesNotFound')}
+                  </div>
+                )}
               </label>
               <label>
                 <span>{t('addStore.phone')}</span>
