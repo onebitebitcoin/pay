@@ -369,51 +369,77 @@ function StoreFinder() {
 
       const storeCategory = getStoreCategory(store);
 
-      const infowindow = new window.kakao.maps.InfoWindow({
-        content: `
-          <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
-            <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${storeName}</h3>
-            <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${storeCategory}</p>
-            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${storeAddress}</p>
-            <button
-              id="store-detail-btn-${store.id}"
-              style="
-                padding: 6px 12px;
-                background: #2563eb;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: 600;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                transition: background 0.2s;
-              "
-              onmouseover="this.style.background='#1d4ed8'"
-              onmouseout="this.style.background='#2563eb'"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-              ${t('storeFinder.viewDetails')}
-            </button>
-          </div>
-        `
+      // Create custom overlay content
+      const overlayContent = document.createElement('div');
+      overlayContent.style.cssText = `
+        position: relative;
+        padding: 15px;
+        width: 250px;
+        text-align: center;
+        background: white;
+        border-radius: 1rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+      `;
+      overlayContent.innerHTML = `
+        <div style="position: absolute; top: -8px; right: 8px; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); border-radius: 50%; color: #6b7280; font-weight: bold; font-size: 14px;" id="close-overlay-${store.id}">×</div>
+        <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${storeName}</h3>
+        <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${storeCategory}</p>
+        <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${storeAddress}</p>
+        <button
+          id="store-detail-btn-${store.id}"
+          style="
+            padding: 6px 12px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+          "
+          onmouseover="this.style.background='#1d4ed8'"
+          onmouseout="this.style.background='#2563eb'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          ${t('storeFinder.viewDetails')}
+        </button>
+      `;
+
+      const customOverlay = new window.kakao.maps.CustomOverlay({
+        position: markerPosition,
+        content: overlayContent,
+        yAnchor: 1.4,
+        zIndex: 3
       });
 
       window.kakao.maps.event.addListener(marker, 'click', () => {
         if (currentInfowindowRef.current) {
-          currentInfowindowRef.current.close();
+          currentInfowindowRef.current.setMap(null);
         }
 
-        infowindow.open(kakaoMapRef.current, marker);
-        currentInfowindowRef.current = infowindow;
+        customOverlay.setMap(kakaoMapRef.current);
+        currentInfowindowRef.current = customOverlay;
 
         setTimeout(() => {
+          const closeBtn = document.getElementById(`close-overlay-${store.id}`);
+          if (closeBtn) {
+            closeBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              customOverlay.setMap(null);
+              currentInfowindowRef.current = null;
+            };
+          }
+
           const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
           if (detailBtn) {
             detailBtn.onclick = (e) => {
@@ -426,7 +452,7 @@ function StoreFinder() {
       });
 
       markersRef.current.push(marker);
-      infowindowsRef.current.push({ storeId: store.id, marker, infowindow });
+      infowindowsRef.current.push({ storeId: store.id, marker, infowindow: customOverlay });
     });
 
     console.log('[StoreFinder] ✅ Kakao markers created -', validMarkers, 'valid,', invalidMarkers, 'invalid');
@@ -481,7 +507,7 @@ function StoreFinder() {
       }).addTo(leafletMapRef.current);
 
       const popupContent = `
-        <div style="padding: 15px; width: 250px; text-align: center; background: white; border-radius: 8px;">
+        <div style="padding: 15px; width: 250px; text-align: center;">
           <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 16px; font-weight: 700;">${storeName}</h3>
           <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; font-weight: 600;">${storeCategory}</p>
           <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 12px; line-height: 1.4;">${storeAddress}</p>
@@ -586,6 +612,10 @@ function StoreFinder() {
         distance: calculateDistance(userLocation.lat, userLocation.lng, store.lat, store.lng)
       })).sort((a, b) => a.distance - b.distance);
       console.log('[StoreFinder] Sorted by distance from user location');
+    } else {
+      // Default sort: newest first (by id descending)
+      filtered = filtered.sort((a, b) => b.id - a.id);
+      console.log('[StoreFinder] Sorted by newest first (id descending)');
     }
 
     console.log('[StoreFinder] Final filtered stores:', filtered.length);
@@ -686,11 +716,11 @@ function StoreFinder() {
         <select
           id="category-select"
           className="category-select"
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
+          value={selectedCategory ?? ''}
+          onChange={(e) => setSelectedCategory(e.target.value || null)}
         >
           {categories.map((cat) => (
-            <option key={cat} value={cat}>
+            <option key={cat ?? ''} value={cat ?? ''}>
               {cat === null ? t('storeFinder.allCategories') : cat}
             </option>
           ))}
@@ -706,6 +736,9 @@ function StoreFinder() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
             />
+            {selectedCategory !== null && (
+              <p className="search-hint">{t('storeFinder.searchHint')}</p>
+            )}
           </div>
           <button
             type="button"

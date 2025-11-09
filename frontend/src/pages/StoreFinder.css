@@ -73,6 +73,7 @@
 .search-container {
   flex: 1;
   min-width: 300px;
+  position: relative;
 }
 
 .search-input {
@@ -92,6 +93,14 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.15);
   background: rgba(var(--primary-rgb), 0.05);
+}
+
+.search-hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
 }
 
 .random-btn {
@@ -140,7 +149,7 @@
 }
 
 .location-btn {
-  padding: 0.75rem 1.2rem;
+  padding: 0.75rem 1rem;
   background: var(--card-bg);
   color: var(--text);
   border: 2px solid var(--border);
@@ -154,6 +163,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  height: fit-content;
 }
 
 .location-btn:hover:not(:disabled) {
@@ -676,9 +686,55 @@
 /* Leaflet Popup Styles */
 .leaflet-popup-content-wrapper {
   border-radius: 1rem !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
 }
 
 .leaflet-popup-tip {
-  /* Make the popup arrow more rounded at the connection point */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
   border-radius: 2px;
+}
+
+/* Kakao Map InfoWindow Styles */
+.map-container .wrap {
+  border-radius: 1rem !important;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+  border: none !important;
+}
+
+.map-container .wrap .info {
+  border: none !important;
+  border-radius: 1rem !important;
+}
+
+/* Override Kakao default infowindow styles */
+.map-container :global(.infowindow) {
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Kakao InfoWindow customization */
+:global(.kakao-infowindow) {
+  border: none !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+:global(.kakao-infowindow .wrap) {
+  border-radius: 1rem !important;
+  border: none !important;
+  overflow: hidden;
+}
+
+:global(.kakao-infowindow .info) {
+  border-radius: 1rem !important;
+  border: none !important;
+  overflow: hidden;
 }

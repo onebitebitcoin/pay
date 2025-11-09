@@ -194,6 +194,7 @@
     "title": "Bitcoin-Accepting Stores",
     "subtitle": "Find nearby stores that accept Bitcoin",
     "search": "Search by name, category, address...",
+    "searchHint": "To search all stores, change category to All",
     "random": "Random Store",
     "addStore": "Add Store",
     "myLocation": "My Location",
