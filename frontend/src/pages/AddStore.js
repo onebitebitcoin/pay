@@ -24,6 +24,7 @@ function AddStoreForm() {
     hours: '',
     description: '',
     website: '',
+    naver_map_url: '',
     lat: null,
     lng: null,
   });
@@ -157,8 +158,8 @@ function AddStoreForm() {
     };
   }, [isKorean]);
 
-  const geocodeAddress = async (retryCount = 0) => {
-    const addressQuery = (newStore.address || '').trim();
+  const geocodeAddress = async (retryCount = 0, addressOverride = null) => {
+    const addressQuery = (addressOverride ?? newStore.address ?? '').trim();
     console.log('[Geocode] Starting geocode for address:', addressQuery, 'retry:', retryCount);
 
     if (!addressQuery) {
@@ -201,7 +202,6 @@ function AddStoreForm() {
 
         if (!geocoderRef.current) {
           console.error('[Geocode] ❌ Kakao geocoder still not available after retries');
-          alert(t('messages.addressSearchNotReady'));
           setGeocodeStatus('error');
           return;
         }
@@ -220,7 +220,6 @@ function AddStoreForm() {
           setGeocodeStatus('success');
         } else {
           console.error('[Geocode] ❌ Kakao geocoding FAILED - Status:', status);
-          alert(t('messages.addressNotFound'));
           setGeocodeStatus('error');
         }
       });
@@ -268,7 +267,6 @@ function AddStoreForm() {
         setGeocodeStatus('success');
       } else {
         console.error('[Geocode] ❌ OSM geocoding FAILED - No results');
-        alert(t('messages.addressNotFound'));
         setGeocodeStatus('error');
       }
     } catch (error) {
@@ -278,7 +276,6 @@ function AddStoreForm() {
         return;
       }
       console.error('[Geocode] ❌ OSM geocoding ERROR:', error);
-      alert(t('messages.addressSearchNotReady'));
       setGeocodeStatus('error');
     }
   };
@@ -302,12 +299,6 @@ function AddStoreForm() {
           if (addr) {
             setNewStore((prev) => ({ ...prev, address: addr, lat: null, lng: null }));
             setGeocodeStatus('loading');
-            // Give more time for Kakao SDK to initialize
-            console.log('[AddStore] Waiting 300ms before geocoding...');
-            setTimeout(() => {
-              console.log('[AddStore] Now calling geocodeAddress()');
-              geocodeAddress();
-            }, 300);
           }
         }
       });
@@ -320,6 +311,18 @@ function AddStoreForm() {
     }
   };
 
+  useEffect(() => {
+    const normalizedAddress = (newStore.address || '').trim();
+    if (!normalizedAddress) {
+      setGeocodeStatus('idle');
+      return;
+    }
+
+    console.log('[AddStore] Address changed, triggering geocode for:', normalizedAddress);
+    geocodeAddress(0, normalizedAddress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newStore.address, isKorean]);
+
   const submitNewStore = async () => {
     const { name, category, address, phone, hours, description, lat, lng } = newStore;
     const trimmedName = name.trim();
@@ -330,8 +333,7 @@ function AddStoreForm() {
       return;
     }
     if (lat == null || lng == null) {
-      await geocodeAddress();
-      alert(t('messages.geocoding'));
+      alert(t('messages.coordinatesRequired'));
       return;
     }
     try {
@@ -347,6 +349,7 @@ function AddStoreForm() {
         hours: hours.trim() ? hours.trim() : null,
         description: description.trim() ? description.trim() : null,
         website: newStore.website.trim() ? newStore.website.trim() : null,
+        naver_map_url: newStore.naver_map_url.trim() ? newStore.naver_map_url.trim() : null,
       };
       const resp = await fetch(apiUrl('/api/stores'), {
         method: 'POST',
@@ -468,12 +471,32 @@ function AddStoreForm() {
                 <div style={{
                   marginTop: '8px',
                   padding: '8px 12px',
-                  backgroundColor: '#f97316',
+                  backgroundColor: '#ef4444',
                   color: 'white',
                   borderRadius: '6px',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}>
-                  {t('addStore.coordinatesNotFound')}
+                  <span>{t('addStore.coordinatesNotFound')}</span>
+                  <button
+                    type="button"
+                    onClick={() => geocodeAddress()}
+                    style={{
+                      marginLeft: '12px',
+                      padding: '4px 12px',
+                      backgroundColor: 'white',
+                      color: '#ef4444',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t('addStore.retryGeocode')}
+                  </button>
                 </div>
               )}
             </label>
@@ -507,14 +530,33 @@ function AddStoreForm() {
                 placeholder={t('addStore.websitePlaceholder')}
               />
             </label>
+
+            <label className="col-span-2">
+              <span>{t('addStore.naverMapUrl')}</span>
+              <input
+                type="url"
+                value={newStore.naver_map_url}
+                onChange={(e) => setNewStore((prev) => ({ ...prev, naver_map_url: e.target.value }))}
+                placeholder={t('addStore.naverMapUrlPlaceholder')}
+              />
+            </label>
           </div>
 
           <div className="form-actions">
             <button className="cancel-btn" onClick={() => navigate(-1)}>
               {t('common.cancel')}
             </button>
-            <button className="submit-btn" onClick={submitNewStore} disabled={submitLoading}>
-              {submitLoading ? t('addStore.submitting') : t('addStore.submit')}
+            <button
+              className="submit-btn"
+              onClick={submitNewStore}
+              disabled={submitLoading || geocodeStatus === 'loading'}
+            >
+              {submitLoading
+                ? t('addStore.submitting')
+                : geocodeStatus === 'loading'
+                  ? t('addStore.coordinatesLoading')
+                  : t('addStore.submit')
+              }
             </button>
           </div>
         </div>

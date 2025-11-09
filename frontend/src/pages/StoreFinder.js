@@ -845,6 +845,32 @@ function StoreFinder() {
                     </div>
                   </div>
                 )}
+                {selectedStore.website && (
+                  <div className="store-detail-item">
+                    <Icon name="info" size={18} />
+                    <div style={{ flex: 1 }}>
+                      <strong>{t('storeFinder.website')}</strong>
+                      <p>
+                        <a href={selectedStore.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                          {selectedStore.website}
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {selectedStore.naver_map_url && (
+                  <div className="store-detail-item">
+                    <Icon name="map" size={18} />
+                    <div style={{ flex: 1 }}>
+                      <strong>{t('storeFinder.naverMap')}</strong>
+                      <p>
+                        <a href={selectedStore.naver_map_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                          {t('storeFinder.openInNaverMap')}
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="store-detail-item">
                   <Icon name="bitcoin" size={18} />
                   <div>

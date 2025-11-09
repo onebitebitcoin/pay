@@ -17,6 +17,7 @@ const emptyForm = {
   hours: '',
   description: '',
   website: '',
+  naver_map_url: '',
 };
 
 const parseHoursRange = (value = '') => {
@@ -126,6 +127,7 @@ function StoreManagementContent() {
         hours: editingStore.hours || '',
         description: editingStore.description || '',
         website: editingStore.website || '',
+        naver_map_url: editingStore.naver_map_url || '',
       });
       setEditHoursRange(parseHoursRange(editingStore.hours));
     } else {
@@ -294,8 +296,8 @@ function StoreManagementContent() {
     setFormDirty(true);
   };
 
-  const geocodeAddress = async () => {
-    const addressQuery = (formValues.address || '').trim();
+  const geocodeAddress = async (address = null) => {
+    const addressQuery = (address || formValues.address || '').trim();
     if (!addressQuery) {
       return;
     }
@@ -332,7 +334,7 @@ function StoreManagementContent() {
     }
 
     if (!window.daum) {
-      alert(t('messages.addressSearchNotReady'));
+      setStatus({ type: 'error', message: t('messages.addressSearchNotReady') });
       return;
     }
 
@@ -345,7 +347,7 @@ function StoreManagementContent() {
           setFormDirty(true);
           setGeocodeStatus('loading');
           setTimeout(() => {
-            geocodeAddress();
+            geocodeAddress(addr);
           }, 300);
         }
       }
@@ -424,6 +426,7 @@ function StoreManagementContent() {
         hours: (formValues.hours || '').trim() || null,
         description: (formValues.description || '').trim() || null,
         website: (formValues.website || '').trim() || null,
+        naver_map_url: (formValues.naver_map_url || '').trim() || null,
       };
 
       const response = await fetch(apiUrl(`/api/stores/${editingStoreId}`), {
@@ -795,9 +798,29 @@ function StoreManagementContent() {
                     backgroundColor: '#ef4444',
                     color: 'white',
                     borderRadius: '6px',
-                    fontSize: '14px'
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
                   }}>
-                    {t('addStore.coordinatesNotFound')}
+                    <span>{t('addStore.coordinatesNotFound')}</span>
+                    <button
+                      type="button"
+                      onClick={() => geocodeAddress()}
+                      style={{
+                        marginLeft: '12px',
+                        padding: '4px 12px',
+                        backgroundColor: 'white',
+                        color: '#ef4444',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('addStore.retryGeocode')}
+                    </button>
                   </div>
                 )}
               </label>
@@ -854,6 +877,16 @@ function StoreManagementContent() {
                   placeholder={t('addStore.websitePlaceholder')}
                 />
               </label>
+
+              <label className="full-width">
+                <span>{t('addStore.naverMapUrl')}</span>
+                <input
+                  type="url"
+                  value={formValues.naver_map_url}
+                  onChange={handleInputChange('naver_map_url')}
+                  placeholder={t('addStore.naverMapUrlPlaceholder')}
+                />
+              </label>
             </div>
             <div className="edit-panel-actions">
               {status && (
@@ -871,11 +904,13 @@ function StoreManagementContent() {
                   className="primary"
                   type="button"
                   onClick={handleSaveStore}
-                  disabled={saving}
+                  disabled={saving || geocodeStatus === 'loading'}
                 >
                   {saving
                     ? t('storeManagementPage.actions.saving')
-                    : t('common.save')}
+                    : geocodeStatus === 'loading'
+                      ? t('addStore.coordinatesLoading')
+                      : t('common.save')}
                 </button>
               </div>
             </div>
