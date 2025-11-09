@@ -238,6 +238,8 @@
     "selectCategory": "カテゴリーを選択",
     "address": "住所",
     "addressPlaceholder": "住所を入力してください",
+    "addressDetail": "詳細住所",
+    "addressDetailPlaceholder": "例）101号室、2階",
     "searchAddress": "住所を検索",
     "addressNotFound": "住所が見つかりません。別の表現で試してください。",
     "addressSearchNotReady": "住所検索スクリプトがまだ読み込まれていません。しばらく待ってから再試行してください。",

@@ -238,6 +238,8 @@
     "selectCategory": "Select Category",
     "address": "Address",
     "addressPlaceholder": "Enter address",
+    "addressDetail": "Address Detail",
+    "addressDetailPlaceholder": "e.g., Suite 101, 2F",
     "searchAddress": "Search Address",
     "addressNotFound": "Address not found. Please try a different search.",
     "addressSearchNotReady": "Address search script not yet loaded. Please try again in a moment.",
