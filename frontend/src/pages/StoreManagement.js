@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminGate from '../components/AdminGate';
 import Icon from '../components/Icon';
-import { apiUrl } from '../config';
+import { apiUrl, loadKakaoSdk } from '../config';
 import './StoreManagement.css';
 
 const emptyForm = {
@@ -106,6 +106,22 @@ function StoreManagementContent() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [location.pathname]);
+
+  // Load Kakao SDK for address search (Korean only)
+  useEffect(() => {
+    const isKorean = i18n.language === 'ko';
+    if (!isKorean) {
+      return;
+    }
+
+    loadKakaoSdk()
+      .then(() => {
+        console.log('[StoreManagement] Kakao SDK loaded successfully');
+      })
+      .catch((err) => {
+        console.error('[StoreManagement] Failed to load Kakao SDK:', err);
+      });
+  }, [i18n.language]);
 
   // Get unique categories
   const categories = useMemo(() => {
@@ -228,6 +244,32 @@ function StoreManagementContent() {
             ? `${nextRange.open}${nextRange.open && !nextRange.close ? ' ~' : ''}${nextRange.close}`
             : '',
     }));
+  };
+
+  const openAddressSearch = () => {
+    const isKorean = i18n.language === 'ko';
+
+    if (!isKorean) {
+      const query = formValues.address ? encodeURIComponent(formValues.address) : '';
+      window.open(`https://www.openstreetmap.org/search?query=${query}`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (!window.daum) {
+      alert(t('messages.addressSearchNotReady'));
+      return;
+    }
+
+    const postcode = new window.daum.Postcode({
+      oncomplete: function(data) {
+        const addr = data.roadAddress || data.jibunAddress || '';
+        console.log('[StoreManagement] Daum address selected:', addr);
+        if (addr) {
+          setFormValues((prev) => ({ ...prev, address: addr }));
+        }
+      }
+    });
+    postcode.open();
   };
 
   const handleDeleteStore = async (store) => {
@@ -609,29 +651,33 @@ function StoreManagementContent() {
               </label>
               <label className="full-width">
                 <span>{t('addStore.address')}</span>
-                <input
-                  type="text"
-                  value={formValues.address}
-                  onChange={handleInputChange('address')}
-                />
-              </label>
-              <label>
-                <span>{t('addStore.latitude')}</span>
-                <input
-                  type="number"
-                  value={formValues.lat}
-                  onChange={handleInputChange('lat')}
-                  step="0.0000001"
-                />
-              </label>
-              <label>
-                <span>{t('addStore.longitude')}</span>
-                <input
-                  type="number"
-                  value={formValues.lng}
-                  onChange={handleInputChange('lng')}
-                  step="0.0000001"
-                />
+                <div className="address-input-row" style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={formValues.address}
+                    readOnly
+                    placeholder={t('addStore.addressPlaceholder')}
+                    style={{ flex: 1, cursor: 'pointer', backgroundColor: 'var(--surface-bg)' }}
+                    onClick={openAddressSearch}
+                  />
+                  <button
+                    type="button"
+                    className="search-btn"
+                    onClick={openAddressSearch}
+                    style={{
+                      padding: '0.65rem 1rem',
+                      borderRadius: '8px',
+                      border: '2px solid var(--border)',
+                      background: 'var(--primary)',
+                      color: 'white',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {t('addStore.searchAddress')}
+                  </button>
+                </div>
               </label>
               <label>
                 <span>{t('addStore.phone')}</span>
@@ -641,7 +687,7 @@ function StoreManagementContent() {
                   onChange={handleInputChange('phone')}
                 />
               </label>
-              <label>
+              <label className="full-width">
                 <span>{t('addStore.hours')}</span>
                 <div className="hours-input-row">
                   <input

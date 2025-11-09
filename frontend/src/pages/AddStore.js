@@ -27,6 +27,8 @@ function AddStoreForm() {
   });
   const [newStore, setNewStore] = useState(createEmptyStore);
   const [hoursRange, setHoursRange] = useState({ open: '', close: '' });
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [tempAddress, setTempAddress] = useState('');
   const geocoderRef = useRef(null);
   const geocodeAbortRef = useRef(null);
 
@@ -423,14 +425,10 @@ function AddStoreForm() {
                 <input
                   type="text"
                   value={newStore.address}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setNewStore((prev) => ({ ...prev, address: value, lat: null, lng: null }));
-                    setGeocodeStatus('idle');
-                  }}
-                  onBlur={geocodeAddress}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); geocodeAddress(); } }}
+                  readOnly
                   placeholder={t('addStore.addressPlaceholder')}
+                  style={{ cursor: 'pointer', backgroundColor: 'var(--surface-bg)' }}
+                  onClick={openAddressSearch}
                 />
                 <button type="button" className="search-btn" onClick={openAddressSearch}>
                   {t('addStore.searchAddress')}
