@@ -31,6 +31,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Non-GET requests shouldn't be cached
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

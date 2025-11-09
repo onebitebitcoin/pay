@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminGate from '../components/AdminGate';
@@ -19,6 +19,17 @@ const emptyForm = {
   website: '',
 };
 
+const parseHoursRange = (value = '') => {
+  if (!value || typeof value !== 'string') {
+    return { open: '', close: '' };
+  }
+  const parts = value.split(/~|-/).map((part) => part.trim());
+  return {
+    open: parts[0] || '',
+    close: parts[1] || '',
+  };
+};
+
 function StoreManagementContent() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -37,6 +48,7 @@ function StoreManagementContent() {
   const [editHoursRange, setEditHoursRange] = useState({ open: '', close: '' });
   const [geocodeStatus, setGeocodeStatus] = useState('idle');
   const geocoderRef = useRef(null);
+  const [formDirty, setFormDirty] = useState(false);
 
   // Filter and pagination states
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,20 +108,41 @@ function StoreManagementContent() {
     }
   }, [location.pathname]);
 
-  // Reload stores when page becomes visible (e.g., switching tabs)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && location.pathname === '/admin/stores') {
-        setReloadIndex((prev) => prev + 1);
-      }
-    };
+  const editingStore = useMemo(
+    () => stores.find((store) => store.id === editingStoreId) || null,
+    [stores, editingStoreId]
+  );
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+  const resetEditForm = useCallback(() => {
+    if (editingStore) {
+      setFormValues({
+        name: editingStore.name || '',
+        category: editingStore.category || '',
+        address: editingStore.address || '',
+        address_detail: editingStore.address_detail || '',
+        lat: editingStore.lat ?? '',
+        lng: editingStore.lng ?? '',
+        phone: editingStore.phone || '',
+        hours: editingStore.hours || '',
+        description: editingStore.description || '',
+        website: editingStore.website || '',
+      });
+      setEditHoursRange(parseHoursRange(editingStore.hours));
+    } else {
+      setFormValues(emptyForm);
+      setEditHoursRange({ open: '', close: '' });
+    }
+    setFormDirty(false);
+  }, [editingStore]);
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [location.pathname]);
+  const resetEditState = useCallback(() => {
+    setEditingStoreId(null);
+    setFormValues(emptyForm);
+    setStatus(null);
+    setEditModalOpen(false);
+    setEditHoursRange({ open: '', close: '' });
+    setFormDirty(false);
+  }, []);
 
   // Load Kakao SDK for address search (Korean only)
   useEffect(() => {
@@ -186,60 +219,63 @@ function StoreManagementContent() {
     setCurrentPage(1);
   }, [searchTerm, categoryFilter, sortOrder, itemsPerPage]);
 
-  const editingStore = useMemo(
-    () => stores.find((store) => store.id === editingStoreId) || null,
-    [stores, editingStoreId]
-  );
-
-  const parseHoursRange = (value = '') => {
-    if (!value || typeof value !== 'string') {
-      return { open: '', close: '' };
-    }
-    const parts = value.split(/~|-/).map((part) => part.trim());
-    return {
-      open: parts[0] || '',
-      close: parts[1] || '',
-    };
-  };
-
   useEffect(() => {
-    if (editingStore) {
-      setFormValues({
-        name: editingStore.name || '',
-        category: editingStore.category || '',
-        address: editingStore.address || '',
-        address_detail: editingStore.address_detail || '',
-        lat: editingStore.lat ?? '',
-        lng: editingStore.lng ?? '',
-        phone: editingStore.phone || '',
-        hours: editingStore.hours || '',
-        description: editingStore.description || '',
-        website: editingStore.website || '',
-      });
-      setEditHoursRange(parseHoursRange(editingStore.hours));
-    } else {
-      setFormValues(emptyForm);
-      setEditHoursRange({ open: '', close: '' });
+    if (!editingStore || !formDirty) {
+      resetEditForm();
     }
-  }, [editingStore]);
+  }, [editingStore, formDirty, resetEditForm]);
+
+  // Reload stores when page becomes visible (e.g., switching tabs)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && location.pathname === '/admin/stores') {
+        if (editModalOpen && formDirty) {
+          return;
+        }
+        setReloadIndex((prev) => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [location.pathname, editModalOpen, formDirty]);
 
   const handleEditClick = (store) => {
     setEditingStoreId(store.id);
     setStatus(null);
     setEditModalOpen(true);
+    setFormDirty(false);
   };
 
   const handleCloseEdit = () => {
-    setEditingStoreId(null);
-    setFormValues(emptyForm);
-    setStatus(null);
-    setEditModalOpen(false);
-    setEditHoursRange({ open: '', close: '' });
+    resetEditState();
   };
+
+  useEffect(() => {
+    if (!editModalOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        resetEditState();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editModalOpen, resetEditState]);
 
   const handleInputChange = (field) => (event) => {
     const { value } = event.target;
     setFormValues((prev) => ({ ...prev, [field]: value }));
+    setFormDirty(true);
   };
 
   const handleHoursInputChange = (field) => (event) => {
@@ -255,6 +291,7 @@ function StoreManagementContent() {
             ? `${nextRange.open}${nextRange.open && !nextRange.close ? ' ~' : ''}${nextRange.close}`
             : '',
     }));
+    setFormDirty(true);
   };
 
   const geocodeAddress = async () => {
@@ -275,6 +312,7 @@ function StoreManagementContent() {
           const parsedLng = parseFloat(lng);
           console.log('[StoreManagement] Kakao geocoding SUCCESS - Lat:', parsedLat, 'Lng:', parsedLng);
           setFormValues((prev) => ({ ...prev, lat: parsedLat, lng: parsedLng }));
+          setFormDirty(true);
           setGeocodeStatus('success');
         } else {
           console.error('[StoreManagement] Kakao geocoding FAILED - Status:', status);
@@ -304,6 +342,7 @@ function StoreManagementContent() {
         console.log('[StoreManagement] Daum address selected:', addr);
         if (addr) {
           setFormValues((prev) => ({ ...prev, address: addr }));
+          setFormDirty(true);
           setGeocodeStatus('loading');
           setTimeout(() => {
             geocodeAddress();
@@ -402,6 +441,7 @@ function StoreManagementContent() {
       setStores((prev) => prev.map((store) => (store.id === updated.id ? updated : store)));
       setLastUpdated(new Date());
       setStatus({ type: 'success', message: t('storeManagementPage.updateSuccess') });
+      setFormDirty(false);
     } catch (updateError) {
       console.error('[StoreManagement] Failed to update store:', updateError);
       setStatus({ type: 'error', message: t('storeManagementPage.updateError') });
@@ -682,6 +722,7 @@ function StoreManagementContent() {
                   type="text"
                   value={formValues.name}
                   onChange={handleInputChange('name')}
+                  placeholder={t('addStore.storeNamePlaceholder')}
                 />
               </label>
               <label>
@@ -690,6 +731,7 @@ function StoreManagementContent() {
                   type="text"
                   value={formValues.category}
                   onChange={handleInputChange('category')}
+                  placeholder={t('addStore.categoryPlaceholder')}
                 />
               </label>
               <label className="full-width">
@@ -774,6 +816,7 @@ function StoreManagementContent() {
                   type="text"
                   value={formValues.phone}
                   onChange={handleInputChange('phone')}
+                  placeholder={t('addStore.phonePlaceholder')}
                 />
               </label>
               <label className="full-width">
@@ -798,6 +841,7 @@ function StoreManagementContent() {
                   rows={3}
                   value={formValues.description}
                   onChange={handleInputChange('description')}
+                  placeholder={t('addStore.descriptionPlaceholder')}
                 />
               </label>
 
