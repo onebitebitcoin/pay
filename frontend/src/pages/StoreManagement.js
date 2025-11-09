@@ -34,6 +34,13 @@ function StoreManagementContent() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editHoursRange, setEditHoursRange] = useState({ open: '', close: '' });
 
+  // Filter and pagination states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
   useEffect(() => {
     document.title = t('pageTitle.storeManagement');
   }, [t, i18n.language]);
@@ -100,13 +107,63 @@ function StoreManagementContent() {
     };
   }, [location.pathname]);
 
-  const sortedStores = useMemo(() => {
-    return [...stores].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Get unique categories
+  const categories = useMemo(() => {
+    const uniqueCategories = new Set();
+    stores.forEach(store => {
+      if (store.category) {
+        uniqueCategories.add(store.category);
+      }
+    });
+    return Array.from(uniqueCategories).sort();
   }, [stores]);
 
+  // Filter and sort stores
+  const filteredAndSortedStores = useMemo(() => {
+    let result = [...stores];
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(store =>
+        (store.name || '').toLowerCase().includes(lowerSearch) ||
+        (store.address || '').toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // Filter by category
+    if (categoryFilter !== 'all') {
+      result = result.filter(store => store.category === categoryFilter);
+    }
+
+    // Sort by ID (newest or oldest)
+    result.sort((a, b) => {
+      if (sortOrder === 'newest') {
+        return (b.id || 0) - (a.id || 0);
+      } else {
+        return (a.id || 0) - (b.id || 0);
+      }
+    });
+
+    return result;
+  }, [stores, searchTerm, categoryFilter, sortOrder]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredAndSortedStores.length / itemsPerPage);
+  const paginatedStores = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedStores.slice(startIndex, endIndex);
+  }, [filteredAndSortedStores, currentPage, itemsPerPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, sortOrder, itemsPerPage]);
+
   const editingStore = useMemo(
-    () => sortedStores.find((store) => store.id === editingStoreId) || null,
-    [sortedStores, editingStoreId]
+    () => stores.find((store) => store.id === editingStoreId) || null,
+    [stores, editingStoreId]
   );
 
   const parseHoursRange = (value = '') => {
@@ -284,70 +341,115 @@ function StoreManagementContent() {
       );
     }
 
-    if (!sortedStores.length) {
+    if (stores.length === 0) {
       return <div className="store-management-state">{t('storeManagementPage.noStores')}</div>;
     }
 
+    if (filteredAndSortedStores.length === 0) {
+      return <div className="store-management-state">{t('storeManagementPage.noResults')}</div>;
+    }
+
     return (
-      <div className="store-management-table-wrapper">
-        <table className="store-management-table">
-          <thead>
-            <tr>
-              <th>{t('storeManagementPage.table.id')}</th>
-              <th>{t('storeManagementPage.table.name')}</th>
-              <th>{t('storeManagementPage.table.category')}</th>
-              <th>{t('storeManagementPage.table.address')}</th>
-              <th>{t('storeManagementPage.table.phone')}</th>
-              <th>{t('storeManagementPage.table.hours')}</th>
-              <th>{t('storeManagementPage.table.actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedStores.map((store) => (
-              <tr
-                key={store.id}
-                className={editingStoreId === store.id ? 'active' : undefined}
-              >
-                <td>#{store.id}</td>
-                <td>{store.name || t('storeManagementPage.fields.unnamed')}</td>
-                <td>{store.category || t('storeManagementPage.fields.uncategorized')}</td>
-                <td>{store.address || t('storeManagementPage.notAvailable')}</td>
-                <td>{store.phone || t('storeManagementPage.notAvailable')}</td>
-                <td>{store.hours || t('storeManagementPage.notAvailable')}</td>
-                <td>
-                  <div className="table-actions">
-                    <button
-                      type="button"
-                      className="table-icon-button"
-                      onClick={() => handleEditClick(store)}
-                      aria-label={t('storeManagementPage.actions.edit')}
-                    >
-                      <Icon name="edit" size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      className="table-icon-button danger"
-                      onClick={() => handleDeleteStore(store)}
-                      disabled={deletingId === store.id}
-                      aria-label={
-                        deletingId === store.id
-                          ? t('storeManagementPage.actions.deleting')
-                          : t('storeManagementPage.actions.delete')
-                      }
-                    >
-                      {deletingId === store.id ? (
-                        <Icon name="loader" size={16} className="spin" />
-                      ) : (
-                        <Icon name="trash" size={16} />
-                      )}
-                    </button>
-                  </div>
-                </td>
+      <>
+        <div className="store-management-table-wrapper">
+          <table className="store-management-table">
+            <thead>
+              <tr>
+                <th>{t('storeManagementPage.table.id')}</th>
+                <th>{t('storeManagementPage.table.name')}</th>
+                <th>{t('storeManagementPage.table.category')}</th>
+                <th>{t('storeManagementPage.table.address')}</th>
+                <th>{t('storeManagementPage.table.phone')}</th>
+                <th>{t('storeManagementPage.table.hours')}</th>
+                <th>{t('storeManagementPage.table.actions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {paginatedStores.map((store) => (
+                <tr
+                  key={store.id}
+                  className={editingStoreId === store.id ? 'active' : undefined}
+                >
+                  <td>#{store.id}</td>
+                  <td>{store.name || t('storeManagementPage.fields.unnamed')}</td>
+                  <td>{store.category || t('storeManagementPage.fields.uncategorized')}</td>
+                  <td>{store.address || t('storeManagementPage.notAvailable')}</td>
+                  <td>{store.phone || t('storeManagementPage.notAvailable')}</td>
+                  <td>{store.hours || t('storeManagementPage.notAvailable')}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="table-icon-button"
+                        onClick={() => handleEditClick(store)}
+                        aria-label={t('storeManagementPage.actions.edit')}
+                      >
+                        <Icon name="edit" size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="table-icon-button danger"
+                        onClick={() => handleDeleteStore(store)}
+                        disabled={deletingId === store.id}
+                        aria-label={
+                          deletingId === store.id
+                            ? t('storeManagementPage.actions.deleting')
+                            : t('storeManagementPage.actions.delete')
+                        }
+                      >
+                        {deletingId === store.id ? (
+                          <Icon name="loader" size={16} className="spin" />
+                        ) : (
+                          <Icon name="trash" size={16} />
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              {t('storeManagementPage.pagination.first')}
+            </button>
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              {t('storeManagementPage.pagination.prev')}
+            </button>
+
+            <div className="pagination-info">
+              {t('storeManagementPage.pagination.pageOf', { current: currentPage, total: totalPages })}
+            </div>
+
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              {t('storeManagementPage.pagination.next')}
+            </button>
+            <button
+              className="pagination-btn"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              {t('storeManagementPage.pagination.last')}
+            </button>
+          </div>
+        )}
+      </>
     );
   };
 
@@ -378,6 +480,76 @@ function StoreManagementContent() {
             <Icon name="plus" size={20} />
             <span className="sr-only">{t('storeManagementPage.addStore')}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Filters and Controls */}
+      <div className="store-filters">
+        <div className="filter-row">
+          <div className="filter-group">
+            <label htmlFor="search-store">{t('storeManagementPage.filters.search')}</label>
+            <input
+              id="search-store"
+              type="text"
+              placeholder={t('storeManagementPage.filters.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="filter-input"
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="category-filter">{t('storeManagementPage.filters.category')}</label>
+            <select
+              id="category-filter"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">{t('storeManagementPage.filters.allCategories')}</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="sort-order">{t('storeManagementPage.filters.sort')}</label>
+            <select
+              id="sort-order"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="filter-select"
+            >
+              <option value="newest">{t('storeManagementPage.filters.newest')}</option>
+              <option value="oldest">{t('storeManagementPage.filters.oldest')}</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="items-per-page">{t('storeManagementPage.filters.perPage')}</label>
+            <select
+              id="items-per-page"
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="filter-select"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="filter-summary">
+          {t('storeManagementPage.filters.showing', {
+            start: filteredAndSortedStores.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1,
+            end: Math.min(currentPage * itemsPerPage, filteredAndSortedStores.length),
+            total: filteredAndSortedStores.length,
+            totalStores: stores.length
+          })}
         </div>
       </div>
 

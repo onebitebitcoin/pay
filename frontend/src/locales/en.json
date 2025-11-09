@@ -287,6 +287,7 @@
     "loading": "Loading stores...",
     "loadError": "Failed to load stores. Please try again.",
     "noStores": "No stores have been registered yet.",
+    "noResults": "No results found.",
     "notAvailable": "Not provided",
     "deleteConfirm": "Delete \"{{name}}\"?",
     "deleteSuccess": "Store deleted.",
@@ -294,6 +295,24 @@
     "updateSuccess": "Store updated.",
     "updateError": "Failed to update store.",
     "validationError": "Please provide name, category, address, latitude, and longitude.",
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "Search by name or address...",
+      "category": "Category",
+      "allCategories": "All Categories",
+      "sort": "Sort",
+      "newest": "Newest First",
+      "oldest": "Oldest First",
+      "perPage": "Per Page",
+      "showing": "Showing {{start}}-{{end}} of {{total}} ({{totalStores}} total)"
+    },
+    "pagination": {
+      "first": "First",
+      "prev": "Previous",
+      "next": "Next",
+      "last": "Last",
+      "pageOf": "Page {{current}} of {{total}}"
+    },
     "fields": {
       "address": "Address",
       "phone": "Phone",

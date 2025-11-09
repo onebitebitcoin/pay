@@ -287,6 +287,7 @@
     "loading": "매장을 불러오는 중...",
     "loadError": "매장 정보를 불러오지 못했습니다. 다시 시도해주세요.",
     "noStores": "아직 등록된 매장이 없습니다.",
+    "noResults": "검색 결과가 없습니다.",
     "notAvailable": "제공되지 않음",
     "deleteConfirm": "\"{{name}}\" 매장을 삭제할까요?",
     "deleteSuccess": "매장이 삭제되었습니다.",
@@ -294,6 +295,24 @@
     "updateSuccess": "매장 정보가 저장되었습니다.",
     "updateError": "매장 정보를 저장하지 못했습니다.",
     "validationError": "매장명, 카테고리, 주소, 위도/경도를 모두 입력해주세요.",
+    "filters": {
+      "search": "검색",
+      "searchPlaceholder": "매장명 또는 주소 검색...",
+      "category": "카테고리",
+      "allCategories": "전체 카테고리",
+      "sort": "정렬",
+      "newest": "최신순",
+      "oldest": "오래된 순",
+      "perPage": "페이지당 항목",
+      "showing": "{{start}}-{{end}} / {{total}}개 표시 (전체 {{totalStores}}개)"
+    },
+    "pagination": {
+      "first": "처음",
+      "prev": "이전",
+      "next": "다음",
+      "last": "마지막",
+      "pageOf": "{{current}} / {{total}} 페이지"
+    },
     "fields": {
       "address": "주소",
       "phone": "전화번호",
