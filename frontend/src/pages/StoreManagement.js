@@ -376,11 +376,13 @@ function StoreManagementContent() {
         name: trimmedName,
         category: trimmedCategory,
         address: trimmedAddress,
+        address_detail: (formValues.address_detail || '').trim() || null,
         lat: nextLat,
         lng: nextLng,
-        phone: formValues.phone.trim() || null,
-        hours: formValues.hours.trim() || null,
-        description: formValues.description.trim() || null,
+        phone: (formValues.phone || '').trim() || null,
+        hours: (formValues.hours || '').trim() || null,
+        description: (formValues.description || '').trim() || null,
+        website: (formValues.website || '').trim() || null,
       };
 
       const response = await fetch(apiUrl(`/api/stores/${editingStoreId}`), {
