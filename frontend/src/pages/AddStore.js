@@ -351,7 +351,7 @@ function AddStoreForm() {
         throw new Error(err.error || t('addStore.error'));
       }
       alert(t('messages.storeSubmitSuccess'));
-      navigate('/map');
+      navigate('/admin/stores');
     } catch (e) {
       console.error(e);
       alert(e.message || t('messages.storeSubmitError'));

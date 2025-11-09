@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AdminGate from '../components/AdminGate';
 import Icon from '../components/Icon';
 import { apiUrl } from '../config';
@@ -20,6 +20,7 @@ const emptyForm = {
 function StoreManagementContent() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,6 +77,28 @@ function StoreManagementContent() {
       controller.abort();
     };
   }, [reloadIndex, t]);
+
+  // Reload stores when returning to this page
+  useEffect(() => {
+    if (location.pathname === '/admin/stores') {
+      setReloadIndex((prev) => prev + 1);
+    }
+  }, [location.pathname]);
+
+  // Reload stores when page becomes visible (e.g., switching tabs)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && location.pathname === '/admin/stores') {
+        setReloadIndex((prev) => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [location.pathname]);
 
   const sortedStores = useMemo(() => {
     return [...stores].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
