@@ -351,6 +351,20 @@
 .edit-panel-actions {
   margin-top: 1.5rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.edit-panel-status-row {
+  width: 100%;
+}
+
+.edit-panel-status-row .store-management-status {
+  margin: 0;
+}
+
+.edit-panel-buttons {
+  display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
 }

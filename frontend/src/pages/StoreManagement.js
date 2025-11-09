@@ -208,11 +208,13 @@ function StoreManagementContent() {
         name: editingStore.name || '',
         category: editingStore.category || '',
         address: editingStore.address || '',
+        address_detail: editingStore.address_detail || '',
         lat: editingStore.lat ?? '',
         lng: editingStore.lng ?? '',
         phone: editingStore.phone || '',
         hours: editingStore.hours || '',
         description: editingStore.description || '',
+        website: editingStore.website || '',
       });
       setEditHoursRange(parseHoursRange(editingStore.hours));
     } else {
@@ -400,7 +402,6 @@ function StoreManagementContent() {
       setStores((prev) => prev.map((store) => (store.id === updated.id ? updated : store)));
       setLastUpdated(new Date());
       setStatus({ type: 'success', message: t('storeManagementPage.updateSuccess') });
-      handleCloseEdit();
     } catch (updateError) {
       console.error('[StoreManagement] Failed to update store:', updateError);
       setStatus({ type: 'error', message: t('storeManagementPage.updateError') });
@@ -656,7 +657,7 @@ function StoreManagementContent() {
         )}
       </div>
 
-      {status && (
+      {status && !editModalOpen && (
         <div className={`store-management-status ${status.type}`}>
           {status.message}
         </div>
@@ -811,19 +812,28 @@ function StoreManagementContent() {
               </label>
             </div>
             <div className="edit-panel-actions">
-              <button className="ghost" type="button" onClick={handleCloseEdit}>
-                {t('storeManagementPage.actions.cancel')}
-              </button>
-              <button
-                className="primary"
-                type="button"
-                onClick={handleSaveStore}
-                disabled={saving}
-              >
-                {saving
-                  ? t('storeManagementPage.actions.saving')
-                  : t('storeManagementPage.actions.save')}
-              </button>
+              {status && (
+                <div className="edit-panel-status-row">
+                  <div className={`store-management-status ${status.type}`}>
+                    {status.message}
+                  </div>
+                </div>
+              )}
+              <div className="edit-panel-buttons">
+                <button className="ghost" type="button" onClick={handleCloseEdit}>
+                  {t('common.close')}
+                </button>
+                <button
+                  className="primary"
+                  type="button"
+                  onClick={handleSaveStore}
+                  disabled={saving}
+                >
+                  {saving
+                    ? t('storeManagementPage.actions.saving')
+                    : t('common.save')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
