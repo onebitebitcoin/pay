@@ -387,16 +387,6 @@ function AddStoreForm() {
               />
             </label>
 
-            <label className="col-span-2">
-              <span>{t('addStore.addressDetail')}</span>
-              <input
-                type="text"
-                value={newStore.address_detail}
-                onChange={(e) => setNewStore((prev) => ({ ...prev, address_detail: e.target.value }))}
-                placeholder={t('addStore.addressDetailPlaceholder')}
-              />
-            </label>
-
             <label>
               <span>{t('addStore.category')} <span className="required">*</span></span>
               <input
@@ -486,6 +476,16 @@ function AddStoreForm() {
                   {t('addStore.coordinatesNotFound')}
                 </div>
               )}
+            </label>
+
+            <label className="col-span-2">
+              <span>{t('addStore.addressDetail')}</span>
+              <input
+                type="text"
+                value={newStore.address_detail}
+                onChange={(e) => setNewStore((prev) => ({ ...prev, address_detail: e.target.value }))}
+                placeholder={t('addStore.addressDetailPlaceholder')}
+              />
             </label>
 
             <label className="col-span-2">

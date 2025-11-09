@@ -766,14 +766,6 @@ function StoreManagementContent() {
                 />
               </label>
               <label>
-                <span>{t('addStore.category')}</span>
-                <input
-                  type="text"
-                  value={formValues.category}
-                  onChange={handleInputChange('category')}
-                />
-              </label>
-              <label>
                 <span>{t('addStore.phone')}</span>
                 <input
                   type="text"

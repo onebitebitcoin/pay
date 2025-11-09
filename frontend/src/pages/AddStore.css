@@ -65,6 +65,8 @@
 
 .form-grid input,
 .form-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -92,6 +94,8 @@
 .address-input-row {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .address-input-row input {
@@ -208,4 +212,15 @@
     text-align: center;
   }
 
+  .address-input-row {
+    flex-direction: column;
+  }
+
+  .address-input-row .search-btn {
+    width: 100%;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
 }
