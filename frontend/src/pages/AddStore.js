@@ -387,16 +387,6 @@ function AddStoreForm() {
               />
             </label>
 
-            <label>
-              <span>{t('addStore.category')} <span className="required">*</span></span>
-              <input
-                type="text"
-                value={newStore.category}
-                onChange={(e) => setNewStore((prev) => ({ ...prev, category: e.target.value }))}
-                placeholder={t('addStore.categoryPlaceholder')}
-              />
-            </label>
-
             <label className="col-span-2">
               <span>{t('addStore.addressDetail')}</span>
               <input
@@ -404,6 +394,16 @@ function AddStoreForm() {
                 value={newStore.address_detail}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, address_detail: e.target.value }))}
                 placeholder={t('addStore.addressDetailPlaceholder')}
+              />
+            </label>
+
+            <label>
+              <span>{t('addStore.category')} <span className="required">*</span></span>
+              <input
+                type="text"
+                value={newStore.category}
+                onChange={(e) => setNewStore((prev) => ({ ...prev, category: e.target.value }))}
+                placeholder={t('addStore.categoryPlaceholder')}
               />
             </label>
 
