@@ -450,6 +450,7 @@ app.post('/api/stores', (req, res) => {
       hours = null,
       description = null,
       website = null,
+      naver_map_url = null,
     } = req.body || {};
     const parsedLat = typeof lat === 'string' ? parseFloat(lat) : lat;
     const parsedLng = typeof lng === 'string' ? parseFloat(lng) : lng;
@@ -476,6 +477,7 @@ app.post('/api/stores', (req, res) => {
       hours: hours ? String(hours).trim() : null,
       description: description ? String(description).trim() : null,
       website: website ? String(website).trim() : null,
+      naver_map_url: naver_map_url ? String(naver_map_url).trim() : null,
     });
     res.status(201).json(created);
   } catch (error) {
@@ -510,6 +512,7 @@ app.put('/api/stores/:id', (req, res) => {
       name_en,
       address_en,
       category_en,
+      naver_map_url,
     } = req.body || {};
 
     const nextName = typeof name === 'string' ? name.trim() : existing.name;
@@ -542,6 +545,7 @@ app.put('/api/stores/:id', (req, res) => {
       name_en: name_en !== undefined ? (name_en ? String(name_en).trim() : null) : existing.name_en,
       address_en: address_en !== undefined ? (address_en ? String(address_en).trim() : null) : existing.address_en,
       category_en: category_en !== undefined ? (category_en ? String(category_en).trim() : null) : existing.category_en,
+      naver_map_url: naver_map_url !== undefined ? (naver_map_url ? String(naver_map_url).trim() : null) : existing.naver_map_url,
     });
 
     res.json(updated);

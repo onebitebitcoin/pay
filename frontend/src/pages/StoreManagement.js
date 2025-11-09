@@ -144,6 +144,7 @@ function StoreManagementContent() {
     setEditModalOpen(false);
     setEditHoursRange({ open: '', close: '' });
     setFormDirty(false);
+    setGeocodeStatus('idle');
   }, []);
 
   // Load Kakao SDK for address search (Korean only)
@@ -250,6 +251,7 @@ function StoreManagementContent() {
     setStatus(null);
     setEditModalOpen(true);
     setFormDirty(false);
+    setGeocodeStatus('idle');
   };
 
   const handleCloseEdit = () => {
@@ -299,6 +301,7 @@ function StoreManagementContent() {
   const geocodeAddress = async (address = null) => {
     const addressQuery = (address || formValues.address || '').trim();
     if (!addressQuery) {
+      setGeocodeStatus('idle');
       return;
     }
 
@@ -321,6 +324,10 @@ function StoreManagementContent() {
           setGeocodeStatus('error');
         }
       });
+    } else {
+      // Non-Korean or geocoder not ready - reset status
+      console.log('[StoreManagement] Geocoder not available, resetting status');
+      setGeocodeStatus('idle');
     }
   };
 
@@ -345,7 +352,6 @@ function StoreManagementContent() {
         if (addr) {
           setFormValues((prev) => ({ ...prev, address: addr }));
           setFormDirty(true);
-          setGeocodeStatus('loading');
           setTimeout(() => {
             geocodeAddress(addr);
           }, 300);
