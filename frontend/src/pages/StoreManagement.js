@@ -10,6 +10,7 @@ const emptyForm = {
   name: '',
   category: '',
   address: '',
+  address_detail: '',
   lat: '',
   lng: '',
   phone: '',
@@ -754,6 +755,15 @@ function StoreManagementContent() {
                     {t('addStore.coordinatesNotFound')}
                   </div>
                 )}
+              </label>
+              <label className="full-width">
+                <span>{t('addStore.addressDetail')}</span>
+                <input
+                  type="text"
+                  value={formValues.address_detail}
+                  onChange={handleInputChange('address_detail')}
+                  placeholder={t('addStore.addressDetailPlaceholder')}
+                />
               </label>
               <label>
                 <span>{t('addStore.phone')}</span>

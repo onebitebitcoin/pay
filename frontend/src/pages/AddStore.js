@@ -19,6 +19,7 @@ function AddStoreForm() {
     name: '',
     category: '',
     address: '',
+    address_detail: '',
     phone: '',
     hours: '',
     description: '',
@@ -339,6 +340,7 @@ function AddStoreForm() {
         name: trimmedName,
         category: trimmedCategory,
         address: trimmedAddress,
+        address_detail: newStore.address_detail.trim() ? newStore.address_detail.trim() : null,
         lat: Number(lat),
         lng: Number(lng),
         phone: phone.trim() ? phone.trim() : null,
@@ -392,6 +394,16 @@ function AddStoreForm() {
                 value={newStore.category}
                 onChange={(e) => setNewStore((prev) => ({ ...prev, category: e.target.value }))}
                 placeholder={t('addStore.categoryPlaceholder')}
+              />
+            </label>
+
+            <label className="col-span-2">
+              <span>{t('addStore.addressDetail')}</span>
+              <input
+                type="text"
+                value={newStore.address_detail}
+                onChange={(e) => setNewStore((prev) => ({ ...prev, address_detail: e.target.value }))}
+                placeholder={t('addStore.addressDetailPlaceholder')}
               />
             </label>
 
