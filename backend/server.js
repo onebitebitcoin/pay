@@ -5,6 +5,13 @@ const http = require('http');
 const WebSocket = require('ws');
 require('dotenv').config();
 
+// Disable console logs in production (keep error and warn)
+if (process.env.NODE_ENV === 'production') {
+  console.log = function() {};
+  console.info = function() {};
+  console.debug = function() {};
+}
+
 const db = require('./db');
 const cashu = require('./cashu');
 const lnaddr = require('./lightningaddr');
