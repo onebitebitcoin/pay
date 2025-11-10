@@ -1,69 +1,99 @@
 .admin-gate {
-  min-height: 60vh;
+  min-height: calc(100vh - 64px);
+  padding: 3rem 1.5rem 4rem;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--faq-accent-rgb), 0.08) 0%,
+    rgba(255, 255, 255, 0.96) 45%,
+    rgba(var(--faq-accent-rgb), 0.05) 100%
+  );
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  text-align: center;
+  gap: 1.5rem;
 }
 
-.admin-gate-card {
+:root.dark .admin-gate {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 10, 4, 0.95) 0%,
+    rgba(21, 15, 7, 0.9) 45%,
+    rgba(8, 6, 3, 0.98) 100%
+  );
+}
+
+.admin-gate h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--faq-accent);
+}
+
+.admin-gate p {
+  margin: 0;
+  max-width: 420px;
+  color: var(--faq-muted);
+  font-size: 1rem;
+}
+
+.admin-gate form {
   width: 100%;
   max-width: 420px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 2rem;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
-}
-
-.admin-gate-card h1 {
-  margin-bottom: 0.5rem;
-  font-size: 1.75rem;
-  color: var(--text);
-}
-
-.admin-gate-card p {
-  margin: 0 0 1.5rem;
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
-.admin-gate-card form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.admin-gate-card input {
+.admin-gate input {
   padding: 0.85rem 1rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface-bg);
+  border-radius: 12px;
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.95);
   font-size: 1rem;
   color: var(--text);
+  transition: border-color 0.2s;
 }
 
-.admin-gate-card input:focus {
+:root.dark .admin-gate input {
+  background: rgba(18, 12, 6, 0.92);
+  border-color: rgba(var(--faq-accent-rgb), 0.35);
+  color: #fed7aa;
+}
+
+.admin-gate input:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1);
+  border-color: var(--faq-accent);
+  box-shadow: 0 0 0 2px rgba(var(--faq-accent-rgb), 0.15);
 }
 
-.admin-gate-card button {
-  padding: 0.9rem;
-  border-radius: 10px;
-  border: none;
-  background: var(--primary);
-  color: #fff;
+.admin-gate button {
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.45);
+  background: rgba(var(--faq-accent-rgb), 0.08);
+  color: var(--faq-accent);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
-.admin-gate-card button:hover {
-  background: var(--primary-600);
+.admin-gate button:hover {
+  background: rgba(var(--faq-accent-rgb), 0.18);
+  border-color: rgba(var(--faq-accent-rgb), 0.55);
+  box-shadow: var(--shadow-sm);
+}
+
+:root.dark .admin-gate button {
+  background: rgba(var(--faq-accent-rgb), 0.18);
+  color: #fed7aa;
+  border-color: rgba(var(--faq-accent-rgb), 0.55);
+}
+
+:root.dark .admin-gate button:hover {
+  background: rgba(var(--faq-accent-rgb), 0.28);
 }
 
 .admin-gate-error {

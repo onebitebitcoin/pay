@@ -1,4 +1,4 @@
-const DEFAULT_THEME = 'light';
+const DEFAULT_THEME = 'dark';
 const VALID_THEMES = ['light', 'dark'];
 
 const normalizeTheme = (theme) => {

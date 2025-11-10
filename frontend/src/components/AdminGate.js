@@ -24,28 +24,26 @@ function AdminGate({ children }) {
   }
 
   return (
-    <div className="admin-gate">
-      <div className="admin-gate-card">
-        <h1>{t('adminAccess.title')}</h1>
-        <p>{t('adminAccess.description')}</p>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setError('');
-            }}
-            placeholder={t('adminAccess.placeholder')}
-            autoFocus
-          />
-          {error && <div className="admin-gate-error">{error}</div>}
-          <button type="submit">
-            {t('adminAccess.submit')}
-          </button>
-        </form>
-      </div>
-    </div>
+    <section className="admin-gate">
+      <h1>{t('adminAccess.title')}</h1>
+      <p>{t('adminAccess.description')}</p>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setError('');
+          }}
+          placeholder={t('adminAccess.placeholder')}
+          autoFocus
+        />
+        {error && <div className="admin-gate-error">{error}</div>}
+        <button type="submit">
+          {t('adminAccess.submit')}
+        </button>
+      </form>
+    </section>
   );
 }
 

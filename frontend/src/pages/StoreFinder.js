@@ -82,6 +82,7 @@ function StoreFinder() {
   const leafletUserMarkerRef = useRef(null);
   const currentLeafletPopupRef = useRef(null);
   const latestFilteredStoresRef = useRef([]);
+  const hasAutoFocusedRef = useRef(false);
   const [pendingStoreId, setPendingStoreId] = useState(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -655,7 +656,7 @@ function StoreFinder() {
   };
 
   const focusStoreOnMap = (store) => {
-    if (!store) return;
+    if (!store) return false;
 
     console.log('[StoreFinder] 🎯 Focusing store on map:', {
       id: store.id,
@@ -663,7 +664,12 @@ function StoreFinder() {
       type: isKakao ? 'kakao' : 'leaflet'
     });
 
-    if (isKakao && kakaoMapRef.current && window.kakao) {
+    if (isKakao) {
+      if (!kakaoMapRef.current || !window.kakao) {
+        console.warn('[StoreFinder] ⚠️ Kakao map not ready for focusing store:', store.id);
+        return false;
+      }
+
       const moveLatLon = new window.kakao.maps.LatLng(store.lat, store.lng);
       kakaoMapRef.current.setCenter(moveLatLon);
       kakaoMapRef.current.setLevel(3); // Zoom in
@@ -686,14 +692,25 @@ function StoreFinder() {
           storeMarkerData.infowindow.setMap(kakaoMapRef.current);
           currentInfowindowRef.current = storeMarkerData.infowindow;
         }
+        return true;
       }
-    } else if (!isKakao && leafletMapRef.current) {
+
+      console.warn('[StoreFinder] ⚠️ No marker/overlay found yet for store:', store.id);
+      return false;
+    }
+
+    if (!isKakao && leafletMapRef.current) {
       leafletMapRef.current.setView([store.lat, store.lng], 15);
       const storeMarkerData = leafletMarkersRef.current.find(item => item.storeId === store.id);
       if (storeMarkerData) {
         storeMarkerData.marker.openPopup();
+        return true;
       }
+      console.warn('[StoreFinder] ⚠️ Leaflet marker not found for store:', store.id);
+      return false;
     }
+
+    return false;
   };
 
   const handleStoreClick = (store) => {
@@ -720,21 +737,83 @@ function StoreFinder() {
       return;
     }
 
-    const pendingStore =
-      latestFilteredStoresRef.current.find(store => store.id === pendingStoreId) ||
-      stores.find(store => store.id === pendingStoreId);
+    let cancelled = false;
+    let timeoutId = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+    const RETRY_DELAY = 180;
 
-    if (!pendingStore) {
-      console.warn('[StoreFinder] ⚠️ Pending store id not found in current data:', pendingStoreId);
-      setPendingStoreId(null);
+    const scheduleRetry = () => {
+      if (attempts >= MAX_ATTEMPTS) {
+        console.warn('[StoreFinder] ⚠️ Giving up focusing pending store:', pendingStoreId);
+        setPendingStoreId(null);
+        return;
+      }
+      attempts += 1;
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        attemptFocus();
+      }, RETRY_DELAY);
+    };
+
+    const attemptFocus = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const pendingStore =
+        latestFilteredStoresRef.current.find(store => store.id === pendingStoreId) ||
+        stores.find(store => store.id === pendingStoreId);
+
+      if (!pendingStore) {
+        console.log('[StoreFinder] ⏳ Pending store data not ready yet:', pendingStoreId);
+        scheduleRetry();
+        return;
+      }
+
+      console.log('[StoreFinder] ▶️ Processing queued store click:', pendingStoreId);
+      const success = focusStoreOnMap(pendingStore);
+      if (success) {
+        setPendingStoreId(null);
+        return;
+      }
+
+      scheduleRetry();
+    };
+
+    attemptFocus();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [mapReady, pendingStoreId, stores, isKakao]);
+
+  useEffect(() => {
+    hasAutoFocusedRef.current = false;
+  }, [isKakao]);
+
+  useEffect(() => {
+    if (!mapReady || hasAutoFocusedRef.current) {
+      return;
+    }
+    if (!filteredStores.length || pendingStoreId) {
       return;
     }
 
-    console.log('[StoreFinder] ▶️ Processing queued store click:', pendingStoreId);
-    setPendingStoreId(null);
-    // Defer focus slightly so it runs after any pending map adjustments
-    setTimeout(() => focusStoreOnMap(pendingStore), 50);
-  }, [mapReady, pendingStoreId, stores, isKakao]);
+    const firstStoreWithCoords = filteredStores.find(store => store.lat != null && store.lng != null);
+    if (!firstStoreWithCoords) {
+      return;
+    }
+
+    const success = focusStoreOnMap(firstStoreWithCoords);
+    if (success) {
+      hasAutoFocusedRef.current = true;
+      console.log('[StoreFinder] ✅ Auto-focused the first store on map load');
+    }
+  }, [mapReady, filteredStores, pendingStoreId, isKakao]);
 
   const openStoreDetail = (store) => {
     setSelectedStore(store);

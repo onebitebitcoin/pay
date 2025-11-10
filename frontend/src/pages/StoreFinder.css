@@ -552,6 +552,13 @@
 
   .category-select-wrapper {
     width: 100%;
+    min-width: 0;
+    display: flex;
+  }
+
+  .category-select {
+    width: 100%;
+    min-width: 0;
   }
 
   .controls {

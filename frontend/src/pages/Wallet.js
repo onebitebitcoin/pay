@@ -185,19 +185,19 @@ function Wallet() {
 
         if (i18n.language === 'ko') {
           try {
-            const response = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-BTC');
+            const response = await fetch(apiUrl('/api/rates/krw-btc'));
             if (!response.ok) {
-              throw new Error(`Upbit responded with ${response.status}`);
+              throw new Error(`Upbit proxy responded with ${response.status}`);
             }
             const data = await response.json();
-            const tradePrice = Number(data?.[0]?.trade_price);
+            const tradePrice = Number(data?.rate ?? data?.[0]?.trade_price);
             if (!Number.isFinite(tradePrice)) {
               throw new Error('Upbit trade price missing');
             }
             rate = tradePrice;
-            sourceKey = 'upbit';
+            sourceKey = data?.source || 'upbit';
           } catch (error) {
-            console.warn('Failed to fetch Upbit rate, falling back to CoinGecko:', error);
+            console.warn('Failed to fetch Upbit rate via backend, falling back to CoinGecko:', error);
           }
         }
 

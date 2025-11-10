@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
 require('dotenv').config();
 
@@ -24,6 +25,42 @@ const wss = new WebSocket.Server({ server });
 const subscriptions = new Map(); // subscriptionId -> ws
 const quoteToSubscription = new Map(); // quoteId -> subscriptionId for payment notifications
 const PORT = process.env.PORT || 5001;
+
+/**
+ * Lightweight helper to fetch JSON over HTTPS without adding extra deps.
+ * @param {string} url
+ * @param {number} timeoutMs
+ * @returns {Promise<any>}
+ */
+function fetchJson(url, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, (response) => {
+      let rawData = '';
+
+      response.on('data', (chunk) => {
+        rawData += chunk;
+      });
+
+      response.on('end', () => {
+        if (response.statusCode && (response.statusCode < 200 || response.statusCode >= 300)) {
+          return reject(new Error(`Request failed with status ${response.statusCode}`));
+        }
+
+        try {
+          const parsed = JSON.parse(rawData);
+          resolve(parsed);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error('Request timed out'));
+    });
+  });
+}
 
 // Generate unique subscription ID using SHA256
 function generateSubscriptionId() {
@@ -433,6 +470,28 @@ app.get('/api/stores/:id', (req, res) => {
     res.json(store);
   } catch (error) {
     res.status(500).json({ error: '서버 내부 오류' });
+  }
+});
+
+app.get('/api/rates/krw-btc', async (req, res) => {
+  try {
+    const data = await fetchJson('https://api.upbit.com/v1/ticker?markets=KRW-BTC');
+    const tradePrice = Number(data?.[0]?.trade_price);
+
+    if (!Number.isFinite(tradePrice)) {
+      throw new Error('Invalid trade price from Upbit');
+    }
+
+    res.json({
+      rate: tradePrice,
+      currency: 'KRW',
+      market: 'KRW-BTC',
+      source: 'upbit',
+      fetchedAt: Date.now()
+    });
+  } catch (error) {
+    console.error('[Rates] Failed to fetch Upbit KRW rate:', error);
+    res.status(502).json({ error: 'Failed to fetch rate from Upbit' });
   }
 });
 
