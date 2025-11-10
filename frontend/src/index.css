@@ -29,6 +29,19 @@
   --danger-rgb: 248, 113, 113;
   --info: #38bdf8;
   --info-rgb: 56, 189, 248;
+  /* FAQ palette */
+  --faq-surface: #fff9ed;
+  --faq-card-bg: rgba(255, 255, 255, 0.95);
+  --faq-question-bg: rgba(255, 247, 222, 0.95);
+  --faq-answer-bg: rgba(255, 241, 204, 0.9);
+  --faq-border: rgba(245, 158, 11, 0.45);
+  --faq-accent: #f97316;
+  --faq-accent-rgb: 249, 115, 22;
+  --faq-muted: #b45309;
+  --faq-hero-glow: rgba(250, 204, 21, 0.3);
+  --faq-bg-top: #fffdf5;
+  --faq-bg-mid: #fff5da;
+  --faq-bg-bottom: #ffe4c0;
   --radius: 16px;
   --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.08);
   --shadow-md: 0 8px 24px 0 rgb(15 23 42 / 0.12);
@@ -64,6 +77,19 @@
   --danger-rgb: 248, 113, 113;
   --info: #38bdf8;
   --info-rgb: 56, 189, 248;
+  /* FAQ palette */
+  --faq-surface: rgba(41, 25, 5, 0.9);
+  --faq-card-bg: rgba(30, 19, 4, 0.9);
+  --faq-question-bg: rgba(120, 53, 15, 0.35);
+  --faq-answer-bg: rgba(249, 115, 22, 0.12);
+  --faq-border: rgba(253, 186, 116, 0.35);
+  --faq-accent: #fb923c;
+  --faq-accent-rgb: 251, 146, 60;
+  --faq-muted: #fed7aa;
+  --faq-hero-glow: rgba(249, 115, 22, 0.35);
+  --faq-bg-top: #1d1204;
+  --faq-bg-mid: #281805;
+  --faq-bg-bottom: #361f08;
   --radius: 16px;
   --shadow-sm: 0 1px 4px 0 rgb(15 23 42 / 0.35);
   --shadow-md: 0 6px 18px 0 rgb(15 23 42 / 0.45);

@@ -355,6 +355,7 @@ function Settings() {
         ))}
       </div>
 
+      <div className="settings-page-wrapper">
       <div className="settings-page">
         <div className="page-header">
           <h1><Icon name="settings" size={22} /> {t('settings.title')}</h1>
@@ -555,6 +556,7 @@ function Settings() {
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {/* PIN Setup Modal */}

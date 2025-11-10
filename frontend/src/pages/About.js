@@ -64,7 +64,7 @@ function About() {
   };
 
   return (
-    <div className="home">
+    <div className="home about-page">
       <div className="hero">
         <div className="hero-content">
           <h1 className="hero-title">

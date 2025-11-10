@@ -2164,7 +2164,7 @@ function Wallet() {
   }, [convertAmount, convertDirection, ecashBalance, ECASH_CONFIG, showInfoMessage, t, formatAmount, setLoading]);
 
   return (
-    <>
+    <div className="wallet-page">
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
@@ -2477,7 +2477,7 @@ function Wallet() {
           </div>
         </div>
       ) : (
-        <div className="wallet">
+        <>
       <div className="wallet-header">
         <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
         <p className="wallet-subtitle">{t('wallet.subtitle')}</p>
@@ -3094,7 +3094,7 @@ function Wallet() {
           </div>
         )}
       </div>
-    </div>
+    </>
       )}
 
       {/* QR Code Modal */}
@@ -3126,7 +3126,7 @@ function Wallet() {
         </div>
       )}
 
-    </>
+    </div>
   );
 }
 

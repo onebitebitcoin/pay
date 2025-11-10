@@ -1,7 +1,32 @@
 .store-management-page {
+  width: 100%;
+  padding: 3rem 1.5rem 4rem;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--faq-accent-rgb), 0.08) 0%,
+    rgba(255, 255, 255, 0.96) 45%,
+    rgba(var(--faq-accent-rgb), 0.05) 100%
+  );
+  min-height: calc(100vh - 64px);
+}
+
+:root.dark .store-management-page {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 10, 4, 0.95) 0%,
+    rgba(21, 15, 7, 0.9) 45%,
+    rgba(8, 6, 3, 0.98) 100%
+  );
+}
+
+.store-management-page > *:not(.store-edit-modal) {
   max-width: 1100px;
-  margin: 0 auto;
-  padding: 2rem 1.25rem 4rem;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 1.75rem;
+}
+.store-management-page > *:not(.store-edit-modal):last-child {
+  margin-bottom: 0;
 }
 
 .store-management-header {
@@ -18,20 +43,20 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--faq-accent);
 }
 
 .store-management-header h1 {
   margin: 0 0 0.3rem;
   font-size: 1.65rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--faq-accent);
   letter-spacing: -0.01em;
 }
 
 .store-management-subtitle {
   margin: 0;
-  color: var(--muted);
+  color: var(--faq-muted);
   max-width: 500px;
   font-size: 0.95rem;
   line-height: 1.5;
@@ -47,30 +72,30 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background: var(--surface-bg);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--faq-accent);
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .icon-button.ghost:hover {
-  background: rgba(var(--primary-rgb), 0.08);
+  background: rgba(var(--faq-accent-rgb), 0.12);
 }
 
 .icon-button.primary {
-  background: var(--primary);
+  background: var(--faq-accent);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 12px 28px rgba(var(--faq-accent-rgb), 0.25);
 }
 
 .icon-button.primary:hover {
   transform: translateY(-1px);
-  background: var(--primary-600);
+  background: #ea580c;
 }
 
 .store-management-summary {
@@ -84,9 +109,9 @@
   flex: 1 1 220px;
   padding: 0.9rem 1.1rem;
   border-radius: 14px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
+  box-shadow: 0 16px 30px rgba(var(--faq-accent-rgb), 0.15);
 }
 
 .summary-label {
@@ -112,8 +137,8 @@
   padding: 2rem;
   text-align: center;
   border-radius: 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.25);
   color: var(--muted);
 }
 
@@ -127,7 +152,7 @@
   border-radius: 8px;
   padding: 0.6rem 1.2rem;
   cursor: pointer;
-  background: var(--primary);
+  background: var(--faq-accent);
   color: #fff;
   font-weight: 600;
 }
@@ -157,9 +182,9 @@
   width: 100%;
   overflow-x: auto;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 30px 60px rgba(var(--faq-accent-rgb), 0.18);
 }
 
 .store-management-table {
@@ -185,11 +210,11 @@
 }
 
 .store-management-table tbody tr:hover {
-  background: rgba(var(--primary-rgb), 0.05);
+  background: rgba(var(--faq-accent-rgb), 0.08);
 }
 
 .store-management-table tbody tr.active {
-  background: rgba(var(--primary-rgb), 0.1);
+  background: rgba(var(--faq-accent-rgb), 0.14);
 }
 
 .table-actions {
@@ -202,9 +227,9 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface-bg);
-  color: var(--text);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--faq-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -214,8 +239,8 @@
 
 .table-icon-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--faq-accent);
+  color: var(--faq-accent);
 }
 
 .table-icon-button.danger {
@@ -265,10 +290,10 @@
 .store-edit-dialog {
   width: 100%;
   max-width: 600px;
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.98);
   border-radius: 18px;
-  border: 1px solid var(--border);
-  box-shadow: 0 35px 65px rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.3);
+  box-shadow: 0 45px 85px rgba(var(--faq-accent-rgb), 0.25);
   padding: 1.75rem;
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
@@ -288,13 +313,13 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--faq-accent);
 }
 
 .edit-panel-header h2 {
   margin: 0.4rem 0 0.35rem;
   font-size: 1.5rem;
-  color: var(--text);
+  color: var(--faq-accent);
 }
 
 .panel-hint {
@@ -324,19 +349,19 @@
 
 .edit-form-grid input,
 .edit-form-grid textarea {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.25);
   border-radius: 10px;
   padding: 0.75rem 0.85rem;
   font-size: 0.95rem;
   color: var(--text);
-  background: var(--surface-bg);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .edit-form-grid input:focus,
 .edit-form-grid textarea:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+  border-color: var(--faq-accent);
+  box-shadow: 0 0 0 2px rgba(var(--faq-accent-rgb), 0.25);
 }
 
 .edit-form-grid textarea {
@@ -378,19 +403,23 @@
 }
 
 .edit-panel-actions .ghost {
-  background: var(--surface-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--faq-accent);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.4);
 }
 
 .edit-panel-actions .primary {
-  background: var(--primary);
+  background: var(--faq-accent);
   color: white;
+  box-shadow: 0 12px 30px rgba(var(--faq-accent-rgb), 0.3);
 }
 
 .edit-panel-actions .primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.edit-panel-actions .primary:hover:not(:disabled) {
+  background: #ea580c;
 }
 
 @media (max-width: 768px) {
@@ -470,13 +499,13 @@
 
 /* Filters */
 .store-filters {
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: var(--radius);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
+  box-shadow: 0 18px 40px rgba(var(--faq-accent-rgb), 0.12);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.25);
 }
 
 .filter-row {
@@ -502,8 +531,8 @@
 .filter-select {
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
-  border: 2px solid var(--border);
-  background: var(--surface-bg);
+  border: 2px solid rgba(var(--faq-accent-rgb), 0.3);
+  background: rgba(255, 255, 255, 0.95);
   color: var(--text);
   font-size: 0.925rem;
   transition: all 0.2s;
@@ -512,8 +541,8 @@
 .filter-input:focus,
 .filter-select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.15);
+  border-color: var(--faq-accent);
+  box-shadow: 0 0 0 3px rgba(var(--faq-accent-rgb), 0.2);
 }
 
 .filter-summary {
@@ -536,9 +565,9 @@
 
 .pagination-btn {
   padding: 0.6rem 1rem;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--text);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.4);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--faq-accent);
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 600;
@@ -547,9 +576,9 @@
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: var(--primary);
+  background: var(--faq-accent);
   color: white;
-  border-color: var(--primary);
+  border-color: var(--faq-accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
@@ -567,6 +596,9 @@
 }
 
 @media (max-width: 768px) {
+  .store-management-page {
+    padding: 2rem 1rem 3rem;
+  }
   .filter-row {
     grid-template-columns: 1fr;
   }
@@ -586,5 +618,11 @@
     text-align: center;
     order: -1;
     margin-bottom: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .store-management-page {
+    padding: 1.5rem 0.75rem 2.5rem;
   }
 }

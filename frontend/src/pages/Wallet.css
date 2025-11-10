@@ -1,8 +1,50 @@
-.wallet {
-  padding: 2rem 1rem;
-  max-width: 800px;
-  margin: 0 auto;
+.wallet-page {
   width: 100%;
+  padding: 3rem 1.5rem 4rem;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--faq-accent-rgb), 0.08) 0%,
+    rgba(255, 255, 255, 0.96) 45%,
+    rgba(var(--faq-accent-rgb), 0.05) 100%
+  );
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+}
+
+:root.dark .wallet-page {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 10, 4, 0.95) 0%,
+    rgba(21, 15, 7, 0.9) 45%,
+    rgba(8, 6, 3, 0.98) 100%
+  );
+}
+
+.wallet-page > :not(.toast-container):not(.qr-modal-overlay) {
+  width: 100%;
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .wallet-page {
+    padding: 2rem 1rem 3rem;
+  }
+  .receive-page,
+  .send-page {
+    padding: 2rem 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .wallet-page {
+    padding: 1.5rem 0.75rem 2.5rem;
+  }
+  .receive-page,
+  .send-page {
+    padding: 1.5rem 1rem;
+  }
 }
 
 .wallet-header {
@@ -1114,10 +1156,6 @@
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  .wallet {
-    padding: 1rem;
-  }
-
   .wallet-logo {
     width: 100px;
     height: 100px;

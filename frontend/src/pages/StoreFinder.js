@@ -8,17 +8,23 @@ import 'leaflet/dist/leaflet.css';
 
 const STORE_MARKER_SVG = `
   <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-    <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="#2563eb"/>
-    <circle cx="15" cy="15" r="10" fill="#ffffff"/>
-    <text x="15" y="19" text-anchor="middle" fill="#2563eb" font-size="12" font-weight="bold">B</text>
+    <defs>
+      <linearGradient id="storeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#fed7aa"/>
+        <stop offset="100%" stop-color="#f97316"/>
+      </linearGradient>
+    </defs>
+    <path d="M15 0C6.7 0 0 6.7 0 15c0 10.8 15 25 15 25s15-14.2 15-25C30 6.7 23.3 0 15 0z" fill="url(#storeGradient)"/>
+    <circle cx="15" cy="15" r="10" fill="#fffaf4"/>
+    <text x="15" y="19" text-anchor="middle" fill="#b45309" font-size="12" font-weight="bold">B</text>
   </svg>
 `;
 const STORE_MARKER_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(STORE_MARKER_SVG);
 
 const USER_MARKER_SVG = `
   <svg width="24" height="35" viewBox="0 0 24 35" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 0C5.4 0 0 5.4 0 12c0 8.6 12 23 12 23s12-14.4 12-23C24 5.4 18.6 0 12 0z" fill="#facc15"/>
-    <path d="M12 6l1.9 3.8 4.2.6-3.1 3 0.7 4.3-3.7-1.9-3.7 1.9 0.7-4.3-3.1-3 4.2-.6L12 6z" fill="#1f2937"/>
+    <path d="M12 0C5.4 0 0 5.4 0 12c0 8.6 12 23 12 23s12-14.4 12-23C24 5.4 18.6 0 12 0z" fill="#fef3c7"/>
+    <path d="M12 6l1.9 3.8 4.2.6-3.1 3 0.7 4.3-3.7-1.9-3.7 1.9 0.7-4.3-3.1-3 4.2-.6L12 6z" fill="#b45309"/>
   </svg>
 `;
 const USER_MARKER_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(USER_MARKER_SVG);
@@ -390,7 +396,7 @@ function StoreFinder() {
           id="store-detail-btn-${store.id}"
           style="
             padding: 6px 12px;
-            background: #2563eb;
+            background: #f97316;
             color: white;
             border: none;
             border-radius: 6px;
@@ -402,8 +408,8 @@ function StoreFinder() {
             gap: 4px;
             transition: background 0.2s;
           "
-          onmouseover="this.style.background='#1d4ed8'"
-          onmouseout="this.style.background='#2563eb'"
+          onmouseover="this.style.background='#ea580c'"
+          onmouseout="this.style.background='#f97316'"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -423,7 +429,11 @@ function StoreFinder() {
 
       window.kakao.maps.event.addListener(marker, 'click', () => {
         if (currentInfowindowRef.current) {
-          currentInfowindowRef.current.setMap(null);
+          if (typeof currentInfowindowRef.current.close === 'function') {
+            currentInfowindowRef.current.close();
+          } else if (typeof currentInfowindowRef.current.setMap === 'function') {
+            currentInfowindowRef.current.setMap(null);
+          }
         }
 
         customOverlay.setMap(kakaoMapRef.current);
@@ -515,7 +525,7 @@ function StoreFinder() {
             id="store-detail-btn-${store.id}"
             style="
               padding: 6px 12px;
-              background: #2563eb;
+              background: #f97316;
               color: white;
               border: none;
               border-radius: 6px;
@@ -527,8 +537,8 @@ function StoreFinder() {
               gap: 4px;
               transition: background 0.2s;
             "
-            onmouseover="this.style.background='#1d4ed8'"
-            onmouseout="this.style.background='#2563eb'"
+            onmouseover="this.style.background='#ea580c'"
+            onmouseout="this.style.background='#f97316'"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
@@ -630,28 +640,24 @@ function StoreFinder() {
       kakaoMapRef.current.setCenter(moveLatLon);
       kakaoMapRef.current.setLevel(3); // Zoom in
 
-      // Find and open the corresponding infowindow
+      // Find and open the corresponding infowindow / overlay
       const storeMarkerData = infowindowsRef.current.find(item => item.storeId === store.id);
       if (storeMarkerData) {
-        // Close previous infowindow
-        if (currentInfowindowRef.current) {
-          currentInfowindowRef.current.close();
-        }
-
-        storeMarkerData.infowindow.open(kakaoMapRef.current, storeMarkerData.marker);
-        currentInfowindowRef.current = storeMarkerData.infowindow;
-
-        // Attach click event to detail button
-        setTimeout(() => {
-          const detailBtn = document.getElementById(`store-detail-btn-${store.id}`);
-          if (detailBtn) {
-            detailBtn.onclick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              openStoreDetail(store);
-            };
+        if (window.kakao?.maps?.event?.trigger) {
+          window.kakao.maps.event.trigger(storeMarkerData.marker, 'click');
+        } else if (typeof storeMarkerData.infowindow?.open === 'function') {
+          if (currentInfowindowRef.current && typeof currentInfowindowRef.current.close === 'function') {
+            currentInfowindowRef.current.close();
           }
-        }, 100);
+          storeMarkerData.infowindow.open(kakaoMapRef.current, storeMarkerData.marker);
+          currentInfowindowRef.current = storeMarkerData.infowindow;
+        } else if (typeof storeMarkerData.infowindow?.setMap === 'function') {
+          if (currentInfowindowRef.current && typeof currentInfowindowRef.current.setMap === 'function') {
+            currentInfowindowRef.current.setMap(null);
+          }
+          storeMarkerData.infowindow.setMap(kakaoMapRef.current);
+          currentInfowindowRef.current = storeMarkerData.infowindow;
+        }
       }
     } else if (!isKakao && leafletMapRef.current) {
       leafletMapRef.current.setView([store.lat, store.lng], 15);
@@ -710,6 +716,7 @@ function StoreFinder() {
 
   return (
     <>
+    <div className="store-finder-page">
     <div className="store-finder">
       <div className="category-filter">
         <label className="category-label" htmlFor="category-select">{t('storeFinder.category')}</label>
@@ -803,6 +810,7 @@ function StoreFinder() {
           </div>
         </div>
       </div>
+    </div>
     </div>
     {showDetailModal && selectedStore && (
       <div className="sf-modal-overlay" onClick={closeStoreDetail}>
