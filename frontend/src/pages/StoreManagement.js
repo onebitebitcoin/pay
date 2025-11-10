@@ -544,6 +544,62 @@ function StoreManagementContent() {
             </tbody>
           </table>
         </div>
+        <div className="store-list-mobile">
+          {paginatedStores.map((store) => (
+            <div key={`${store.id}-card`} className="store-card-mobile">
+              <div className="store-card-mobile-header">
+                <span className="store-card-id">#{store.id}</span>
+                <div className="store-card-actions">
+                  <button
+                    type="button"
+                    className="table-icon-button"
+                    onClick={() => handleEditClick(store)}
+                    aria-label={t('storeManagementPage.actions.edit')}
+                  >
+                    <Icon name="edit" size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="table-icon-button danger"
+                    onClick={() => handleDeleteStore(store)}
+                    disabled={deletingId === store.id}
+                    aria-label={
+                      deletingId === store.id
+                        ? t('storeManagementPage.actions.deleting')
+                        : t('storeManagementPage.actions.delete')
+                    }
+                  >
+                    {deletingId === store.id ? (
+                      <Icon name="loader" size={16} className="spin" />
+                    ) : (
+                      <Icon name="trash" size={16} />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="store-card-line">
+                <span className="label">{t('storeManagementPage.table.name')}</span>
+                <span>{store.name || t('storeManagementPage.fields.unnamed')}</span>
+              </div>
+              <div className="store-card-line">
+                <span className="label">{t('storeManagementPage.table.category')}</span>
+                <span>{store.category || t('storeManagementPage.fields.uncategorized')}</span>
+              </div>
+              <div className="store-card-line">
+                <span className="label">{t('storeManagementPage.table.address')}</span>
+                <span>{store.address || t('storeManagementPage.notAvailable')}</span>
+              </div>
+              <div className="store-card-line">
+                <span className="label">{t('storeManagementPage.table.phone')}</span>
+                <span>{store.phone || t('storeManagementPage.notAvailable')}</span>
+              </div>
+              <div className="store-card-line">
+                <span className="label">{t('storeManagementPage.table.hours')}</span>
+                <span>{store.hours || t('storeManagementPage.notAvailable')}</span>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -720,8 +776,7 @@ function StoreManagementContent() {
             <div className="edit-panel-header">
               <div>
                 <p className="panel-eyebrow">{t('storeManagementPage.editPanel.title')}</p>
-                <h2>{t('storeManagementPage.editPanel.subtitle')}</h2>
-                <p className="panel-hint">{t('storeManagementPage.editPanel.coordinatesHint')}</p>
+                <h2>{editingStore?.name || t('storeManagementPage.fields.unnamed')}</h2>
               </div>
             </div>
             <div className="edit-form-grid">
@@ -758,16 +813,6 @@ function StoreManagementContent() {
                     type="button"
                     className="search-btn"
                     onClick={openAddressSearch}
-                    style={{
-                      padding: '0.65rem 1rem',
-                      borderRadius: '8px',
-                      border: '2px solid var(--border)',
-                      background: 'var(--primary)',
-                      color: 'white',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
                   >
                     {t('addStore.searchAddress')}
                   </button>

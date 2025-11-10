@@ -720,18 +720,21 @@ function StoreFinder() {
     <div className="store-finder">
       <div className="category-filter">
         <label className="category-label" htmlFor="category-select">{t('storeFinder.category')}</label>
-        <select
-          id="category-select"
-          className="category-select"
-          value={selectedCategory ?? ''}
-          onChange={(e) => setSelectedCategory(e.target.value || null)}
-        >
-          {categories.map((cat) => (
-            <option key={cat ?? ''} value={cat ?? ''}>
-              {cat === null ? t('storeFinder.allCategories') : cat}
-            </option>
-          ))}
-        </select>
+        <div className="category-select-wrapper">
+          <select
+            id="category-select"
+            className="category-select"
+            value={selectedCategory ?? ''}
+            onChange={(e) => setSelectedCategory(e.target.value || null)}
+          >
+            {categories.map((cat) => (
+              <option key={cat ?? ''} value={cat ?? ''}>
+                {cat === null ? t('storeFinder.allCategories') : cat}
+              </option>
+            ))}
+          </select>
+          <span className="category-select-icon" aria-hidden="true" />
+        </div>
       </div>
 
       <div className="controls">
@@ -892,7 +895,7 @@ function StoreFinder() {
                     <div style={{ flex: 1 }}>
                       <strong>{t('storeFinder.website')}</strong>
                       <p>
-                        <a href={selectedStore.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                        <a href={selectedStore.website} target="_blank" rel="noopener noreferrer" className="store-detail-link">
                           {selectedStore.website}
                         </a>
                       </p>
@@ -905,7 +908,7 @@ function StoreFinder() {
                     <div style={{ flex: 1 }}>
                       <strong>{t('storeFinder.naverMap')}</strong>
                       <p>
-                        <a href={selectedStore.naver_map_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                        <a href={selectedStore.naver_map_url} target="_blank" rel="noopener noreferrer" className="store-detail-link">
                           {t('storeFinder.openInNaverMap')}
                         </a>
                       </p>

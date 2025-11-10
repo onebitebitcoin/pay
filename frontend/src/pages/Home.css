@@ -2,6 +2,25 @@
   min-height: calc(100vh - 64px);
 }
 
+.home.about-page {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--faq-accent-rgb), 0.08) 0%,
+    rgba(255, 255, 255, 0.96) 45%,
+    rgba(var(--faq-accent-rgb), 0.05) 100%
+  );
+  padding-bottom: 3rem;
+}
+
+:root.dark .home.about-page {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 10, 4, 0.95) 0%,
+    rgba(21, 15, 7, 0.9) 45%,
+    rgba(8, 6, 3, 0.98) 100%
+  );
+}
+
 /* Hero Section */
 .hero {
   background: rgba(var(--primary-rgb), 0.06);
@@ -53,8 +72,8 @@
 }
 
 :root.dark .about-page .hero {
-  background: linear-gradient(140deg, #1a1206 0%, #251806 55%, #301f0a 100%);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+  background: transparent;
+  box-shadow: none;
 }
 
 .about-page .hero::before {
@@ -112,9 +131,9 @@
 }
 
 :root.dark .about-page .info-section {
-  background: linear-gradient(180deg, rgba(19, 13, 6, 0.95) 0%, rgba(12, 8, 4, 0.9) 100%);
-  border-top: 1px solid rgba(var(--faq-accent-rgb), 0.2);
-  border-bottom: 1px solid rgba(var(--faq-accent-rgb), 0.2);
+  background: transparent;
+  border-top: 1px solid rgba(var(--faq-accent-rgb), 0.25);
+  border-bottom: 1px solid rgba(var(--faq-accent-rgb), 0.25);
 }
 
 .about-page .info-section::before {
@@ -123,6 +142,10 @@
   inset: 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(var(--faq-accent-rgb), 0.05));
   pointer-events: none;
+}
+
+:root.dark .about-page .info-section::before {
+  background: transparent;
 }
 
 .about-page .info-content {
@@ -446,4 +469,7 @@
   .stat-number {
     font-size: 2rem;
   }
+}
+:root.dark .about-page .hero::before {
+  display: none;
 }

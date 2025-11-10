@@ -81,6 +81,7 @@ function Settings() {
   const [mainUrlStatus, setMainUrlStatus] = useState(null);
   const [toasts, setToasts] = useState([]);
   const showStoreManagement = true;
+  const showPinSetting = false;
 
   const addToast = (message, type = 'info') => {
     const id = Date.now();
@@ -430,32 +431,34 @@ function Settings() {
         </div>
 
         {/* Security Settings */}
-        <div className="settings-section">
-          <h2>{t('settings.security')}</h2>
+        {showPinSetting && (
+          <div className="settings-section">
+            <h2>{t('settings.security')}</h2>
 
-          <div className="setting-item">
-            <div className="setting-info">
-              <div className="setting-title">{t('settings.pinLock')}</div>
-              <div className="setting-description">
-                {t('settings.pinLockDesc')}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-title">{t('settings.pinLock')}</div>
+                <div className="setting-description">
+                  {t('settings.pinLockDesc')}
+                </div>
               </div>
-            </div>
-            {!settings.pinEnabled ? (
-              <button onClick={openPinSetup} className="setting-button">
-                {t('settings.setupPin')}
-              </button>
-            ) : (
-              <div style={{display: 'flex', gap: '0.5rem'}}>
+              {!settings.pinEnabled ? (
                 <button onClick={openPinSetup} className="setting-button">
-                  {t('settings.changePin')}
+                  {t('settings.setupPin')}
                 </button>
-                <button onClick={disablePin} className="danger-button">
-                  {t('settings.disablePin')}
-                </button>
-              </div>
-            )}
+              ) : (
+                <div style={{display: 'flex', gap: '0.5rem'}}>
+                  <button onClick={openPinSetup} className="setting-button">
+                    {t('settings.changePin')}
+                  </button>
+                  <button onClick={disablePin} className="danger-button">
+                    {t('settings.disablePin')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
 
 

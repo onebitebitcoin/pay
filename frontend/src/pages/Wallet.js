@@ -2351,13 +2351,6 @@ function Wallet() {
                         >
                           {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
-                        <button
-                          type="button"
-                          className="secondary-btn"
-                          onClick={exitReceiveFlow}
-                        >
-                          {t('wallet.backToWallet')}
-                        </button>
                       </div>
                     </>
                   ) : (loading || (invoice && !qrLoaded)) ? (
@@ -2378,7 +2371,7 @@ function Wallet() {
                     <>
                       <div className="invoice-section receive-invoice">
                         <div className="qr-placeholder">
-                          <div className="qr-code-wrapper" onClick={() => setShowQrModal(true)} style={{ cursor: 'pointer' }}>
+                          <div className="qr-image-container" onClick={() => setShowQrModal(true)}>
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
                               alt="Lightning Invoice QR"
@@ -2388,18 +2381,9 @@ function Wallet() {
                               <img src="/logo-192.png" alt="Logo" className="qr-logo" />
                             </div>
                           </div>
-                          <div className="qr-amount-display">{formatAmount(receiveAmount)} sats</div>
-                          {receiveFiatDisplay && (
-                            <div className="qr-fiat-display">
-                              {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
-                            </div>
-                          )}
-                          <div className="qr-mint-display" style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
-                            Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                          </div>
                           <div className="qr-zoom-hint">{t('wallet.tapToZoom')}</div>
                         </div>
-                        <label>{t('wallet.tapToCopy')}</label>
+                        <label className="invoice-copy-label">{t('wallet.tapToCopy')}</label>
                         <div className="invoice-input-wrapper">
                           <textarea
                             value={invoice}
@@ -2423,6 +2407,25 @@ function Wallet() {
                         </div>
                       </div>
                       <div className="receive-actions">
+                        <div className="qr-detail-card qr-detail-textarea">
+                          <div className="qr-detail-row">
+                            <span className="label">{t('wallet.amount')}</span>
+                            <span className="value">
+                              {formatAmount(receiveAmount)} sats
+                              {receiveFiatDisplay && (
+                                <>
+                                  {' · '}
+                                  {receiveFiatDisplay}
+                                  {rateSourceLabel ? ` (${rateSourceLabel})` : ''}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          <div className="qr-detail-line">
+                            <span className="label">Mint</span>
+                            <span className="value">{mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                          </div>
+                        </div>
                         <button
                           type="button"
                           className="primary-btn"
@@ -2436,13 +2439,6 @@ function Wallet() {
                           }}
                         >
                           {t('wallet.recreate')}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-btn"
-                          onClick={exitReceiveFlow}
-                        >
-                          {t('wallet.backToWallet')}
                         </button>
                       </div>
                     </>
@@ -3107,14 +3103,12 @@ function Wallet() {
             <div className="qr-modal-body">
               <h3>{formatAmount(receiveAmount)} sats</h3>
               <div className="qr-modal-code">
-                <div className="qr-code-wrapper">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                    alt="Lightning Invoice QR Code"
-                  />
-                  <div className="qr-logo-overlay">
-                    <img src="/logo-192.png" alt="Logo" className="qr-logo" />
-                  </div>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                  alt="Lightning Invoice QR Code"
+                />
+                <div className="qr-logo-overlay">
+                  <img src="/logo-192.png" alt="Logo" className="qr-logo" />
                 </div>
               </div>
               <p className="qr-mint-info" style={{ fontSize: '0.875rem', color: 'var(--muted)', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
