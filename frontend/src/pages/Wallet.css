@@ -2321,7 +2321,7 @@
 }
 
 .qr-modal-body {
-  padding: 3rem 2rem 2rem;
+  padding: 3rem 0.5rem 1.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -2335,19 +2335,19 @@
   font-weight: 600;
   max-width: 100%;
   word-break: break-word;
+  padding: 0 1rem;
 }
 
 .qr-modal-code {
   background: #ffffff;
-  padding: 1.5rem;
-  border-radius: 1rem;
+  padding: 0.5rem;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  width: min(80vw, 420px);
-  height: min(80vw, 420px);
-  max-height: min(60vh, 420px);
+  box-shadow: none;
+  width: 100%;
+  height: auto;
   aspect-ratio: 1;
   margin: 0 auto 1.5rem;
   position: relative;
@@ -2360,11 +2360,12 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: 0.5rem;
+  border-radius: 0;
 }
 
 .qr-modal-hint {
   margin: 1.5rem 0 0 0;
+  padding: 0 1rem;
   color: #666;
   font-size: 0.95rem;
   max-width: 100%;
@@ -2393,16 +2394,17 @@
 
 @media (max-width: 768px) {
   .qr-modal-body {
-    padding: 2rem 1.5rem 1.5rem;
+    padding: 2.5rem 0.5rem 1.25rem;
   }
 
   .qr-modal-body h3 {
     font-size: 1.5rem;
     margin-bottom: 1.25rem;
+    padding: 0 1rem;
   }
 
   .qr-modal-code {
-    padding: 1.25rem;
+    padding: 0.5rem;
   }
 }
 :root.dark .receive-page,
