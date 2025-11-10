@@ -111,9 +111,9 @@ function QrScanner({ onScan, onError, className = '' }) {
             maxScansPerSecond: 60,
             preferredCamera: 'environment',
             calculateScanRegion: (video) => {
-              // Use a large scan region (85% of shorter side) for better sensitivity
+              // Use a very large scan region (95% of shorter side) for maximum sensitivity
               const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-              const scanRegionSize = Math.round(0.85 * smallestDimension);
+              const scanRegionSize = Math.round(0.95 * smallestDimension);
               return {
                 x: Math.round((video.videoWidth - scanRegionSize) / 2),
                 y: Math.round((video.videoHeight - scanRegionSize) / 2),
@@ -176,14 +176,6 @@ function QrScanner({ onScan, onError, className = '' }) {
               const { min = 0, max = 0, step = 0 } = capabilities.exposureCompensation;
               const compensation = Math.min(max, Math.max(min, step || 0));
               enhancementConstraints.advanced.push({ exposureCompensation: compensation });
-            }
-
-            if (capabilities.zoom) {
-              const { min = 1, max = 1 } = capabilities.zoom;
-              if (max > min) {
-                const zoomTarget = Math.max(min, Math.min(max, min + (max - min) * 0.65));
-                enhancementConstraints.advanced.push({ zoom: zoomTarget });
-              }
             }
 
             if (capabilities.whiteBalanceMode?.includes('continuous')) {
@@ -327,18 +319,13 @@ function QrScanner({ onScan, onError, className = '' }) {
             <div className="qr-scanner__corner qr-scanner__corner--tr" />
             <div className="qr-scanner__corner qr-scanner__corner--bl" />
             <div className="qr-scanner__corner qr-scanner__corner--br" />
-            <div className="qr-scanner__controls">
-              {focusSupported && (
-                <button type="button" className="qr-scanner__control-btn" onClick={refocusCamera}>
-                  {t('wallet.refocus')}
-                </button>
-              )}
-              {torchSupported && (
+            {torchSupported && (
+              <div className="qr-scanner__controls">
                 <button type="button" className="qr-scanner__control-btn" onClick={toggleTorch}>
                   {torchEnabled ? t('wallet.torchOff') : t('wallet.torchOn')}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
             {enhancingCamera && (
               <div className="qr-scanner__hint">{t('wallet.optimizingCamera')}</div>
             )}

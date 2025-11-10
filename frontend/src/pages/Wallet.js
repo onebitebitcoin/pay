@@ -2270,13 +2270,6 @@ function Wallet() {
                 >
                   {loading ? t('wallet.sending') : fetchingQuote ? t('common.checkingInvoice') : t('wallet.send')}
                 </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={exitSendFlow}
-                >
-                  {t('wallet.backToWallet')}
-                </button>
               </div>
             </div>
           </div>
