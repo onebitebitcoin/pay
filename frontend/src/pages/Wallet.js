@@ -697,7 +697,8 @@ function Wallet() {
       try { stopAutoRedeem(); } catch {}
       setCheckingPayment(false);
       setReceiveCompleted(true);
-
+      // Close QR modal if open
+      setShowQrModal(false);
     }
 
     let signatures = Array.isArray(detail?.signatures) ? detail.signatures : [];
