@@ -194,13 +194,16 @@
 }
 
 .submit-btn {
-  background: var(--faq-accent);
-  color: white;
-  box-shadow: 0 18px 35px rgba(var(--faq-accent-rgb), 0.25);
+  background: rgba(var(--faq-accent-rgb), 0.08);
+  color: var(--faq-accent);
+  border: 1px solid rgba(var(--faq-accent-rgb), 0.45);
+  box-shadow: none;
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #ea580c;
+  background: rgba(var(--faq-accent-rgb), 0.18);
+  border-color: rgba(var(--faq-accent-rgb), 0.55);
+  box-shadow: var(--shadow-sm);
 }
 
 .submit-btn:disabled {
@@ -267,4 +270,17 @@
     padding: 1.25rem;
     border-radius: 20px;
   }
+}
+
+/* Dark mode */
+:root.dark .submit-btn {
+  background: rgba(var(--faq-accent-rgb), 0.18);
+  color: #fed7aa;
+  border-color: rgba(var(--faq-accent-rgb), 0.55);
+}
+
+:root.dark .submit-btn:hover:not(:disabled) {
+  background: rgba(var(--faq-accent-rgb), 0.25);
+  border-color: rgba(var(--faq-accent-rgb), 0.7);
+  box-shadow: var(--shadow-sm);
 }
