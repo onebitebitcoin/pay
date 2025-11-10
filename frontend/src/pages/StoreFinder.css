@@ -950,6 +950,8 @@
 
 .store-detail-item > div {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .store-detail-item strong {
@@ -965,12 +967,19 @@
   color: var(--text);
   font-size: 0.95rem;
   line-height: 1.5;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .store-detail-link {
   color: var(--faq-accent);
   text-decoration: underline;
   font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 :root.dark .store-detail-link {
