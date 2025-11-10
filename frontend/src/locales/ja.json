@@ -135,7 +135,9 @@
     "torchOn": "ライトをオン",
     "torchOff": "ライトをオフ",
     "optimizingCamera": "カメラを最適化しています...",
-    "startingCamera": "カメラを起動しています..."
+    "startingCamera": "カメラを起動しています...",
+    "pollingTimeout": "決済確認がタイムアウトしました。ウォレットページに移動して更新ボタンを押してください。",
+    "pollingError": "決済確認中にエラーが発生しました。ウォレットページに移動して更新ボタンを押してください。"
   },
   "settings": {
     "title": "設定",

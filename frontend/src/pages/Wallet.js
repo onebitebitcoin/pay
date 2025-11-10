@@ -778,7 +778,7 @@ function Wallet() {
   // Polling function to check invoice status
   const startInvoicePolling = useCallback((quoteId, amount) => {
     console.log('[startInvoicePolling] Starting poll for quote:', quoteId);
-    
+
     // Set up polling to check for payment status for up to 3 minutes (180 seconds)
     // Check every 3 seconds (3000ms), so that's 60 polls max
     const MAX_POLLS = 60;
@@ -790,6 +790,11 @@ function Wallet() {
         console.log('[startInvoicePolling] Polling stopped - max attempts reached or cancelled for quote:', quoteId);
         // Update UI to indicate polling has ended
         setCheckingPayment(false);
+
+        // Show timeout message
+        if (pollCount >= MAX_POLLS) {
+          showInfoMessage(t('wallet.pollingTimeout'), 'warning', 8000);
+        }
         return;
       }
 
@@ -807,11 +812,11 @@ function Wallet() {
             if (resultResp.ok) {
               const data = await resultResp.json();
               console.log('[startInvoicePolling] Payment completed for quote:', quoteId, data);
-              
+
               // Stop polling
               isPollingActive = false;
               setCheckingPayment(false);
-              
+
               // Process the payment notification
               window.dispatchEvent(new CustomEvent('payment_received', {
                 detail: {
@@ -823,13 +828,18 @@ function Wallet() {
                   memo: data.memo || ''
                 }
               }));
-              
+
               return;
             }
           }
         }
       } catch (error) {
         console.error('[startInvoicePolling] Error polling for quote:', quoteId, error);
+        // Show error message on polling error
+        isPollingActive = false;
+        setCheckingPayment(false);
+        showInfoMessage(t('wallet.pollingError'), 'error', 8000);
+        return;
       }
 
       // Continue polling
@@ -843,14 +853,14 @@ function Wallet() {
 
     // Start polling immediately
     pollForPayment();
-    
+
     // Return a function to stop polling if needed
     return () => {
       isPollingActive = false;
       setCheckingPayment(false);
       console.log('[startInvoicePolling] Polling cancelled for quote:', quoteId);
     };
-  }, [apiUrl]);
+  }, [apiUrl, showInfoMessage, t]);
 
   useEffect(() => {
     // Auto-connect to mint on mount

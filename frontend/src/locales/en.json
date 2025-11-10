@@ -135,7 +135,9 @@
     "torchOn": "Turn torch on",
     "torchOff": "Turn torch off",
     "optimizingCamera": "Optimising camera...",
-    "startingCamera": "Starting camera..."
+    "startingCamera": "Starting camera...",
+    "pollingTimeout": "Payment check timed out. Please go to the wallet page and tap the refresh button.",
+    "pollingError": "Error occurred while checking payment. Please go to the wallet page and tap the refresh button."
   },
   "settings": {
     "title": "Settings",
