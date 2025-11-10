@@ -1790,7 +1790,7 @@
 }
 
 .receive-invoice .qr-image {
-  width: clamp(240px, 70vw, 400px);
+  width: clamp(260px, 75vw, 420px);
   height: auto;
   display: block;
   background: #ffffff;
@@ -1830,6 +1830,18 @@
   font-size: 0.85rem;
   color: var(--muted);
   text-align: center;
+}
+
+@media (max-width: 600px) {
+  .receive-invoice .qr-image {
+    width: min(92vw, 520px);
+    padding: 0.75rem;
+  }
+
+  .qr-image-container {
+    width: min(95vw, 540px);
+    justify-content: center;
+  }
 }
 
 .invoice-loading {
@@ -2169,7 +2181,7 @@
   }
 
   .receive-invoice .qr-image {
-    width: clamp(240px, 75vw, 350px);
+    width: clamp(260px, 88vw, 450px);
     padding: 1rem;
   }
 
@@ -2252,7 +2264,7 @@
   }
 
   .receive-invoice .qr-image {
-    width: clamp(200px, 85vw, 300px);
+    width: clamp(240px, 92vw, 380px);
     padding: 0.875rem;
   }
 }
