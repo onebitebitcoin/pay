@@ -82,6 +82,8 @@ function StoreFinder() {
   const leafletUserMarkerRef = useRef(null);
   const currentLeafletPopupRef = useRef(null);
   const latestFilteredStoresRef = useRef([]);
+  const [pendingStoreId, setPendingStoreId] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     fetchStores();
@@ -122,6 +124,7 @@ function StoreFinder() {
   };
 
   useEffect(() => {
+    setMapReady(false);
     if (!isKakao) {
       resetKakaoArtifacts();
       kakaoMapRef.current = null;
@@ -141,6 +144,7 @@ function StoreFinder() {
       cancelled = true;
       resetKakaoArtifacts();
       kakaoMapRef.current = null;
+      setMapReady(false);
     };
   }, [isKakao]);
 
@@ -154,6 +158,7 @@ function StoreFinder() {
       return undefined;
     }
 
+    setMapReady(false);
     const container = mapRef.current;
     if (!container) {
       return undefined;
@@ -173,7 +178,10 @@ function StoreFinder() {
     }).addTo(mapInstance);
 
     leafletMapRef.current = mapInstance;
+    console.log('[StoreFinder] ✅ Leaflet map initialized');
     updateMapMarkers(latestFilteredStoresRef.current);
+    setMapReady(true);
+    console.log('[StoreFinder] ✅ Leaflet map ready for interactions');
 
     return () => {
       resetLeafletArtifacts();
@@ -181,6 +189,8 @@ function StoreFinder() {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
       }
+      setMapReady(false);
+      console.log('[StoreFinder] ♻️ Leaflet map cleaned up');
     };
   }, [isKakao]);
 
@@ -329,6 +339,8 @@ function StoreFinder() {
       console.log('[StoreFinder] ✅ Kakao Map initialized');
       console.log('[StoreFinder] Updating markers with', latestFilteredStoresRef.current.length, 'stores');
       updateMapMarkers(latestFilteredStoresRef.current);
+      setMapReady(true);
+      console.log('[StoreFinder] ✅ Kakao map ready for interactions');
     });
   };
 
@@ -468,14 +480,18 @@ function StoreFinder() {
     console.log('[StoreFinder] ✅ Kakao markers created -', validMarkers, 'valid,', invalidMarkers, 'invalid');
 
     if (storeData.length > 0 && !sortByDistance) {
-      const validStores = storeData.filter(s => s.lat != null && s.lng != null);
-      if (validStores.length > 0) {
-        const bounds = new window.kakao.maps.LatLngBounds();
-        validStores.forEach(store => {
-          bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
-        });
-        kakaoMapRef.current.setBounds(bounds);
-        console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+      if (pendingStoreId) {
+        console.log('[StoreFinder] ⏭️ Skipping Kakao bounds fit due to pending store focus:', pendingStoreId);
+      } else {
+        const validStores = storeData.filter(s => s.lat != null && s.lng != null);
+        if (validStores.length > 0) {
+          const bounds = new window.kakao.maps.LatLngBounds();
+          validStores.forEach(store => {
+            bounds.extend(new window.kakao.maps.LatLng(store.lat, store.lng));
+          });
+          kakaoMapRef.current.setBounds(bounds);
+          console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+        }
       }
     }
   };
@@ -578,11 +594,15 @@ function StoreFinder() {
     console.log('[StoreFinder] ✅ Leaflet markers created -', validMarkers, 'valid,', invalidMarkers, 'invalid');
 
     if (storeData.length > 0 && !sortByDistance) {
-      const validStores = storeData.filter(s => s.lat != null && s.lng != null);
-      if (validStores.length > 0) {
-        const bounds = L.latLngBounds(validStores.map(store => [store.lat, store.lng]));
-        leafletMapRef.current.fitBounds(bounds, { padding: [40, 40] });
-        console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+      if (pendingStoreId) {
+        console.log('[StoreFinder] ⏭️ Skipping Leaflet bounds fit due to pending store focus:', pendingStoreId);
+      } else {
+        const validStores = storeData.filter(s => s.lat != null && s.lng != null);
+        if (validStores.length > 0) {
+          const bounds = L.latLngBounds(validStores.map(store => [store.lat, store.lng]));
+          leafletMapRef.current.fitBounds(bounds, { padding: [40, 40] });
+          console.log('[StoreFinder] Map bounds adjusted to fit', validStores.length, 'stores');
+        }
       }
     }
   };
@@ -634,7 +654,15 @@ function StoreFinder() {
     updateMapMarkers(filtered);
   };
 
-  const handleStoreClick = (store) => {
+  const focusStoreOnMap = (store) => {
+    if (!store) return;
+
+    console.log('[StoreFinder] 🎯 Focusing store on map:', {
+      id: store.id,
+      name: getStoreName(store),
+      type: isKakao ? 'kakao' : 'leaflet'
+    });
+
     if (isKakao && kakaoMapRef.current && window.kakao) {
       const moveLatLon = new window.kakao.maps.LatLng(store.lat, store.lng);
       kakaoMapRef.current.setCenter(moveLatLon);
@@ -667,6 +695,46 @@ function StoreFinder() {
       }
     }
   };
+
+  const handleStoreClick = (store) => {
+    if (!store) return;
+    const mapInstanceReady = isKakao
+      ? Boolean(kakaoMapRef.current && mapReady)
+      : Boolean(leafletMapRef.current && mapReady);
+
+    if (!mapInstanceReady) {
+      setPendingStoreId(store.id);
+      console.log('[StoreFinder] ⏳ Map not ready yet. Queued store click:', {
+        storeId: store.id,
+        isKakao,
+        mapReady
+      });
+      return;
+    }
+
+    focusStoreOnMap(store);
+  };
+
+  useEffect(() => {
+    if (!mapReady || !pendingStoreId) {
+      return;
+    }
+
+    const pendingStore =
+      latestFilteredStoresRef.current.find(store => store.id === pendingStoreId) ||
+      stores.find(store => store.id === pendingStoreId);
+
+    if (!pendingStore) {
+      console.warn('[StoreFinder] ⚠️ Pending store id not found in current data:', pendingStoreId);
+      setPendingStoreId(null);
+      return;
+    }
+
+    console.log('[StoreFinder] ▶️ Processing queued store click:', pendingStoreId);
+    setPendingStoreId(null);
+    // Defer focus slightly so it runs after any pending map adjustments
+    setTimeout(() => focusStoreOnMap(pendingStore), 50);
+  }, [mapReady, pendingStoreId, stores, isKakao]);
 
   const openStoreDetail = (store) => {
     setSelectedStore(store);
