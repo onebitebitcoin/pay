@@ -27,7 +27,7 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 const RECEIVE_MIN_AMOUNT = 1;
-const RECEIVE_MAX_AMOUNT = 999;
+const RECEIVE_MAX_AMOUNT = 10;
 
 const createInitialFiatState = (language = 'en') => {
   switch (language) {
