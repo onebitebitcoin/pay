@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import QrScannerLib from 'qr-scanner';
 
@@ -14,6 +14,73 @@ function QrScanner({ onScan, onError, className = '' }) {
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [focusSupported, setFocusSupported] = useState(false);
   const [enhancingCamera, setEnhancingCamera] = useState(false);
+
+  const normalizeModes = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    return [value];
+  };
+
+  const getMacroFocusValue = (range = {}) => {
+    const { min = 0, max = 1 } = range;
+    const delta = max - min;
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return min;
+    }
+    // bias heavily towards macro (closest focus distance)
+    return Math.max(min, Math.min(max, min + delta * 0.03));
+  };
+
+  const appendTrackFocusConstraints = (capabilities = {}, advanced = []) => {
+    const focusModes = normalizeModes(capabilities.focusMode);
+    const supportsManual = focusModes.includes('manual') && capabilities.focusDistance;
+    if (supportsManual) {
+      advanced.push({
+        focusMode: 'manual',
+        focusDistance: getMacroFocusValue(capabilities.focusDistance)
+      });
+      return true;
+    }
+
+    if (focusModes.includes('continuous') || focusModes.includes('auto')) {
+      advanced.push({
+        focusMode: focusModes.includes('continuous') ? 'continuous' : 'auto'
+      });
+      return true;
+    }
+
+    if (focusModes.includes('single-shot')) {
+      advanced.push({ focusMode: 'single-shot' });
+      return true;
+    }
+
+    return false;
+  };
+
+  const applyPhotoFocusOptions = async (imageCapture, photoCaps) => {
+    if (!imageCapture || !photoCaps) return false;
+    const focusModes = normalizeModes(photoCaps.focusMode);
+
+    if (focusModes.includes('manual') && photoCaps.focusDistance) {
+      await imageCapture.setOptions({
+        focusMode: 'manual',
+        focusDistance: getMacroFocusValue(photoCaps.focusDistance)
+      });
+      return true;
+    }
+
+    if (focusModes.includes('continuous')) {
+      await imageCapture.setOptions({ focusMode: 'continuous' });
+      return true;
+    }
+
+    if (focusModes.includes('single-shot')) {
+      await imageCapture.setOptions({ focusMode: 'single-shot' });
+      return true;
+    }
+
+    return false;
+  };
 
   useEffect(() => {
     let scanner = null;
@@ -41,12 +108,12 @@ function QrScanner({ onScan, onError, className = '' }) {
             returnDetailedScanResult: true,
             highlightScanRegion: false,
             highlightCodeOutline: false,
-            maxScansPerSecond: 24,
+            maxScansPerSecond: 60,
             preferredCamera: 'environment',
             calculateScanRegion: (video) => {
-              // Use a balanced scan region (70% of shorter side) for better autofocus
+              // Use a large scan region (85% of shorter side) for better sensitivity
               const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-              const scanRegionSize = Math.round(0.7 * smallestDimension);
+              const scanRegionSize = Math.round(0.85 * smallestDimension);
               return {
                 x: Math.round((video.videoWidth - scanRegionSize) / 2),
                 y: Math.round((video.videoHeight - scanRegionSize) / 2),
@@ -68,9 +135,9 @@ function QrScanner({ onScan, onError, className = '' }) {
         // Don't set focusMode here - will be optimized after camera starts
         const constraints = {
           facingMode: 'environment',
-          width: { ideal: 1920, min: 1280 },
-          height: { ideal: 1080, min: 720 },
-          frameRate: { ideal: 30, min: 24 }
+          width: { ideal: 2560, max: 4096, min: 1920 },
+          height: { ideal: 1440, max: 2160, min: 1080 },
+          frameRate: { ideal: 60, max: 60, min: 30 }
         };
 
         try {
@@ -96,20 +163,10 @@ function QrScanner({ onScan, onError, className = '' }) {
 
           try {
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-            const enhancementConstraints = { advanced: [] };
+              const enhancementConstraints = { advanced: [] };
+              let focusApplied = false;
 
-            // Prioritize manual focus for macro/close-up QR scanning (1-5cm range)
-            if (capabilities.focusMode?.includes('manual') && capabilities.focusDistance) {
-              const { min = 0, max = 1 } = capabilities.focusDistance;
-              // Use macro focus: very close to min for 1-5cm scanning range
-              const macroFocus = min + (max - min) * 0.05;
-              enhancementConstraints.advanced.push({ focusMode: 'manual' });
-              enhancementConstraints.advanced.push({ focusDistance: macroFocus });
-              setFocusSupported(true);
-            } else if (capabilities.focusMode?.includes('continuous')) {
-              enhancementConstraints.advanced.push({ focusMode: 'continuous' });
-              setFocusSupported(true);
-            }
+            focusApplied = appendTrackFocusConstraints(capabilities, enhancementConstraints.advanced);
 
             if (capabilities.exposureMode?.includes('continuous')) {
               enhancementConstraints.advanced.push({ exposureMode: 'continuous' });
@@ -119,6 +176,14 @@ function QrScanner({ onScan, onError, className = '' }) {
               const { min = 0, max = 0, step = 0 } = capabilities.exposureCompensation;
               const compensation = Math.min(max, Math.max(min, step || 0));
               enhancementConstraints.advanced.push({ exposureCompensation: compensation });
+            }
+
+            if (capabilities.zoom) {
+              const { min = 1, max = 1 } = capabilities.zoom;
+              if (max > min) {
+                const zoomTarget = Math.max(min, Math.min(max, min + (max - min) * 0.65));
+                enhancementConstraints.advanced.push({ zoom: zoomTarget });
+              }
             }
 
             if (capabilities.whiteBalanceMode?.includes('continuous')) {
@@ -140,20 +205,9 @@ function QrScanner({ onScan, onError, className = '' }) {
                 const photoCaps = await imageCapture.getPhotoCapabilities();
                 photoCapabilitiesRef.current = photoCaps;
 
-                const focusModes = photoCaps.focusMode || [];
-                // Prioritize manual focus for macro/close-up QR code scanning (1-5cm range)
-                if (focusModes.includes('manual') && photoCaps.focusDistance) {
-                  const { min = 0, max = 1 } = photoCaps.focusDistance;
-                  // Use macro focus: very close to min for 1-5cm scanning range
-                  const macroFocus = min + (max - min) * 0.05;
-                  setFocusSupported(true);
-                  await imageCapture.setOptions({
-                    focusMode: 'manual',
-                    focusDistance: macroFocus
-                  });
-                } else if (focusModes.includes('continuous')) {
-                  setFocusSupported(true);
-                  await imageCapture.setOptions({ focusMode: 'continuous' });
+                const photoFocusApplied = await applyPhotoFocusOptions(imageCapture, photoCaps);
+                if (photoFocusApplied) {
+                  focusApplied = true;
                 }
 
                 const torchAvailable = (photoCaps.fillLightMode || []).includes('torch') || photoCaps.torch;
@@ -163,6 +217,10 @@ function QrScanner({ onScan, onError, className = '' }) {
               } catch (imageCaptureErr) {
                 console.log('ImageCapture adjustments not available:', imageCaptureErr);
               }
+            }
+
+            if (focusApplied) {
+              setFocusSupported(true);
             }
           } finally {
             setEnhancingCamera(false);
@@ -220,26 +278,18 @@ function QrScanner({ onScan, onError, className = '' }) {
     }
   };
 
-  const refocusCamera = async () => {
+  const refocusCamera = useCallback(async () => {
     if (!focusSupported) return;
 
     const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
     try {
       if (track?.getCapabilities) {
         const { focusMode = [], focusDistance } = track.getCapabilities();
-        const manualSupported = focusMode.includes('manual') && focusDistance;
         const constraints = { advanced: [] };
-
-        // Prioritize manual focus for macro/close-up QR code scanning (1-5cm range)
-        if (manualSupported) {
-          const { min = 0, max = 1 } = focusDistance;
-          // Use macro focus: very close to min for 1-5cm scanning range
-          const macroFocus = min + (max - min) * 0.05;
-          constraints.advanced.push({ focusMode: 'manual' });
-          constraints.advanced.push({ focusDistance: macroFocus });
-        } else if (focusMode.includes('continuous')) {
-          constraints.advanced.push({ focusMode: 'continuous' });
-        }
+        appendTrackFocusConstraints(
+          { focusMode, focusDistance },
+          constraints.advanced
+        );
 
         if (constraints.advanced.length > 0) {
           await track.applyConstraints(constraints);
@@ -247,24 +297,20 @@ function QrScanner({ onScan, onError, className = '' }) {
       }
 
       if (imageCaptureRef.current && photoCapabilitiesRef.current) {
-        const caps = photoCapabilitiesRef.current;
-        // Prioritize manual focus for macro/close-up QR code scanning (1-5cm range)
-        if ((caps.focusMode || []).includes('manual') && caps.focusDistance) {
-          const { min = 0, max = 1 } = caps.focusDistance;
-          // Use macro focus: very close to min for 1-5cm scanning range
-          const macroFocus = min + (max - min) * 0.05;
-          await imageCaptureRef.current.setOptions({
-            focusMode: 'manual',
-            focusDistance: macroFocus
-          });
-        } else if ((caps.focusMode || []).includes('continuous')) {
-          await imageCaptureRef.current.setOptions({ focusMode: 'continuous' });
-        }
+        await applyPhotoFocusOptions(imageCaptureRef.current, photoCapabilitiesRef.current);
       }
     } catch (err) {
       console.log('Refocus failed:', err);
     }
-  };
+  }, [focusSupported]);
+
+  useEffect(() => {
+    if (!focusSupported) return;
+    const interval = setInterval(() => {
+      refocusCamera();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [focusSupported, refocusCamera]);
 
   return (
     <div className={`qr-scanner ${className}`.trim()}>

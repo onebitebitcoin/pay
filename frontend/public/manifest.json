@@ -4,8 +4,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#60a5fa",
+  "background_color": "#fff0d4",
+  "theme_color": "#fff0d4",
   "description": "비트코인 라이트닝 결제와 Cashu eCash 지갑",
   "orientation": "portrait",
   "icons": [
