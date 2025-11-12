@@ -209,6 +209,7 @@
     "storesCount": "비트코인 매장 ({{count}}개)",
     "sortedByDistance": "· 거리순",
     "distance": "{{distance}}",
+    "dataSourceLabel": "매장 데이터 출처",
     "viewOnMap": "위치 보기",
     "details": "자세히",
     "storeInfo": "매장 정보",

@@ -209,6 +209,7 @@
     "storesCount": "ビットコイン店舗 ({{count}}件)",
     "sortedByDistance": "· 距離順",
     "distance": "{{distance}}",
+    "dataSourceLabel": "店舗データ出典",
     "viewOnMap": "地図で見る",
     "details": "詳細",
     "storeInfo": "店舗情報",

@@ -209,6 +209,7 @@
     "storesCount": "Bitcoin Stores ({{count}})",
     "sortedByDistance": "· By Distance",
     "distance": "{{distance}}",
+    "dataSourceLabel": "Store data source",
     "viewOnMap": "View on Map",
     "details": "Details",
     "storeInfo": "Store Information",

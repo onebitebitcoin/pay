@@ -910,6 +910,12 @@ function StoreFinder() {
       <div className="store-finder-content">
         <div className="map-container">
           <div ref={mapRef} className="map" />
+          <div className="map-data-source">
+            {t('storeFinder.dataSourceLabel')}:&nbsp;
+            <a href="https://btcmap.kr" target="_blank" rel="noreferrer noopener">
+              btcmap.kr
+            </a>
+          </div>
         </div>
 
         <div className="store-finder-sidebar">
