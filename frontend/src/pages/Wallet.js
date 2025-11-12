@@ -906,15 +906,19 @@ function Wallet() {
   // Handle page visibility change (app resuming from background)
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (!document.hidden && isReceiveView && checkingPayment) {
-        // App came back to foreground while waiting for payment
-        console.log('App resumed, checking payment status...');
+      if (document.hidden || !isReceiveView || !checkingPayment) {
+        return;
+      }
 
+      // App came back to foreground while waiting for payment
+      console.log('App resumed, checking payment status...');
+
+      try {
+        const lastQuote = localStorage.getItem('cashu_last_quote');
+        if (!lastQuote) return;
+
+        // Check if payment was completed on server
         try {
-          const lastQuote = localStorage.getItem('cashu_last_quote');
-          if (!lastQuote) return;
-
-          // Check if payment was completed on server
           const resultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${lastQuote}`));
           if (resultResp.ok) {
             const data = await resultResp.json();
@@ -925,37 +929,46 @@ function Wallet() {
               pollingCancelRef.current();
               pollingCancelRef.current = null;
             }
-            
+
             // Process the payment notification
             await processPaymentNotification(data);
-            
+
             // Set state to reflect that payment has been processed
             setCheckingPayment(false);
-          } else {
-            // Check if there's still a valid quote to poll for
-            const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${lastQuote}&mintUrl=${encodeURIComponent(mintUrl)}`));
-            if (checkResp.ok) {
-              const quoteData = await checkResp.json();
-              const state = (quoteData?.state || '').toUpperCase();
-              
-              if (state !== 'UNPAID') {
-                // If the quote is no longer unpaid, stop polling
-                if (pollingCancelRef.current) {
-                  pollingCancelRef.current();
-                  pollingCancelRef.current = null;
-                }
-                setCheckingPayment(false);
-              } else {
-                // Quote still unpaid, potentially restart polling if it was stopped
-                // NOTE: We don't restart polling here since the existing polling interval 
-                // should still be running unless explicitly stopped
-                console.log('Payment still pending, continuing to wait...');
-              }
-            }
+            return;
           }
         } catch (error) {
-          console.error('Error checking payment status on resume:', error);
+          console.error('Error fetching payment result on resume:', error);
         }
+
+        // Check if there's still a valid quote to poll for
+        const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${lastQuote}&mintUrl=${encodeURIComponent(mintUrl)}`));
+        if (checkResp.ok) {
+          const quoteData = await checkResp.json();
+          const state = (quoteData?.state || '').toUpperCase();
+
+          if (state !== 'UNPAID') {
+            // If the quote is no longer unpaid, stop polling
+            if (pollingCancelRef.current) {
+              pollingCancelRef.current();
+              pollingCancelRef.current = null;
+            }
+            setCheckingPayment(false);
+          } else {
+            // Quote still unpaid; restart polling since background timers may have been paused
+            if (pollingCancelRef.current) {
+              pollingCancelRef.current();
+              pollingCancelRef.current = null;
+            }
+            const lastAmountRaw = localStorage.getItem('cashu_last_mint_amount');
+            const lastAmount = Number.parseInt(lastAmountRaw || '0', 10);
+            console.log('Payment still pending after resume, restarting polling...');
+            pollingCancelRef.current = startInvoicePolling(lastQuote, Number.isFinite(lastAmount) && lastAmount > 0 ? lastAmount : undefined);
+            setCheckingPayment(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking payment status on resume:', error);
       }
     };
 
@@ -963,7 +976,7 @@ function Wallet() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isReceiveView, checkingPayment, processPaymentNotification]);
+  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling]);
 
   // Sync mintUrl from settings when page becomes visible
   useEffect(() => {
