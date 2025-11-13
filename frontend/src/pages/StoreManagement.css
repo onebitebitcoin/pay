@@ -218,10 +218,6 @@
 
 .store-list-mobile {
   display: none;
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
 }
 
 .store-card-mobile {
@@ -297,6 +293,9 @@
 
   .store-list-mobile {
     display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.25rem;
   }
 
   .pagination {

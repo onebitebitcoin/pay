@@ -1632,6 +1632,41 @@
   font-size: 0.95rem;
 }
 
+/* Receive Tabs */
+.receive-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+
+.receive-tab {
+  flex: 1;
+  padding: 0.875rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.receive-tab:hover {
+  color: var(--text);
+  background: rgba(var(--primary-rgb), 0.05);
+}
+
+.receive-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
 .receive-card-body {
   padding: 1.25rem 1.5rem;
   display: flex;
@@ -2436,4 +2471,23 @@
 :root.dark .receive-card-body,
 :root.dark .send-card-body {
   background: transparent;
+}
+
+:root.dark .receive-tabs {
+  border-bottom-color: rgba(var(--faq-accent-rgb), 0.25);
+}
+
+:root.dark .receive-tab {
+  color: rgba(254, 243, 199, 0.7);
+}
+
+:root.dark .receive-tab:hover {
+  color: #fef3c7;
+  background: rgba(var(--faq-accent-rgb), 0.1);
+}
+
+:root.dark .receive-tab.active {
+  color: #fbbf24;
+  border-bottom-color: #fbbf24;
+  background: rgba(var(--faq-accent-rgb), 0.15);
 }

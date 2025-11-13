@@ -148,7 +148,10 @@ function Wallet() {
   const [receiveAmountTooLow, setReceiveAmountTooLow] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
-  
+  const [receiveTab, setReceiveTab] = useState('ecash'); // 'lightning' or 'ecash'
+  const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
+  const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
+
 
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
@@ -1508,16 +1511,84 @@ function Wallet() {
     }
   };
 
+  const generateEcashRequest = async () => {
+    if (!receiveAmount) {
+      showInfoMessage(t('messages.enterValidAmount'), 'error');
+      return;
+    }
+
+    const amount = parseInt(receiveAmount, 10);
+    if (!Number.isFinite(amount) || Number.isNaN(amount) || amount <= 0) {
+      showInfoMessage(t('messages.enterValidAmount'), 'error');
+      return;
+    }
+
+    if (amount < RECEIVE_MIN_AMOUNT) {
+      setReceiveAmountTooLow(true);
+      showInfoMessage(t('wallet.receiveAmountMinimum', { amount: RECEIVE_MIN_AMOUNT }), 'error');
+      return;
+    }
+
+    if (amount > RECEIVE_MAX_AMOUNT) {
+      setReceiveAmountTooHigh(true);
+      showInfoMessage(t('wallet.receiveAmountMaximum', { amount: RECEIVE_MAX_AMOUNT }), 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setQrLoaded(false);
+      setReceiveCompleted(false);
+      setInvoiceError('');
+
+      // Get mint keys and create blinded outputs for the request
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+      if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
+      const mintKeys = await keysResp.json();
+      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
+
+      // Store output data for later when sender pays the request
+      setEcashRequestData(outputDatas);
+
+      // Create the eCash request string
+      // Format: cashu:request:<mint_url>:<amount>:<blinded_outputs_json>
+      const serializedOutputs = serializeOutputDatas(outputDatas);
+      const requestPayload = {
+        mint: mintUrl,
+        amount,
+        outputs: serializedOutputs
+      };
+      const requestString = `cashu:request:${btoa(JSON.stringify(requestPayload))}`;
+
+      setEcashRequest(requestString);
+      setQrLoaded(true);
+
+      console.log('[DEBUG] eCash request generated:', {
+        amount,
+        mintUrl,
+        outputsCount: outputs.length
+      });
+    } catch (error) {
+      console.error('Failed to generate eCash request:', error);
+      const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');
+      setInvoiceError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const exitReceiveFlow = useCallback(() => {
     // Stop any active polling
     if (pollingCancelRef.current) {
       pollingCancelRef.current();
       pollingCancelRef.current = null;
     }
-    
+
     try { stopAutoRedeem(); } catch {}
     setCheckingPayment(false);
     setInvoice('');
+    setEcashRequest('');
+    setEcashRequestData(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setReceiveAmount('');
@@ -1532,6 +1603,8 @@ function Wallet() {
     receiveOriginRef.current = fallback;
     try { stopAutoRedeem(); } catch {}
     setInvoice('');
+    setEcashRequest('');
+    setEcashRequestData(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setCheckingPayment(false);
@@ -1597,6 +1670,25 @@ function Wallet() {
     if (!val || typeof val !== 'string') return false;
     const s = val.trim().replace(/\s+/g, '').toLowerCase().replace(/^lightning:/, '');
     return s.startsWith('lnbc') || s.startsWith('lntb') || s.startsWith('lno');
+  };
+
+  const isEcashRequest = (val) => {
+    if (!val || typeof val !== 'string') return false;
+    const s = val.trim().toLowerCase();
+    return s.startsWith('cashu:request:');
+  };
+
+  const parseEcashRequest = (val) => {
+    try {
+      if (!isEcashRequest(val)) return null;
+      const base64Data = val.replace(/^cashu:request:/i, '');
+      const jsonStr = atob(base64Data);
+      const payload = JSON.parse(jsonStr);
+      return payload; // { mint, amount, outputs: [serialized OutputData] }
+    } catch (error) {
+      console.error('Failed to parse eCash request:', error);
+      return null;
+    }
   };
 
   const isLightningAddress = (val) => {
@@ -1850,6 +1942,146 @@ function Wallet() {
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const sendCtxRef = useRef(null); // { bolt11, quoteData }
 
+  const handleEcashRequestSend = useCallback(async () => {
+    try {
+      setLoading(true);
+      setInvoiceError('');
+
+      // Parse the eCash request
+      const requestPayload = parseEcashRequest(sendAddress);
+      if (!requestPayload) {
+        throw new Error(t('messages.invalidEcashRequest'));
+      }
+
+      const { mint, amount, outputs: serializedOutputs } = requestPayload;
+
+      // Validate amount
+      if (!amount || amount <= 0) {
+        throw new Error(t('messages.invalidAmount'));
+      }
+
+      // Check balance
+      const available = getBalanceSats();
+      if (available < amount) {
+        throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(amount - available) }));
+      }
+
+      // Select proofs for the amount
+      const { ok, picked, total } = selectProofsForAmount(amount);
+      if (!ok) throw new Error(t('messages.insufficientBalance'));
+
+      const mintMismatchMessage = getMintMismatchMessage(picked);
+      if (mintMismatchMessage) {
+        setInvoiceError(mintMismatchMessage);
+        showInfoMessage(mintMismatchMessage, 'error');
+        throw new Error(mintMismatchMessage);
+      }
+
+      // Deserialize the receiver's blinded outputs
+      const receiverOutputDatas = await deserializeOutputDatas(serializedOutputs);
+      const receiverOutputs = receiverOutputDatas.map(od => od.blindedMessage);
+
+      // Prepare for swap: inputs (our proofs) -> outputs (receiver's blinded messages)
+      const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
+
+      // Get mint keys for change calculation
+      let changeOutputs = undefined;
+      let changeOutputDatas = undefined;
+      const change = Math.max(0, Number(total) - Number(amount));
+
+      if (change > 0) {
+        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`));
+        if (!kr.ok) throw new Error(t('messages.mintKeysFetchError'));
+        const mintKeys = await kr.json();
+        const built = await createBlindedOutputs(change, mintKeys);
+        changeOutputs = built.outputs;
+        changeOutputDatas = built.outputDatas;
+      }
+
+      // Combine receiver outputs and change outputs
+      const allOutputs = [...receiverOutputs, ...(changeOutputs || [])];
+
+      // Perform swap
+      const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: uniquePicked,
+          outputs: allOutputs,
+          mintUrl: mint
+        })
+      });
+
+      if (!swapResp.ok) {
+        let msg = t('messages.ecashSendFailed');
+        try {
+          const err = await swapResp.json();
+          if (err?.error) {
+            msg = translateErrorMessage(err.error);
+          }
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const swapData = await swapResp.json();
+      const signatures = swapData?.signatures || [];
+
+      // First signatures go to receiver, remaining go to us as change
+      const receiverSignatures = signatures.slice(0, receiverOutputs.length);
+      const changeSignatures = signatures.slice(receiverOutputs.length);
+
+      // Process our change
+      let changeProofs = [];
+      if (change > 0 && changeSignatures.length > 0 && changeOutputDatas) {
+        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`));
+        if (kr.ok) {
+          const mintKeys = await kr.json();
+          changeProofs = await signaturesToProofs(changeSignatures, mintKeys, changeOutputDatas);
+        }
+      }
+
+      // Remove spent proofs and add change
+      removeProofs(uniquePicked);
+      if (changeProofs.length > 0) {
+        addProofs(changeProofs);
+      }
+
+      // Add transaction record
+      addTransaction({
+        id: Date.now(),
+        type: 'send',
+        amount: amount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.ecashSend'),
+        memo: '',
+        mintUrl: mint
+      });
+
+      // Update balance and navigate to success
+      await loadWalletData();
+      showInfoMessage(t('messages.ecashSendSuccess'), 'success');
+
+      // Navigate to payment success page
+      navigate('/wallet/payment-success', {
+        state: {
+          amount,
+          type: 'ecash_send',
+          from: '/wallet/send'
+        },
+        replace: true
+      });
+
+    } catch (error) {
+      console.error('Failed to send eCash:', error);
+      const errorMessage = error.message || t('messages.ecashSendFailed');
+      setInvoiceError(errorMessage);
+      showInfoMessage(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate]);
+
   const prepareSend = useCallback(async () => {
     if (enableSendScanner) {
       setEnableSendScanner(false);
@@ -1860,10 +2092,16 @@ function Wallet() {
 
     const hasInvoice = isBolt11Invoice(sendAddress);
     const hasAddress = isLightningAddress(sendAddress);
+    const hasEcashRequest = isEcashRequest(sendAddress);
 
-    if (!hasInvoice && !hasAddress) {
+    if (!hasInvoice && !hasAddress && !hasEcashRequest) {
       setInvoiceError(t('messages.invoiceRequired'));
       return;
+    }
+
+    // Handle eCash request separately
+    if (hasEcashRequest) {
+      return handleEcashRequestSend();
     }
 
     try {
@@ -2241,12 +2479,14 @@ function Wallet() {
                 <small>
                   {isBolt11Invoice(sendAddress)
                     ? t('wallet.invoiceDetected')
-                    : isLightningAddress(sendAddress)
-                      ? t('wallet.addressDetected')
-                      : t('wallet.invoiceOrAddressHint')}
+                    : isEcashRequest(sendAddress)
+                      ? t('wallet.ecashRequestDetected')
+                      : isLightningAddress(sendAddress)
+                        ? t('wallet.addressDetected')
+                        : t('wallet.invoiceOrAddressHint')}
                 </small>
               </div>
-              {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && (
+              {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && (
                 <div className="input-group">
                   <label>{t('wallet.amountToSend')}</label>
                   <input
@@ -2266,7 +2506,24 @@ function Wallet() {
                   )}
                 </div>
               )}
-              {invoiceQuote && (
+              {isEcashRequest(sendAddress) && (() => {
+                const requestPayload = parseEcashRequest(sendAddress);
+                if (!requestPayload) return null;
+                const requestAmount = requestPayload.amount || 0;
+                const requestFiatDisplay = fiatRate.rate ? formatFiatAmount(requestAmount) : null;
+                return (
+                  <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
+                    <div>{t('wallet.ecashRequestAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(requestAmount)} sats</strong></div>
+                    {requestFiatDisplay && (
+                      <div className="fiat-hint" style={{ marginTop: '0.5rem' }}>
+                        {t('wallet.fiatApprox', { value: requestFiatDisplay, source: rateSourceLabel })}
+                      </div>
+                    )}
+                    <div>{t('wallet.afterBalance')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(ecashBalance - requestAmount)} sats</strong></div>
+                  </div>
+                );
+              })()}
+              {invoiceQuote && !isEcashRequest(sendAddress) && (
                 <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
                   <div>{t('wallet.sendAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
                   <div>{t('wallet.fee')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
@@ -2288,7 +2545,8 @@ function Wallet() {
                     !isConnected ||
                     !!invoiceError ||
                     (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
-                    (!isBolt11Invoice(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
+                    (isEcashRequest(sendAddress) && !parseEcashRequest(sendAddress)) ||
+                    (!isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
                     (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
                   }
                 >
@@ -2305,9 +2563,45 @@ function Wallet() {
               <h2><Icon name="inbox" size={20} /> {t('wallet.receiveTitle')}</h2>
               <p className="receive-subtext">{t('wallet.receiveSubtext')}</p>
             </div>
+
+            {/* Tabs for Lightning / eCash */}
+            <div className="receive-tabs">
+              <button
+                className={`receive-tab ${receiveTab === 'ecash' ? 'active' : ''}`}
+                onClick={() => {
+                  setReceiveTab('ecash');
+                  setInvoice('');
+                  setEcashRequest('');
+                  setEcashRequestData(null);
+                  setInvoiceError('');
+                  setQrLoaded(false);
+                  if (pollingCancelRef.current) {
+                    pollingCancelRef.current();
+                    pollingCancelRef.current = null;
+                  }
+                  setCheckingPayment(false);
+                }}
+              >
+                <Icon name="coins" size={16} /> eCash (cashu)
+              </button>
+              <button
+                className={`receive-tab ${receiveTab === 'lightning' ? 'active' : ''}`}
+                onClick={() => {
+                  setReceiveTab('lightning');
+                  setInvoice('');
+                  setEcashRequest('');
+                  setEcashRequestData(null);
+                  setInvoiceError('');
+                  setQrLoaded(false);
+                }}
+              >
+                <Icon name="bitcoin" size={16} /> Lightning (walletofsatoshi)
+              </button>
+            </div>
+
             <div className="receive-card-body">
 
-              
+
               {!receiveCompleted ? (
                 <>
                   <div className="warning-banner warning">
@@ -2315,7 +2609,7 @@ function Wallet() {
                       {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
                     </div>
                   </div>
-                  {!invoice ? (
+                  {(receiveTab === 'lightning' && !invoice) || (receiveTab === 'ecash' && !ecashRequest) ? (
                     <>
                       {!isConnected ? (
                         <div className="network-warning" style={{ marginBottom: '1rem' }}>
@@ -2362,21 +2656,30 @@ function Wallet() {
                       )}
                       <div className="receive-actions">
                         <button
-                          onClick={generateInvoice}
+                          onClick={receiveTab === 'lightning' ? generateInvoice : generateEcashRequest}
                           className="primary-btn"
                           disabled={loading || !receiveAmount || receiveAmountTooLow || receiveAmountTooHigh || !isConnected}
                         >
-                          {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
+                          {loading ? (receiveTab === 'lightning' ? t('wallet.generatingInvoice') : t('wallet.generatingRequest')) : (receiveTab === 'lightning' ? t('wallet.generateInvoice') : t('wallet.generateRequest'))}
                         </button>
                       </div>
                     </>
-                  ) : (loading || (invoice && !qrLoaded)) ? (
+                  ) : (loading || ((invoice || ecashRequest) && !qrLoaded)) ? (
                     <div className="invoice-loading">
                       <div className="loading-spinner"></div>
-                      <p>{t('wallet.generatingInvoice')}</p>
+                      <p>{receiveTab === 'lightning' ? t('wallet.generatingInvoice') : t('wallet.generatingRequest')}</p>
                       {invoice && (
                         <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
+                          alt="Loading QR"
+                          style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                          onLoad={() => setQrLoaded(true)}
+                          onError={() => setQrLoaded(true)}
+                        />
+                      )}
+                      {ecashRequest && (
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(ecashRequest)}`}
                           alt="Loading QR"
                           style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                           onLoad={() => setQrLoaded(true)}
@@ -2390,8 +2693,12 @@ function Wallet() {
                         <div className="qr-placeholder">
                           <div className="qr-image-container" onClick={() => setShowQrModal(true)}>
                             <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                              alt="Lightning Invoice QR"
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
+                                receiveTab === 'lightning'
+                                  ? ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
+                                  : ecashRequest
+                              )}`}
+                              alt={receiveTab === 'lightning' ? "Lightning Invoice QR" : "eCash Request QR"}
                               className="qr-image"
                             />
                             <div className="qr-logo-overlay">
@@ -2403,13 +2710,14 @@ function Wallet() {
                         <label className="invoice-copy-label">{t('wallet.tapToCopy')}</label>
                         <div className="invoice-input-wrapper">
                           <textarea
-                            value={invoice}
+                            value={receiveTab === 'lightning' ? invoice : ecashRequest}
                             readOnly
                             className="invoice-textarea clickable"
                             onFocus={(e) => e.target.select()}
                             onClick={async () => {
                               try {
-                                await navigator.clipboard.writeText(invoice);
+                                const textToCopy = receiveTab === 'lightning' ? invoice : ecashRequest;
+                                await navigator.clipboard.writeText(textToCopy);
                                 setInvoiceCopied(true);
                                 setTimeout(() => setInvoiceCopied(false), 2000);
                               } catch {
@@ -2449,6 +2757,8 @@ function Wallet() {
                           onClick={() => {
                             try { stopAutoRedeem(); } catch {}
                             setInvoice('');
+                            setEcashRequest('');
+                            setEcashRequestData(null);
                             setCheckingPayment(false);
                             setReceiveCompleted(false);
                             setReceivedAmount(0);
@@ -3111,7 +3421,7 @@ function Wallet() {
       )}
 
       {/* QR Code Modal */}
-      {showQrModal && invoice && (
+      {showQrModal && (invoice || ecashRequest) && (
         <div className="qr-modal-overlay" onClick={() => setShowQrModal(false)}>
           <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="qr-modal-close" onClick={() => setShowQrModal(false)} aria-label="Close">
@@ -3121,8 +3431,12 @@ function Wallet() {
               <h3>{formatAmount(receiveAmount)} sats</h3>
               <div className="qr-modal-code">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
-                  alt="Lightning Invoice QR Code"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
+                    receiveTab === 'lightning'
+                      ? ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
+                      : ecashRequest
+                  )}`}
+                  alt={receiveTab === 'lightning' ? "Lightning Invoice QR Code" : "eCash Request QR Code"}
                 />
                 <div className="qr-logo-overlay">
                   <img src="/logo-192.png" alt="Logo" className="qr-logo" />
@@ -3131,7 +3445,7 @@ function Wallet() {
               <p className="qr-mint-info" style={{ fontSize: '0.875rem', color: 'var(--muted)', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                 Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
               </p>
-              <p className="qr-modal-hint">{t('wallet.scanQrToPayHint')}</p>
+              <p className="qr-modal-hint">{receiveTab === 'lightning' ? t('wallet.scanQrToPayHint') : t('wallet.scanQrToPayEcashHint')}</p>
             </div>
           </div>
         </div>

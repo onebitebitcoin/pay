@@ -63,7 +63,7 @@ function Settings() {
   const [settings, setSettings] = useState({
     walletName: '',
     language: 'ko',
-    theme: 'light',
+    theme: 'dark',
     currency: 'SATS',
     notifications: true,
     mintUrl: '',
@@ -126,7 +126,7 @@ function Settings() {
       const defaultSettings = {
         walletName: '',
         language: 'ko',
-        theme: 'light',
+        theme: 'dark',
         currency: 'SATS',
         notifications: true,
         mintUrl: DEFAULT_MINT_URL,
@@ -161,7 +161,7 @@ function Settings() {
       const fallback = {
         walletName: '',
         language: 'ko',
-        theme: 'light',
+        theme: 'dark',
         currency: 'SATS',
         notifications: true,
         mintUrl: DEFAULT_MINT_URL,
@@ -324,17 +324,17 @@ function Settings() {
             ...settings,
             mintUrl: DEFAULT_MINT_URL,
             pinEnabled: false,
-            theme: 'light'
+            theme: 'dark'
           };
 
           setSettings(prev => ({
             ...prev,
             mintUrl: DEFAULT_MINT_URL,
             pinEnabled: false,
-            theme: 'light'
+            theme: 'dark'
           }));
           saveSettings(resetSettings);
-          applyTheme('light');
+          applyTheme('dark');
 
           addToast(t('messages.walletReset'), 'success');
           setTimeout(() => window.location.reload(), 1000);
