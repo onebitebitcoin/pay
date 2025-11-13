@@ -570,6 +570,7 @@
     "ecashSendSuccess": "eCash를 성공적으로 보냈습니다",
     "ecashReceiveSuccess": "eCash를 성공적으로 받았습니다",
     "ecashRequestGenerationFailed": "eCash 요청서 생성 실패",
+    "ecashRequestMintMismatch": "eCash 요청서의 Mint({{requestMint}})와 현재 설정된 Mint({{currentMint}})가 다릅니다. 같은 Mint끼리만 교환 가능합니다.",
     "alreadyIssuedNoRecovery": "이 인보이스는 이미 처리되었습니다. 안타깝게도 signatures를 받지 못해 복구가 불가능합니다. Mint 관리자에게 문의하세요.",
     "redeemFailed": "Redeem 실패",
     "noValidSignatures": "유효한 서명을 받지 못했습니다",

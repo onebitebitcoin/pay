@@ -2191,6 +2191,20 @@ function Wallet() {
         throw new Error(t('messages.invalidAmount'));
       }
 
+      // Check if request mint matches current mint
+      const currentMint = normalizeMintForCompare(mintUrl);
+      const requestMint = normalizeMintForCompare(mint);
+
+      if (currentMint !== requestMint) {
+        const errorMsg = t('messages.ecashRequestMintMismatch', {
+          requestMint: formatMintLabel(mint),
+          currentMint: formatMintLabel(mintUrl)
+        });
+        setInvoiceError(errorMsg);
+        showInfoMessage(errorMsg, 'error');
+        throw new Error(errorMsg);
+      }
+
       // Check balance
       const available = getBalanceSats();
       if (available < amount) {
@@ -2201,6 +2215,7 @@ function Wallet() {
       const { ok, picked, total } = selectProofsForAmount(amount);
       if (!ok) throw new Error(t('messages.insufficientBalance'));
 
+      // Double check selected proofs are from the same mint
       const mintMismatchMessage = getMintMismatchMessage(picked);
       if (mintMismatchMessage) {
         setInvoiceError(mintMismatchMessage);
@@ -2275,7 +2290,7 @@ function Wallet() {
       // Remove spent proofs and add change
       removeProofs(uniquePicked);
       if (changeProofs.length > 0) {
-        addProofs(changeProofs);
+        addProofs(changeProofs, mint);
       }
 
       // Add transaction record
