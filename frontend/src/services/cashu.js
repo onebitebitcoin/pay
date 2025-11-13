@@ -44,12 +44,19 @@ function uniqueBySecret(arr) {
 }
 
 export function getBalanceSats() {
-  return uniqueBySecret(loadProofs()).reduce((sum, p) => sum + Number(p?.amount || 0), 0);
+  // Only count enabled (non-disabled) proofs
+  return uniqueBySecret(loadProofs())
+    .filter(p => !p.disabled)
+    .reduce((sum, p) => sum + Number(p?.amount || 0), 0);
 }
 
 // Very naive coin selection: pick largest-first until reaching target
+// Only selects enabled (non-disabled) proofs
 export function selectProofsForAmount(target) {
-  const proofs = uniqueBySecret(loadProofs()).slice().sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+  const proofs = uniqueBySecret(loadProofs())
+    .filter(p => !p.disabled) // Skip disabled proofs
+    .slice()
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
   const picked = [];
   let total = 0;
   for (const p of proofs) {
@@ -82,6 +89,19 @@ export function addProofs(newProofs, mintUrl) {
 
   const merged = uniqueBySecret([...current, ...proofsWithMint]);
   saveProofs(merged, mintUrl);
+}
+
+// Toggle disabled state of a proof
+export function toggleProofDisabled(proofSecret) {
+  const proofs = loadProofs();
+  const updated = proofs.map(p => {
+    if ((p?.secret || JSON.stringify(p)) === proofSecret) {
+      return { ...p, disabled: !p.disabled };
+    }
+    return p;
+  });
+  saveProofs(updated);
+  return updated;
 }
 
 // Export current proofs as JSON string

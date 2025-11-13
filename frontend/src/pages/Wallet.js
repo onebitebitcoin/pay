@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
-import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint } from '../services/cashu';
+import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
 import './Wallet.css';
 import Icon from '../components/Icon';
@@ -151,6 +151,7 @@ function Wallet() {
   const [receiveTab, setReceiveTab] = useState('ecash'); // 'lightning' or 'ecash'
   const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
   const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
+  const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
 
 
 
@@ -866,6 +867,137 @@ function Wallet() {
     };
   }, [apiUrl, showInfoMessage, t]);
 
+  // Handle eCash request completion - convert signatures to proofs and update balance
+  const handleEcashRequestCompletion = useCallback(async (signatures, amount, timestamp) => {
+    console.log('[handleEcashRequestCompletion] Processing signatures:', signatures.length);
+
+    try {
+      // Get the stored output data
+      if (!ecashRequestData || ecashRequestData.length === 0) {
+        console.error('[handleEcashRequestCompletion] No ecashRequestData found');
+        showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
+        return;
+      }
+
+      // Get mint keys
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+      if (!keysResp.ok) {
+        throw new Error(t('messages.mintKeysFailed'));
+      }
+      const mintKeys = await keysResp.json();
+
+      // Convert signatures to proofs
+      const proofs = await signaturesToProofs(signatures, mintKeys, ecashRequestData);
+      console.log('[handleEcashRequestCompletion] Converted to proofs:', proofs.length);
+
+      // Add proofs to wallet
+      addProofs(proofs);
+
+      // Calculate credited amount
+      const creditedAmount = proofs.reduce((sum, p) => sum + (parseInt(p.amount, 10) || 0), 0);
+
+      // Add transaction record
+      addTransaction({
+        id: Date.now(),
+        type: 'receive',
+        amount: creditedAmount,
+        timestamp: timestamp || new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.ecashReceive'),
+        memo: '',
+        mintUrl
+      });
+
+      // Update balance
+      await loadWalletData();
+
+      // Update UI
+      setReceiveCompleted(true);
+      setReceivedAmount(creditedAmount);
+      setShowQrModal(false);
+
+      // Show success message
+      showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
+
+      // Clear localStorage
+      localStorage.removeItem('cashu_last_ecash_request_id');
+      localStorage.removeItem('cashu_last_ecash_request_amount');
+
+      console.log('[handleEcashRequestCompletion] Successfully credited:', creditedAmount, 'sats');
+    } catch (error) {
+      console.error('[handleEcashRequestCompletion] Error:', error);
+      showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
+    }
+  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t]);
+
+  // Polling function to check eCash request status
+  const startEcashRequestPolling = useCallback((requestId, amount) => {
+    console.log('[startEcashRequestPolling] Starting poll for requestId:', requestId);
+
+    // Set up polling to check for payment status for up to 3 minutes (180 seconds)
+    // Check every 3 seconds (3000ms), so that's 60 polls max
+    const MAX_POLLS = 60;
+    let pollCount = 0;
+    let isPollingActive = true;
+
+    const pollForPayment = async () => {
+      if (pollCount >= MAX_POLLS || !isPollingActive) {
+        console.log('[startEcashRequestPolling] Polling stopped - max attempts reached or cancelled for requestId:', requestId);
+        // Update UI to indicate polling has ended
+        setCheckingPayment(false);
+
+        // Show timeout message
+        if (pollCount >= MAX_POLLS) {
+          showInfoMessage(t('wallet.pollingTimeout'), 'warning', 8000);
+        }
+        return;
+      }
+
+      try {
+        // Check if the eCash request has been fulfilled
+        const checkResp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}`));
+        if (checkResp.ok) {
+          const data = await checkResp.json();
+          console.log('[startEcashRequestPolling] Check response:', data, 'for requestId:', requestId);
+
+          if (data.paid && data.signatures && Array.isArray(data.signatures)) {
+            console.log('[startEcashRequestPolling] Payment completed for requestId:', requestId);
+
+            // Stop polling
+            isPollingActive = false;
+            setCheckingPayment(false);
+
+            // Process the signatures and update balance
+            await handleEcashRequestCompletion(data.signatures, amount, data.timestamp);
+
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('[startEcashRequestPolling] Error polling for requestId:', requestId, error);
+      }
+
+      // Continue polling
+      pollCount++;
+      setTimeout(() => {
+        if (isPollingActive) {
+          pollForPayment();
+        }
+      }, 3000); // Poll every 3 seconds
+    };
+
+    // Start polling and set checking state
+    setCheckingPayment(true);
+    pollForPayment();
+
+    // Store cancel function
+    pollingCancelRef.current = () => {
+      isPollingActive = false;
+      setCheckingPayment(false);
+      console.log('[startEcashRequestPolling] Polling cancelled for requestId:', requestId);
+    };
+  }, [apiUrl, showInfoMessage, t]);
+
   useEffect(() => {
     // Auto-connect to mint on mount
     connectMint();
@@ -879,6 +1011,38 @@ function Wallet() {
         }
       } catch (err) {
         console.error('Failed to initialize pending invoice:', err);
+      }
+    })();
+
+    // Check for pending eCash request
+    (async () => {
+      try {
+        const lastRequestId = localStorage.getItem('cashu_last_ecash_request_id');
+        const lastAmount = localStorage.getItem('cashu_last_ecash_request_amount');
+
+        if (lastRequestId && ecashRequestData) {
+          console.log('[Init] Found pending eCash request:', lastRequestId);
+          setEcashRequestId(lastRequestId);
+
+          // Check if it was already paid
+          const checkResp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(lastRequestId)}`));
+          if (checkResp.ok) {
+            const data = await checkResp.json();
+            if (data.paid && data.signatures) {
+              console.log('[Init] eCash request was already paid, processing...');
+              await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp);
+            } else if (isReceiveView) {
+              // Still pending and on receive page, restart polling
+              console.log('[Init] eCash request still pending, starting polling...');
+              const amount = parseInt(lastAmount || '0', 10);
+              if (amount > 0) {
+                startEcashRequestPolling(lastRequestId, amount);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to initialize pending eCash request:', err);
       }
     })();
 
@@ -902,7 +1066,7 @@ function Wallet() {
       try { stopAutoRedeem(); } catch {}
       window.removeEventListener('payment_received', handler);
     };
-  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem]);
+  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, ecashRequestData, apiUrl, handleEcashRequestCompletion, isReceiveView, startEcashRequestPolling]);
   
 
 
@@ -917,6 +1081,46 @@ function Wallet() {
       console.log('App resumed, checking payment status...');
 
       try {
+        // Check if waiting for eCash request
+        if (ecashRequestId) {
+          console.log('Checking eCash request status after resume:', ecashRequestId);
+
+          // Check if payment was completed
+          try {
+            const checkResp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(ecashRequestId)}`));
+            if (checkResp.ok) {
+              const data = await checkResp.json();
+
+              if (data.paid && data.signatures) {
+                console.log('eCash request completed while app was in background:', data);
+
+                // Stop current polling before processing
+                if (pollingCancelRef.current) {
+                  pollingCancelRef.current();
+                  pollingCancelRef.current = null;
+                }
+
+                // Process the payment
+                await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp);
+                setCheckingPayment(false);
+                return;
+              } else {
+                // Still unpaid, restart polling
+                console.log('eCash request still pending after resume, restarting polling...');
+                if (pollingCancelRef.current) {
+                  pollingCancelRef.current();
+                  pollingCancelRef.current = null;
+                }
+                startEcashRequestPolling(ecashRequestId, receiveAmount ? parseInt(receiveAmount, 10) : 0);
+                return;
+              }
+            }
+          } catch (error) {
+            console.error('Error checking eCash request on resume:', error);
+          }
+        }
+
+        // Check if waiting for Lightning invoice
         const lastQuote = localStorage.getItem('cashu_last_quote');
         if (!lastQuote) return;
 
@@ -979,7 +1183,7 @@ function Wallet() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling]);
+  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, ecashRequestId, handleEcashRequestCompletion, startEcashRequestPolling, receiveAmount]);
 
   // Sync mintUrl from settings when page becomes visible
   useEffect(() => {
@@ -1005,33 +1209,40 @@ function Wallet() {
     };
   }, [mintUrl]);
 
-  // Stop polling when invoice is cleared or component unmounts
+  // Stop polling when invoice/ecashRequest is cleared
   useEffect(() => {
-    // If invoice is cleared, stop any active polling
-    if (!invoice && checkingPayment) {
-      console.log('[Invoice cleared] Stopping polling');
-      stopAutoRedeem();
+    // If both invoice and ecashRequest are cleared, stop any active polling
+    if (!invoice && !ecashRequest && pollingCancelRef.current) {
+      console.log('[Invoice/Request cleared] Stopping polling');
+      if (pollingCancelRef.current) {
+        pollingCancelRef.current();
+        pollingCancelRef.current = null;
+      }
+      setCheckingPayment(false);
     }
+  }, [invoice, ecashRequest]);
 
-    // Handle page unload/navigation
+  // Handle page unload/navigation - only set up once
+  useEffect(() => {
     const handleBeforeUnload = () => {
-      if (checkingPayment) {
+      if (pollingCancelRef.current) {
         console.log('[Page unloading] Stopping polling');
-        stopAutoRedeem();
+        pollingCancelRef.current();
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Cleanup on unmount or navigation
+    // Cleanup on actual unmount only
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (checkingPayment) {
-        console.log('[Component unmounting] Stopping polling');
-        stopAutoRedeem();
+      console.log('[Component unmounting] Cleaning up');
+      if (pollingCancelRef.current) {
+        pollingCancelRef.current();
+        pollingCancelRef.current = null;
       }
     };
-  }, [invoice, checkingPayment, stopAutoRedeem]);
+  }, []); // Empty dependency - only run once on mount/unmount
 
   // Manual sync proofs with Mint
   const handleSyncProofs = async () => {
@@ -1550,24 +1761,37 @@ function Wallet() {
       // Store output data for later when sender pays the request
       setEcashRequestData(outputDatas);
 
+      // Generate unique request ID for polling
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
       // Create the eCash request string
-      // Format: cashu:request:<mint_url>:<amount>:<blinded_outputs_json>
+      // Format: cashu:request:<base64_json>
       const serializedOutputs = serializeOutputDatas(outputDatas);
       const requestPayload = {
         mint: mintUrl,
         amount,
-        outputs: serializedOutputs
+        outputs: serializedOutputs,
+        requestId
       };
       const requestString = `cashu:request:${btoa(JSON.stringify(requestPayload))}`;
 
       setEcashRequest(requestString);
+      setEcashRequestId(requestId);
       setQrLoaded(true);
+
+      // Store requestId in localStorage for resume detection
+      localStorage.setItem('cashu_last_ecash_request_id', requestId);
+      localStorage.setItem('cashu_last_ecash_request_amount', amount.toString());
 
       console.log('[DEBUG] eCash request generated:', {
         amount,
         mintUrl,
+        requestId,
         outputsCount: outputs.length
       });
+
+      // Start polling for payment
+      startEcashRequestPolling(requestId, amount);
     } catch (error) {
       console.error('Failed to generate eCash request:', error);
       const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');
@@ -1589,10 +1813,16 @@ function Wallet() {
     setInvoice('');
     setEcashRequest('');
     setEcashRequestData(null);
+    setEcashRequestId(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setReceiveAmount('');
     setReceiveAmountTooLow(false);
+
+    // Clear eCash request from localStorage
+    localStorage.removeItem('cashu_last_ecash_request_id');
+    localStorage.removeItem('cashu_last_ecash_request_amount');
+
     const target = receiveOriginRef.current || '/wallet';
     navigate(target, { replace: true });
   }, [navigate, stopAutoRedeem]);
@@ -1605,6 +1835,7 @@ function Wallet() {
     setInvoice('');
     setEcashRequest('');
     setEcashRequestData(null);
+    setEcashRequestId(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
     setCheckingPayment(false);
@@ -1953,7 +2184,7 @@ function Wallet() {
         throw new Error(t('messages.invalidEcashRequest'));
       }
 
-      const { mint, amount, outputs: serializedOutputs } = requestPayload;
+      const { mint, amount, outputs: serializedOutputs, requestId } = requestPayload;
 
       // Validate amount
       if (!amount || amount <= 0) {
@@ -2008,7 +2239,8 @@ function Wallet() {
         body: JSON.stringify({
           inputs: uniquePicked,
           outputs: allOutputs,
-          mintUrl: mint
+          mintUrl: mint,
+          requestId: requestId // Include requestId so server can store signatures for receiver
         })
       });
 
@@ -2573,6 +2805,7 @@ function Wallet() {
                   setInvoice('');
                   setEcashRequest('');
                   setEcashRequestData(null);
+                  setEcashRequestId(null);
                   setInvoiceError('');
                   setQrLoaded(false);
                   if (pollingCancelRef.current) {
@@ -2591,6 +2824,7 @@ function Wallet() {
                   setInvoice('');
                   setEcashRequest('');
                   setEcashRequestData(null);
+                  setEcashRequestId(null);
                   setInvoiceError('');
                   setQrLoaded(false);
                 }}
@@ -2759,6 +2993,7 @@ function Wallet() {
                             setInvoice('');
                             setEcashRequest('');
                             setEcashRequestData(null);
+                            setEcashRequestId(null);
                             setCheckingPayment(false);
                             setReceiveCompleted(false);
                             setReceivedAmount(0);
@@ -3388,18 +3623,39 @@ function Wallet() {
             ) : (
               loadProofs().map((proof, index) => {
                 const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
+                const isDisabled = proof?.disabled || false;
                 const mintUrl = proof?.mintUrl || 'Unknown Mint';
                 const displayMintUrl = mintUrl.length > 40 ? mintUrl.substring(0, 37) + '...' : mintUrl;
 
                 return (
-                  <div key={proof?.secret || index} className="proof-item">
+                  <div
+                    key={proof?.secret || index}
+                    className="proof-item"
+                    style={{ opacity: isDisabled ? 0.5 : 1 }}
+                  >
                     <div className="proof-info">
                       <div className="proof-amount-status">
                         <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
                         <div className={`proof-status ${isValid ? 'valid' : 'invalid'}`}>
                           {isValid ? t('wallet.valid') : t('wallet.invalid')}
                         </div>
+                        {isDisabled && (
+                          <div className="proof-status disabled" style={{ background: 'var(--muted)', marginLeft: '0.5rem' }}>
+                            {t('wallet.disabled')}
+                          </div>
+                        )}
                       </div>
+                      <button
+                        onClick={() => {
+                          toggleProofDisabled(proof?.secret || JSON.stringify(proof));
+                          loadWalletData();
+                        }}
+                        className="icon-btn"
+                        title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
+                        style={{ marginLeft: '0.5rem' }}
+                      >
+                        <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
+                      </button>
                     </div>
                     <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
                       Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>

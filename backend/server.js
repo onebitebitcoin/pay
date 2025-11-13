@@ -214,6 +214,9 @@ function sendPaymentNotification(quoteId, data) {
 const activeQuotes = new Map();
 const redeemedQuotes = new Map();
 
+// Store eCash request signatures: requestId -> { signatures, amount, timestamp }
+const ecashRequestSignatures = new Map();
+
 function cacheRedeemedQuote(quoteId, data) {
   redeemedQuotes.set(quoteId, data);
   setTimeout(() => {
@@ -852,7 +855,7 @@ app.post('/api/cashu/check', async (req, res) => {
 // Swap proofs for fresh ones
 app.post('/api/cashu/swap', async (req, res) => {
   try {
-    const { inputs, outputs, mintUrl } = req.body || {};
+    const { inputs, outputs, mintUrl, requestId } = req.body || {};
     if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
       return res.status(400).json({ error: 'inputs 배열 필요' });
     }
@@ -860,9 +863,58 @@ app.post('/api/cashu/swap', async (req, res) => {
       return res.status(400).json({ error: 'outputs 배열 필요' });
     }
     const result = await cashu.swap({ inputs, outputs, mintUrl });
+
+    // If this swap is for an eCash request, store the signatures for the receiver to poll
+    if (requestId && result?.signatures && Array.isArray(result.signatures)) {
+      const totalAmount = result.signatures.reduce((sum, sig) => {
+        return sum + (parseInt(sig?.amount, 10) || 0);
+      }, 0);
+
+      ecashRequestSignatures.set(requestId, {
+        signatures: result.signatures,
+        amount: totalAmount,
+        timestamp: new Date().toISOString()
+      });
+
+      // Clean up after 10 minutes
+      setTimeout(() => {
+        ecashRequestSignatures.delete(requestId);
+      }, 10 * 60 * 1000);
+
+      console.log(`Stored signatures for eCash request ${requestId}: ${totalAmount} sats`);
+    }
+
     res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.data || e.message });
+  }
+});
+
+// Check if eCash request has been fulfilled (for receiver polling)
+app.get('/api/cashu/ecash-request/check', (req, res) => {
+  try {
+    const { requestId } = req.query;
+    if (!requestId) {
+      return res.status(400).json({ error: 'requestId 필요' });
+    }
+
+    const data = ecashRequestSignatures.get(requestId);
+    if (data) {
+      // Return the signatures and remove from map (one-time retrieval)
+      ecashRequestSignatures.delete(requestId);
+      console.log(`eCash request ${requestId} retrieved by receiver`);
+      res.json({
+        paid: true,
+        signatures: data.signatures,
+        amount: data.amount,
+        timestamp: data.timestamp
+      });
+    } else {
+      res.json({ paid: false });
+    }
+  } catch (e) {
+    console.error('eCash request check error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
