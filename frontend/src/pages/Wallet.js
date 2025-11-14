@@ -148,7 +148,7 @@ function Wallet() {
   const [receiveAmountTooLow, setReceiveAmountTooLow] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
-  const [receiveTab, setReceiveTab] = useState('ecash'); // 'lightning' or 'ecash'
+  // Removed eCash receive tab - Lightning only for privacy
   const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
   const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
   const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
@@ -2990,41 +2990,10 @@ function Wallet() {
               <p className="receive-subtext">{t('wallet.receiveSubtext')}</p>
             </div>
 
-            {/* Tabs for Lightning / eCash */}
-            <div className="receive-tabs">
-              <button
-                className={`receive-tab ${receiveTab === 'ecash' ? 'active' : ''}`}
-                onClick={() => {
-                  setReceiveTab('ecash');
-                  setInvoice('');
-                  setEcashRequest('');
-                  setEcashRequestData(null);
-                  setEcashRequestId(null);
-                  setInvoiceError('');
-                  setQrLoaded(false);
-                  if (pollingCancelRef.current) {
-                    pollingCancelRef.current();
-                    pollingCancelRef.current = null;
-                  }
-                  setCheckingPayment(false);
-                }}
-              >
-                <Icon name="coins" size={16} /> eCash (cashu)
-              </button>
-              <button
-                className={`receive-tab ${receiveTab === 'lightning' ? 'active' : ''}`}
-                onClick={() => {
-                  setReceiveTab('lightning');
-                  setInvoice('');
-                  setEcashRequest('');
-                  setEcashRequestData(null);
-                  setEcashRequestId(null);
-                  setInvoiceError('');
-                  setQrLoaded(false);
-                }}
-              >
-                <Icon name="bitcoin" size={16} /> Lightning (walletofsatoshi)
-              </button>
+            {/* Note: eCash receiving removed - use Lightning for privacy-preserving receives */}
+            <div className="receive-info" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--card-bg)', borderRadius: '8px', fontSize: '0.875rem', color: 'var(--muted)' }}>
+              <Icon name="info" size={16} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+              {t('wallet.receiveViaLightning')}
             </div>
 
             <div className="receive-card-body">
@@ -3037,7 +3006,7 @@ function Wallet() {
                       {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
                     </div>
                   </div>
-                  {(receiveTab === 'lightning' && !invoice) || (receiveTab === 'ecash' && !ecashRequest) ? (
+                  {!invoice ? (
                     <>
                       {!isConnected ? (
                         <div className="network-warning" style={{ marginBottom: '1rem' }}>
@@ -3084,18 +3053,18 @@ function Wallet() {
                       )}
                       <div className="receive-actions">
                         <button
-                          onClick={receiveTab === 'lightning' ? generateInvoice : generateEcashRequest}
+                          onClick={generateInvoice}
                           className="primary-btn"
                           disabled={loading || !receiveAmount || receiveAmountTooLow || receiveAmountTooHigh || !isConnected}
                         >
-                          {loading ? (receiveTab === 'lightning' ? t('wallet.generatingInvoice') : t('wallet.generatingRequest')) : (receiveTab === 'lightning' ? t('wallet.generateInvoice') : t('wallet.generateRequest'))}
+                          {loading ? t('wallet.generatingInvoice') : t('wallet.generateInvoice')}
                         </button>
                       </div>
                     </>
-                  ) : (loading || ((invoice || ecashRequest) && !qrLoaded)) ? (
+                  ) : (loading || (invoice && !qrLoaded)) ? (
                     <div className="invoice-loading">
                       <div className="loading-spinner"></div>
-                      <p>{receiveTab === 'lightning' ? t('wallet.generatingInvoice') : t('wallet.generatingRequest')}</p>
+                      <p>{t('wallet.generatingInvoice')}</p>
                       {invoice && (
                         <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)}`}
@@ -3122,11 +3091,9 @@ function Wallet() {
                           <div className="qr-image-container" onClick={() => setShowQrModal(true)}>
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
-                                receiveTab === 'lightning'
-                                  ? ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
-                                  : ecashRequest
+                                ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
                               )}`}
-                              alt={receiveTab === 'lightning' ? "Lightning Invoice QR" : "eCash Request QR"}
+                              alt="Lightning Invoice QR"
                               className="qr-image"
                             />
                             <div className="qr-logo-overlay">
@@ -3138,14 +3105,13 @@ function Wallet() {
                         <label className="invoice-copy-label">{t('wallet.tapToCopy')}</label>
                         <div className="invoice-input-wrapper">
                           <textarea
-                            value={receiveTab === 'lightning' ? invoice : ecashRequest}
+                            value={invoice}
                             readOnly
                             className="invoice-textarea clickable"
                             onFocus={(e) => e.target.select()}
                             onClick={async () => {
                               try {
-                                const textToCopy = receiveTab === 'lightning' ? invoice : ecashRequest;
-                                await navigator.clipboard.writeText(textToCopy);
+                                await navigator.clipboard.writeText(invoice);
                                 setInvoiceCopied(true);
                                 setTimeout(() => setInvoiceCopied(false), 2000);
                               } catch {
@@ -3877,11 +3843,9 @@ function Wallet() {
               <div className="qr-modal-code">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
-                    receiveTab === 'lightning'
-                      ? ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
-                      : ecashRequest
+                    ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
                   )}`}
-                  alt={receiveTab === 'lightning' ? "Lightning Invoice QR Code" : "eCash Request QR Code"}
+                  alt="Lightning Invoice QR Code"
                 />
                 <div className="qr-logo-overlay">
                   <img src="/logo-192.png" alt="Logo" className="qr-logo" />
@@ -3890,7 +3854,7 @@ function Wallet() {
               <p className="qr-mint-info" style={{ fontSize: '0.875rem', color: 'var(--muted)', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                 Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
               </p>
-              <p className="qr-modal-hint">{receiveTab === 'lightning' ? t('wallet.scanQrToPayHint') : t('wallet.scanQrToPayEcashHint')}</p>
+              <p className="qr-modal-hint">{t('wallet.scanQrToPayHint')}</p>
             </div>
           </div>
         </div>

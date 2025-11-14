@@ -44,6 +44,7 @@
     "receiving": "받는 중...",
     "sending": "보내는 중...",
     "receiveTitle": "라이트닝 받기",
+    "receiveViaLightning": "Lightning invoice로 받기 (Mint가 금액을 알게 되지만 모든 지갑과 호환됩니다)",
     "sendTitle": "라이트닝 보내기",
     "amount": "금액",
     "amountToReceive": "받을 금액 (sats)",
