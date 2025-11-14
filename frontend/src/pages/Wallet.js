@@ -1044,6 +1044,13 @@ function Wallet() {
       localStorage.removeItem('cashu_last_ecash_request_id');
       localStorage.removeItem('cashu_last_ecash_request_amount');
 
+      // Clear polling interval if exists
+      const pollingIntervalId = localStorage.getItem('cashu_polling_interval');
+      if (pollingIntervalId) {
+        clearInterval(Number(pollingIntervalId));
+        localStorage.removeItem('cashu_polling_interval');
+      }
+
       // Clear eCash request state
       setEcashRequestId(null);
       setEcashRequest('');
@@ -1931,6 +1938,37 @@ function Wallet() {
       // Subscribe to WebSocket notifications for this request
       setCheckingPayment(true);
       subscribeToEcashRequest(requestId);
+
+      // Fallback polling: Check every 5 seconds (WebSocket is primary, this is backup)
+      let pollCount = 0;
+      const maxPolls = 36; // 3 minutes
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          localStorage.removeItem('cashu_polling_interval');
+          console.log('[Polling Fallback] Max attempts reached');
+          return;
+        }
+
+        try {
+          const checkResp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}`));
+          if (checkResp.ok) {
+            const data = await checkResp.json();
+            if (data.paid && data.signatures) {
+              clearInterval(pollInterval);
+              localStorage.removeItem('cashu_polling_interval');
+              console.log('[Polling Fallback] Payment detected via server');
+              await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp, requestId);
+            }
+          }
+        } catch (error) {
+          console.error('[Polling Fallback] Error:', error);
+        }
+      }, 5000);
+
+      // Store interval ID for cleanup
+      localStorage.setItem('cashu_polling_interval', String(pollInterval));
     } catch (error) {
       console.error('Failed to generate eCash request:', error);
       const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');
