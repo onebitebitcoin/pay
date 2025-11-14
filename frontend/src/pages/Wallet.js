@@ -27,6 +27,27 @@ const normalizeQrValue = (rawValue = '') => {
   return compact;
 };
 
+const buildWebSocketUrl = (baseUrl) => {
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol === 'https:') {
+      url.protocol = 'wss:';
+    } else if (url.protocol === 'http:') {
+      url.protocol = 'ws:';
+    }
+    const trimmedPath = url.pathname.replace(/\/$/, '');
+    if (trimmedPath.startsWith('/api')) {
+      url.pathname = `${trimmedPath}/ws`;
+    } else {
+      url.pathname = `${trimmedPath || ''}/api/ws`;
+    }
+    return url.toString();
+  } catch (error) {
+    const normalized = baseUrl.replace(/^http/, 'ws').replace(/\/$/, '');
+    return `${normalized}/api/ws`;
+  }
+};
+
 const RECEIVE_MIN_AMOUNT = 1;
 const RECEIVE_MAX_AMOUNT = 10;
 
@@ -144,6 +165,7 @@ function Wallet() {
   const [invoiceCopied, setInvoiceCopied] = useState(false);
   const [qrLoaded, setQrLoaded] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [qrModalPayload, setQrModalPayload] = useState(null);
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
@@ -408,6 +430,53 @@ function Wallet() {
     }
   });
   // Removed inline mint explainer (moved to About page)
+
+  const closeQrModal = useCallback(() => {
+    setShowQrModal(false);
+    setQrModalPayload(null);
+  }, []);
+
+  const openQrModal = useCallback((type, amountOverride) => {
+    let data = '';
+    if (type === 'lightning') {
+      data = invoice;
+    } else if (type === 'ecash') {
+      data = ecashRequest;
+    }
+
+    if (!data) {
+      return;
+    }
+
+    const normalizedAmount = typeof amountOverride === 'number'
+      ? amountOverride
+      : pendingRequestAmount || Number(receiveAmount) || 0;
+
+    setQrModalPayload({
+      type,
+      data,
+      amount: normalizedAmount,
+      mint: mintUrl
+    });
+    setShowQrModal(true);
+  }, [ecashRequest, invoice, mintUrl, pendingRequestAmount, receiveAmount]);
+
+  const qrModalAmountValue = qrModalPayload?.amount || pendingRequestAmount || Number(receiveAmount) || 0;
+  const qrModalMintSource = qrModalPayload?.mint || mintUrl || '';
+  const qrModalMintLabel = qrModalMintSource.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const qrModalDataValue = (() => {
+    if (!qrModalPayload?.data) {
+      return '';
+    }
+    if (qrModalPayload.type === 'lightning') {
+      const invoiceValue = qrModalPayload.data || '';
+      return invoiceValue.toLowerCase().startsWith('ln') ? `lightning:${invoiceValue}` : invoiceValue;
+    }
+    return qrModalPayload.data;
+  })();
+  const qrModalAltText = qrModalPayload?.type === 'ecash'
+    ? 'NUT-18 Payment Request QR Code'
+    : 'Lightning Invoice QR Code';
 
   useEffect(() => {
     // Check storage health
@@ -741,7 +810,7 @@ function Wallet() {
       setReceiveCompleted(true);
       setLastReceiveMode('lightning');
       // Close QR modal if open
-      setShowQrModal(false);
+      closeQrModal();
     }
 
     let signatures = Array.isArray(detail?.signatures) ? detail.signatures : [];
@@ -817,7 +886,7 @@ function Wallet() {
     console.log('[processPaymentNotification] Loading wallet data...');
     await loadWalletData();
     console.log('[processPaymentNotification] Completed');
-  }, [addTransaction, addToast, applyRedeemedSignatures, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem, mintUrl]);
+  }, [addTransaction, addToast, applyRedeemedSignatures, closeQrModal, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem, mintUrl]);
 
   // Polling function to check invoice status
   const startInvoicePolling = useCallback((quoteId, amount) => {
@@ -913,7 +982,7 @@ function Wallet() {
       return;
     }
 
-    const wsUrl = API_BASE_URL.replace(/^http/, 'ws');
+    const wsUrl = buildWebSocketUrl(API_BASE_URL);
     console.log('[WS] Connecting to:', wsUrl);
 
     try {
@@ -1069,7 +1138,7 @@ function Wallet() {
       await loadWalletData();
       setReceiveCompleted(true);
       setReceivedAmount(creditedAmount);
-      setShowQrModal(false);
+      closeQrModal();
 
       showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
 
@@ -1109,7 +1178,7 @@ function Wallet() {
       console.error('[handleEcashRequestCompletion] Error:', error);
       showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
     }
-  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t, unsubscribeFromEcashRequest]);
+  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t, unsubscribeFromEcashRequest, closeQrModal]);
 
   // Polling function to check eCash request status
   const startEcashRequestPolling = useCallback((requestId, amount, mode = 'legacy') => {
@@ -3364,7 +3433,7 @@ function Wallet() {
                     <>
                       <div className="invoice-section receive-invoice">
                         <div className="qr-placeholder">
-                          <div className="qr-image-container" onClick={() => setShowQrModal(true)}>
+                          <div className="qr-image-container" onClick={() => openQrModal('lightning', pendingRequestAmount)}>
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
                                 ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
@@ -3508,7 +3577,7 @@ function Wallet() {
                     <>
                       <div className="invoice-section receive-invoice">
                         <div className="qr-placeholder">
-                          <div className="qr-image-container" onClick={() => setShowQrModal(true)}>
+                          <div className="qr-image-container" onClick={() => openQrModal('ecash', pendingRequestAmount)}>
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(ecashRequest)}`}
                               alt="NUT-18 Payment Request QR"
@@ -4246,27 +4315,25 @@ function Wallet() {
       )}
 
       {/* QR Code Modal */}
-      {showQrModal && (invoice || ecashRequest) && (
-        <div className="qr-modal-overlay" onClick={() => setShowQrModal(false)}>
+      {showQrModal && qrModalPayload?.data && (
+        <div className="qr-modal-overlay" onClick={closeQrModal}>
           <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="qr-modal-close" onClick={() => setShowQrModal(false)} aria-label="Close">
+            <button className="qr-modal-close" onClick={closeQrModal} aria-label="Close">
               <Icon name="close" size={24} />
             </button>
             <div className="qr-modal-body">
-              <h3>{formatAmount(receiveAmount)} sats</h3>
+              <h3>{formatAmount(qrModalAmountValue)} sats</h3>
               <div className="qr-modal-code">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(
-                    ((invoice || '').toLowerCase().startsWith('ln') ? 'lightning:' + invoice : invoice)
-                  )}`}
-                  alt="Lightning Invoice QR Code"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(qrModalDataValue)}`}
+                  alt={qrModalAltText}
                 />
                 <div className="qr-logo-overlay">
                   <img src="/logo-192.png" alt="Logo" className="qr-logo" />
                 </div>
               </div>
               <p className="qr-mint-info" style={{ fontSize: '0.875rem', color: 'var(--muted)', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                Mint: {mintUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                Mint: {qrModalMintLabel}
               </p>
               <p className="qr-modal-hint">{t('wallet.scanQrToPayHint')}</p>
             </div>

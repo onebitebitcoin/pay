@@ -25,6 +25,11 @@ const resolveDefaultApiBase = () => {
     return process.env.REACT_APP_API_BASE_URL;
   }
 
+  // Always talk to the production API when the app itself is built for production.
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://pay.onebitebitcoin.com';
+  }
+
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
@@ -36,11 +41,7 @@ const resolveDefaultApiBase = () => {
     return `${window.location.protocol}//${window.location.host}`;
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:5001';
-  }
-
-  return 'https://pay.onebitebitcoin.com';
+  return 'http://localhost:5001';
 };
 
 const RAW_API_BASE = resolveDefaultApiBase();
