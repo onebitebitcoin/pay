@@ -6,6 +6,7 @@ import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config'
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
 import { createPaymentRequest, parsePaymentRequest, createPaymentPayload, sendPaymentViaPost, createHttpPostTransport } from '../services/nut18';
+import { sendPaymentViaNostr } from '../services/nostrTransport';
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
@@ -2509,10 +2510,25 @@ function Wallet() {
         return type === 'post' && typeof address === 'string' && address.length > 0;
       });
 
-      const transportUrl = postTransport?.a || postTransport?.address || postTransport?.url;
+      const nostrTransport = transports.find((transport) => {
+        const type = transport?.t || transport?.type;
+        const address = transport?.a || transport?.address || transport?.url;
+        return type === 'nostr' && typeof address === 'string' && address.length > 0;
+      });
 
-      if (!transportUrl) {
+      const transportUrl = postTransport?.a || postTransport?.address || postTransport?.url;
+      const nostrEndpoint = nostrTransport?.a || nostrTransport?.address || nostrTransport?.url || '';
+      const nostrTags = Array.isArray(nostrTransport?.g) ? nostrTransport.g : [];
+
+      if (!transportUrl && !nostrEndpoint) {
         throw new Error(t('messages.paymentRequestMissingTransport'));
+      }
+
+      if (nostrEndpoint) {
+        const hasNip17Tag = nostrTags.some((tag) => Array.isArray(tag) && tag[0] === 'n' && tag[1] === '17');
+        if (!hasNip17Tag) {
+          throw new Error(t('messages.paymentRequestUnsupportedNostr'));
+        }
       }
 
       if (Array.isArray(allowedMints) && allowedMints.length > 0) {
@@ -2588,14 +2604,25 @@ function Wallet() {
       const paymentProofs = allProofs.slice(0, paymentProofCount);
       const changeProofs = allProofs.slice(paymentProofCount);
 
+      const paymentPayload = createPaymentPayload({
+        id,
+        memo,
+        mint: mintUrl,
+        unit: unit || 'sat',
+        proofs: paymentProofs
+      });
+
       try {
-        await sendPaymentViaPost(transportUrl, createPaymentPayload({
-          id,
-          memo,
-          mint: mintUrl,
-          unit: unit || 'sat',
-          proofs: paymentProofs
-        }));
+        if (transportUrl) {
+          await sendPaymentViaPost(transportUrl, paymentPayload);
+        } else if (nostrEndpoint) {
+          await sendPaymentViaNostr({
+            nprofile: nostrEndpoint,
+            payload: paymentPayload
+          });
+        } else {
+          throw new Error(t('messages.paymentRequestMissingTransport'));
+        }
         removeProofs(uniquePicked, mintUrl);
         if (changeProofs.length) {
           addProofs(changeProofs, mintUrl);
@@ -2770,7 +2797,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate, mintUrl, normalizeMintForCompare, formatMintLabel, sendPaymentViaPost, createPaymentPayload]);
+  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate, mintUrl, normalizeMintForCompare, formatMintLabel, sendPaymentViaPost, createPaymentPayload, sendPaymentViaNostr]);
 
   const prepareSend = useCallback(async () => {
     if (enableSendScanner) {
