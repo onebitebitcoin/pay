@@ -153,7 +153,11 @@ function Wallet() {
   const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
   const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
 
-
+  // WebSocket state and refs
+  const wsRef = useRef(null);
+  const wsReconnectTimerRef = useRef(null);
+  const wsSubscriptionIdRef = useRef(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
   const pendingMintRef = useRef(null);
@@ -867,6 +871,110 @@ function Wallet() {
     };
   }, [apiUrl, showInfoMessage, t]);
 
+  // WebSocket connection management with auto-reconnect
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('[WS] Already connected');
+      return;
+    }
+
+    const wsUrl = API_BASE_URL.replace(/^http/, 'ws');
+    console.log('[WS] Connecting to:', wsUrl);
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[WS] Connected');
+        setWsConnected(true);
+        // Clear reconnect timer
+        if (wsReconnectTimerRef.current) {
+          clearTimeout(wsReconnectTimerRef.current);
+          wsReconnectTimerRef.current = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[WS] Received:', data);
+
+          // Handle connection confirmation
+          if (data.type === 'connected') {
+            wsSubscriptionIdRef.current = data.subscriptionId;
+            console.log('[WS] Subscription ID:', data.subscriptionId);
+
+            // Re-subscribe to pending eCash request if exists
+            const pendingRequestId = localStorage.getItem('cashu_last_ecash_request_id');
+            if (pendingRequestId && ecashRequestData) {
+              console.log('[WS] Re-subscribing to pending eCash request:', pendingRequestId);
+              ws.send(JSON.stringify({
+                type: 'subscribeEcashRequest',
+                requestId: pendingRequestId
+              }));
+            }
+          }
+
+          // Handle eCash request subscription confirmation
+          if (data.type === 'ecashRequestSubscribed') {
+            console.log('[WS] Subscribed to eCash request:', data.requestId);
+          }
+
+          // Handle eCash request payment notification
+          if (data.type === 'ecash_request_paid') {
+            console.log('[WS] eCash request paid:', data.requestId);
+            handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp, data.requestId);
+          }
+        } catch (error) {
+          console.error('[WS] Message parse error:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('[WS] Error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('[WS] Disconnected');
+        setWsConnected(false);
+        wsRef.current = null;
+
+        // Auto-reconnect after 3 seconds
+        wsReconnectTimerRef.current = setTimeout(() => {
+          console.log('[WS] Attempting reconnect...');
+          connectWebSocket();
+        }, 3000);
+      };
+    } catch (error) {
+      console.error('[WS] Connection error:', error);
+    }
+  }, [ecashRequestData]);
+
+  // Subscribe to eCash request via WebSocket
+  const subscribeToEcashRequest = useCallback((requestId) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('[WS] Subscribing to eCash request:', requestId);
+      wsRef.current.send(JSON.stringify({
+        type: 'subscribeEcashRequest',
+        requestId
+      }));
+    } else {
+      console.log('[WS] Cannot subscribe - WebSocket not connected');
+    }
+  }, []);
+
+  // Unsubscribe from eCash request via WebSocket
+  const unsubscribeFromEcashRequest = useCallback((requestId) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('[WS] Unsubscribing from eCash request:', requestId);
+      wsRef.current.send(JSON.stringify({
+        type: 'unsubscribeEcashRequest',
+        requestId
+      }));
+    }
+  }, []);
+
   // Handle eCash request completion - convert signatures to proofs and update balance
   const handleEcashRequestCompletion = useCallback(async (signatures, amount, timestamp, requestId) => {
     console.log('[handleEcashRequestCompletion] Processing signatures:', signatures.length);
@@ -924,6 +1032,9 @@ function Wallet() {
         try {
           await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}&consume=true`));
           console.log('[handleEcashRequestCompletion] Consumed eCash request:', requestId);
+
+          // Unsubscribe from WebSocket
+          unsubscribeFromEcashRequest(requestId);
         } catch (err) {
           console.error('[handleEcashRequestCompletion] Failed to consume request:', err);
         }
@@ -933,12 +1044,18 @@ function Wallet() {
       localStorage.removeItem('cashu_last_ecash_request_id');
       localStorage.removeItem('cashu_last_ecash_request_amount');
 
+      // Clear eCash request state
+      setEcashRequestId(null);
+      setEcashRequest('');
+      setEcashRequestData(null);
+      setCheckingPayment(false);
+
       console.log('[handleEcashRequestCompletion] Successfully credited:', creditedAmount, 'sats');
     } catch (error) {
       console.error('[handleEcashRequestCompletion] Error:', error);
       showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
     }
-  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t]);
+  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t, unsubscribeFromEcashRequest]);
 
   // Polling function to check eCash request status
   const startEcashRequestPolling = useCallback((requestId, amount) => {
@@ -1008,6 +1125,23 @@ function Wallet() {
     };
   }, [apiUrl, showInfoMessage, t]);
 
+  // WebSocket connection management
+  useEffect(() => {
+    connectWebSocket();
+
+    return () => {
+      // Clean up WebSocket on unmount
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (wsReconnectTimerRef.current) {
+        clearTimeout(wsReconnectTimerRef.current);
+        wsReconnectTimerRef.current = null;
+      }
+    };
+  }, [connectWebSocket]);
+
   useEffect(() => {
     // Auto-connect to mint on mount
     connectMint();
@@ -1042,12 +1176,10 @@ function Wallet() {
               console.log('[Init] eCash request was already paid, processing...');
               await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp, lastRequestId);
             } else if (isReceiveView) {
-              // Still pending and on receive page, restart polling
-              console.log('[Init] eCash request still pending, starting polling...');
-              const amount = parseInt(lastAmount || '0', 10);
-              if (amount > 0) {
-                startEcashRequestPolling(lastRequestId, amount);
-              }
+              // Still pending and on receive page, subscribe via WebSocket
+              console.log('[Init] eCash request still pending, subscribing via WebSocket...');
+              setCheckingPayment(true);
+              subscribeToEcashRequest(lastRequestId);
             }
           }
         }
@@ -1076,7 +1208,7 @@ function Wallet() {
       try { stopAutoRedeem(); } catch {}
       window.removeEventListener('payment_received', handler);
     };
-  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, ecashRequestData, apiUrl, handleEcashRequestCompletion, isReceiveView, startEcashRequestPolling]);
+  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, ecashRequestData, apiUrl, handleEcashRequestCompletion, isReceiveView, subscribeToEcashRequest]);
   
 
 
@@ -1115,13 +1247,9 @@ function Wallet() {
                 setCheckingPayment(false);
                 return;
               } else {
-                // Still unpaid, restart polling
-                console.log('eCash request still pending after resume, restarting polling...');
-                if (pollingCancelRef.current) {
-                  pollingCancelRef.current();
-                  pollingCancelRef.current = null;
-                }
-                startEcashRequestPolling(ecashRequestId, receiveAmount ? parseInt(receiveAmount, 10) : 0);
+                // Still unpaid, re-subscribe via WebSocket (will auto-reconnect if needed)
+                console.log('eCash request still pending after resume, re-subscribing...');
+                subscribeToEcashRequest(ecashRequestId);
                 return;
               }
             }
@@ -1193,7 +1321,7 @@ function Wallet() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, ecashRequestId, handleEcashRequestCompletion, startEcashRequestPolling, receiveAmount]);
+  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, ecashRequestId, handleEcashRequestCompletion, subscribeToEcashRequest, receiveAmount]);
 
   // Sync mintUrl from settings when page becomes visible
   useEffect(() => {
@@ -1800,8 +1928,9 @@ function Wallet() {
         outputsCount: outputs.length
       });
 
-      // Start polling for payment
-      startEcashRequestPolling(requestId, amount);
+      // Subscribe to WebSocket notifications for this request
+      setCheckingPayment(true);
+      subscribeToEcashRequest(requestId);
     } catch (error) {
       console.error('Failed to generate eCash request:', error);
       const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');

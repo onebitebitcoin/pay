@@ -24,6 +24,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const subscriptions = new Map(); // subscriptionId -> ws
 const quoteToSubscription = new Map(); // quoteId -> subscriptionId for payment notifications
+const ecashRequestToSubscription = new Map(); // requestId -> subscriptionId for eCash request notifications
 const PORT = process.env.PORT || 5001;
 
 /**
@@ -157,6 +158,32 @@ wss.on('connection', (ws) => {
           success: removed
         }));
       }
+
+      // Handle eCash request subscription
+      if (data.type === 'subscribeEcashRequest' && data.requestId) {
+        ecashRequestToSubscription.set(data.requestId, ws.subscriptionId);
+        console.log(`[WS] Linked eCash requestId ${data.requestId} to subscriptionId ${ws.subscriptionId}`);
+
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'ecashRequestSubscribed',
+          requestId: data.requestId,
+          subscriptionId: ws.subscriptionId
+        }));
+      }
+
+      // Handle eCash request unsubscribe
+      if (data.type === 'unsubscribeEcashRequest' && data.requestId) {
+        const removed = ecashRequestToSubscription.delete(data.requestId);
+        console.log(`[WS] Unlinked eCash requestId ${data.requestId} - ${removed ? 'success' : 'not found'}`);
+
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'ecashRequestUnsubscribed',
+          requestId: data.requestId,
+          success: removed
+        }));
+      }
     } catch (e) {
       console.error('Invalid WebSocket message:', e);
       ws.send(JSON.stringify({
@@ -176,6 +203,13 @@ wss.on('connection', (ws) => {
     for (const [quoteId, subId] of quoteToSubscription.entries()) {
       if (subId === ws.subscriptionId) {
         quoteToSubscription.delete(quoteId);
+      }
+    }
+
+    // Clean up eCash request subscriptions
+    for (const [requestId, subId] of ecashRequestToSubscription.entries()) {
+      if (subId === ws.subscriptionId) {
+        ecashRequestToSubscription.delete(requestId);
       }
     }
   });
@@ -207,6 +241,28 @@ function sendPaymentNotification(quoteId, data) {
     }
   } else {
     console.log(`No subscription found for quote ${quoteId}`);
+  }
+}
+
+// Send a notification to a specific client subscribed to an eCash request
+function sendEcashRequestNotification(requestId, data) {
+  const subscriptionId = ecashRequestToSubscription.get(requestId);
+  if (subscriptionId) {
+    const ws = subscriptions.get(subscriptionId);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'ecash_request_paid',
+        requestId,
+        ...data
+      }));
+      console.log(`[WS] Sent eCash request payment notification for ${requestId} to subscription ${subscriptionId}`);
+      // Keep subscription active - client will unsubscribe after processing
+    } else {
+      console.log(`[WS] No active WebSocket found for subscription ${subscriptionId}`);
+      ecashRequestToSubscription.delete(requestId);
+    }
+  } else {
+    console.log(`[WS] No subscription found for eCash request ${requestId}`);
   }
 }
 
@@ -882,11 +938,13 @@ app.post('/api/cashu/swap', async (req, res) => {
         return sum + (parseInt(sig?.amount, 10) || 0);
       }, 0);
 
-      ecashRequestSignatures.set(requestId, {
+      const requestData = {
         signatures: result.signatures,
         amount: totalAmount,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      ecashRequestSignatures.set(requestId, requestData);
 
       // Clean up after 10 minutes
       setTimeout(() => {
@@ -894,6 +952,9 @@ app.post('/api/cashu/swap', async (req, res) => {
       }, 10 * 60 * 1000);
 
       console.log(`[Swap] Stored signatures for eCash request ${requestId}: ${totalAmount} sats, total stored: ${ecashRequestSignatures.size}`);
+
+      // Send WebSocket notification to receiver if subscribed
+      sendEcashRequestNotification(requestId, requestData);
     } else {
       console.log('[Swap] NOT storing signatures - requestId:', requestId, 'signatures:', result?.signatures?.length);
     }
