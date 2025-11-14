@@ -17,7 +17,7 @@ import * as cbor from 'cbor-web';
  * @param {Object[]} params.transports - Array of transport objects
  * @returns {Promise<string>} - Encoded payment request (creqA...)
  */
-export async function createPaymentRequest({
+export function createPaymentRequest({
   id,
   amount,
   unit = 'sat',
@@ -60,7 +60,7 @@ export async function createPaymentRequest({
  * @param {string} encoded - Encoded payment request (creqA...)
  * @returns {Promise<Object>} - Decoded payment request
  */
-export async function parsePaymentRequest(encoded) {
+export function parsePaymentRequest(encoded) {
   if (!encoded || !encoded.startsWith('creqA')) {
     throw new Error('Invalid payment request format');
   }
