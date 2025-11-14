@@ -558,7 +558,7 @@
     "tokensRefreshed": "{{amount}} sats의 토큰을 새로고침했습니다",
     "refreshFailed": "새로고침 실패: {{error}}",
     "noPendingInvoice": "확인할 대기 중인 인보이스가 없습니다",
-    "alreadyProcessed": "이미 처리된 인보이스입니다",
+    "alreadyProcessed": "잔액 업데이트를 완료했습니다",
     "checkingInvoiceStatus": "인보이스 상태 확인 중...",
     "quoteCheckFailed": "Quote 상태 확인 실패",
     "invoiceNotPaid": "아직 결제되지 않은 인보이스입니다",

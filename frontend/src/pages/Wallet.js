@@ -868,7 +868,7 @@ function Wallet() {
   }, [apiUrl, showInfoMessage, t]);
 
   // Handle eCash request completion - convert signatures to proofs and update balance
-  const handleEcashRequestCompletion = useCallback(async (signatures, amount, timestamp) => {
+  const handleEcashRequestCompletion = useCallback(async (signatures, amount, timestamp, requestId) => {
     console.log('[handleEcashRequestCompletion] Processing signatures:', signatures.length);
 
     try {
@@ -919,6 +919,16 @@ function Wallet() {
       // Show success message
       showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
 
+      // Consume the eCash request data on the server (mark as retrieved)
+      if (requestId) {
+        try {
+          await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}&consume=true`));
+          console.log('[handleEcashRequestCompletion] Consumed eCash request:', requestId);
+        } catch (err) {
+          console.error('[handleEcashRequestCompletion] Failed to consume request:', err);
+        }
+      }
+
       // Clear localStorage
       localStorage.removeItem('cashu_last_ecash_request_id');
       localStorage.removeItem('cashu_last_ecash_request_amount');
@@ -967,8 +977,8 @@ function Wallet() {
             isPollingActive = false;
             setCheckingPayment(false);
 
-            // Process the signatures and update balance
-            await handleEcashRequestCompletion(data.signatures, amount, data.timestamp);
+            // Process the signatures and update balance (pass requestId to consume it)
+            await handleEcashRequestCompletion(data.signatures, amount, data.timestamp, requestId);
 
             return;
           }
@@ -1030,7 +1040,7 @@ function Wallet() {
             const data = await checkResp.json();
             if (data.paid && data.signatures) {
               console.log('[Init] eCash request was already paid, processing...');
-              await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp);
+              await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp, lastRequestId);
             } else if (isReceiveView) {
               // Still pending and on receive page, restart polling
               console.log('[Init] eCash request still pending, starting polling...');
@@ -1101,7 +1111,7 @@ function Wallet() {
                 }
 
                 // Process the payment
-                await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp);
+                await handleEcashRequestCompletion(data.signatures, data.amount, data.timestamp, ecashRequestId);
                 setCheckingPayment(false);
                 return;
               } else {
@@ -2248,6 +2258,7 @@ function Wallet() {
       const allOutputs = [...receiverOutputs, ...(changeOutputs || [])];
 
       // Perform swap
+      console.log('[handleEcashRequestSend] Sending swap request with requestId:', requestId, 'amount:', amount);
       const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2258,6 +2269,7 @@ function Wallet() {
           requestId: requestId // Include requestId so server can store signatures for receiver
         })
       });
+      console.log('[handleEcashRequestSend] Swap response status:', swapResp.status);
 
       if (!swapResp.ok) {
         let msg = t('messages.ecashSendFailed');
@@ -3651,26 +3663,21 @@ function Wallet() {
                     <div className="proof-info">
                       <div className="proof-amount-status">
                         <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
-                        <div className={`proof-status ${isValid ? 'valid' : 'invalid'}`}>
-                          {isValid ? t('wallet.valid') : t('wallet.invalid')}
+                        <div className={`proof-status ${isDisabled ? 'disabled' : (isValid ? 'valid' : 'invalid')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {isDisabled ? t('wallet.disabled') : (isValid ? t('wallet.valid') : t('wallet.invalid'))}
+                          <button
+                            onClick={() => {
+                              toggleProofDisabled(proof?.secret || JSON.stringify(proof));
+                              loadWalletData();
+                            }}
+                            className="icon-btn"
+                            title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
+                            style={{ marginLeft: '0', padding: '0.25rem' }}
+                          >
+                            <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
+                          </button>
                         </div>
-                        {isDisabled && (
-                          <div className="proof-status disabled" style={{ background: 'var(--muted)', marginLeft: '0.5rem' }}>
-                            {t('wallet.disabled')}
-                          </div>
-                        )}
                       </div>
-                      <button
-                        onClick={() => {
-                          toggleProofDisabled(proof?.secret || JSON.stringify(proof));
-                          loadWalletData();
-                        }}
-                        className="icon-btn"
-                        title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
-                        style={{ marginLeft: '0.5rem' }}
-                      >
-                        <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
-                      </button>
                     </div>
                     <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
                       Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>

@@ -856,6 +856,12 @@ app.post('/api/cashu/check', async (req, res) => {
 app.post('/api/cashu/swap', async (req, res) => {
   try {
     const { inputs, outputs, mintUrl, requestId } = req.body || {};
+    console.log('[Swap] Received swap request');
+    console.log('[Swap] - requestId:', requestId);
+    console.log('[Swap] - inputs count:', inputs?.length);
+    console.log('[Swap] - outputs count:', outputs?.length);
+    console.log('[Swap] - mintUrl:', mintUrl);
+
     if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
       return res.status(400).json({ error: 'inputs 배열 필요' });
     }
@@ -863,6 +869,12 @@ app.post('/api/cashu/swap', async (req, res) => {
       return res.status(400).json({ error: 'outputs 배열 필요' });
     }
     const result = await cashu.swap({ inputs, outputs, mintUrl });
+    console.log('[Swap] Swap result:', {
+      hasSignatures: !!result?.signatures,
+      signaturesIsArray: Array.isArray(result?.signatures),
+      signaturesCount: result?.signatures?.length,
+      resultKeys: Object.keys(result || {})
+    });
 
     // If this swap is for an eCash request, store the signatures for the receiver to poll
     if (requestId && result?.signatures && Array.isArray(result.signatures)) {
@@ -881,11 +893,14 @@ app.post('/api/cashu/swap', async (req, res) => {
         ecashRequestSignatures.delete(requestId);
       }, 10 * 60 * 1000);
 
-      console.log(`Stored signatures for eCash request ${requestId}: ${totalAmount} sats`);
+      console.log(`[Swap] Stored signatures for eCash request ${requestId}: ${totalAmount} sats, total stored: ${ecashRequestSignatures.size}`);
+    } else {
+      console.log('[Swap] NOT storing signatures - requestId:', requestId, 'signatures:', result?.signatures?.length);
     }
 
     res.json(result);
   } catch (e) {
+    console.error('[Swap] Swap error:', e);
     res.status(e.status || 500).json({ error: e.data || e.message });
   }
 });
@@ -893,16 +908,23 @@ app.post('/api/cashu/swap', async (req, res) => {
 // Check if eCash request has been fulfilled (for receiver polling)
 app.get('/api/cashu/ecash-request/check', (req, res) => {
   try {
-    const { requestId } = req.query;
+    const { requestId, consume } = req.query;
     if (!requestId) {
       return res.status(400).json({ error: 'requestId 필요' });
     }
 
+    console.log(`[Check] Checking requestId: ${requestId}, consume: ${consume}, total stored: ${ecashRequestSignatures.size}`);
     const data = ecashRequestSignatures.get(requestId);
+
     if (data) {
-      // Return the signatures and remove from map (one-time retrieval)
-      ecashRequestSignatures.delete(requestId);
-      console.log(`eCash request ${requestId} retrieved by receiver`);
+      // Only delete if consume=true is explicitly set (after successful processing)
+      if (consume === 'true') {
+        ecashRequestSignatures.delete(requestId);
+        console.log(`[Check] eCash request ${requestId} consumed and removed by receiver`);
+      } else {
+        console.log(`[Check] eCash request ${requestId} checked by receiver (not consumed) - ${data.amount} sats`);
+      }
+
       res.json({
         paid: true,
         signatures: data.signatures,
@@ -910,10 +932,11 @@ app.get('/api/cashu/ecash-request/check', (req, res) => {
         timestamp: data.timestamp
       });
     } else {
+      console.log(`[Check] eCash request ${requestId} NOT FOUND in storage`);
       res.json({ paid: false });
     }
   } catch (e) {
-    console.error('eCash request check error:', e);
+    console.error('[Check] eCash request check error:', e);
     res.status(500).json({ error: e.message });
   }
 });
