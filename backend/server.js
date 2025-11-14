@@ -273,6 +273,9 @@ const redeemedQuotes = new Map();
 // Store eCash request signatures: requestId -> { signatures, amount, timestamp }
 const ecashRequestSignatures = new Map();
 
+// NUT-18: Store payment requests: paymentId -> { proofs, amount, timestamp, unit, mint }
+const paymentRequests = new Map();
+
 function cacheRedeemedQuote(quoteId, data) {
   redeemedQuotes.set(quoteId, data);
   setTimeout(() => {
@@ -998,6 +1001,96 @@ app.get('/api/cashu/ecash-request/check', (req, res) => {
     }
   } catch (e) {
     console.error('[Check] eCash request check error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// NUT-18: Receive payment via HTTP POST transport
+app.post('/api/payment-request/:paymentId', (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { id, memo, mint, unit, proofs } = req.body || {};
+
+    console.log(`[NUT-18] Received payment for paymentId: ${paymentId}`);
+    console.log(`[NUT-18] - id: ${id}, mint: ${mint}, unit: ${unit}, proofs: ${proofs?.length}`);
+
+    if (!id || !proofs || !Array.isArray(proofs) || proofs.length === 0) {
+      return res.status(400).json({ error: 'Invalid payment payload' });
+    }
+
+    // Verify payment ID matches
+    if (id !== paymentId) {
+      return res.status(400).json({ error: 'Payment ID mismatch' });
+    }
+
+    // Calculate total amount from proofs
+    const totalAmount = proofs.reduce((sum, proof) => {
+      return sum + (parseInt(proof.amount, 10) || 0);
+    }, 0);
+
+    // Store payment data
+    const paymentData = {
+      proofs,
+      amount: totalAmount,
+      timestamp: new Date().toISOString(),
+      unit: unit || 'sat',
+      mint: mint || '',
+      memo: memo || ''
+    };
+
+    paymentRequests.set(paymentId, paymentData);
+
+    // Clean up after 10 minutes
+    setTimeout(() => {
+      paymentRequests.delete(paymentId);
+    }, 10 * 60 * 1000);
+
+    console.log(`[NUT-18] Stored payment for ${paymentId}: ${totalAmount} ${unit}, total stored: ${paymentRequests.size}`);
+
+    // Send WebSocket notification if subscribed
+    sendEcashRequestNotification(paymentId, paymentData);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[NUT-18] Payment receive error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// NUT-18: Check payment request status (for receiver polling)
+app.get('/api/payment-request/:paymentId', (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { consume } = req.query;
+
+    console.log(`[NUT-18] Checking paymentId: ${paymentId}, consume: ${consume}`);
+
+    const data = paymentRequests.get(paymentId);
+
+    if (data) {
+      // Only delete if consume=true
+      if (consume === 'true') {
+        paymentRequests.delete(paymentId);
+        console.log(`[NUT-18] Payment ${paymentId} consumed and removed`);
+      } else {
+        console.log(`[NUT-18] Payment ${paymentId} checked (not consumed) - ${data.amount} ${data.unit}`);
+      }
+
+      res.json({
+        paid: true,
+        proofs: data.proofs,
+        amount: data.amount,
+        timestamp: data.timestamp,
+        unit: data.unit,
+        mint: data.mint,
+        memo: data.memo
+      });
+    } else {
+      console.log(`[NUT-18] Payment ${paymentId} NOT FOUND`);
+      res.json({ paid: false });
+    }
+  } catch (e) {
+    console.error('[NUT-18] Payment check error:', e);
     res.status(500).json({ error: e.message });
   }
 });
