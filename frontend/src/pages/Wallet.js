@@ -3202,7 +3202,7 @@ function Wallet() {
                           onClick={() => setShowRequestDetails(!showRequestDetails)}
                           style={{ fontSize: '0.9rem', padding: '0.25rem 0' }}
                         >
-                          {showRequestDetails ? '△ 접기' : '▽ 더보기'}
+                          {showRequestDetails ? `△ ${t('common.showLess')}` : `▽ ${t('common.showMore')}`}
                         </button>
                       </div>
                     )}
