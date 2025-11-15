@@ -1271,66 +1271,7 @@ function Wallet() {
       }
     })();
 
-    // Check for pending eCash/NUT-18 request
-    (async () => {
-      try {
-        const lastRequestId = localStorage.getItem('cashu_last_ecash_request_id');
-        const lastAmount = localStorage.getItem('cashu_last_ecash_request_amount');
-        const lastRequestType = localStorage.getItem('cashu_last_ecash_request_type') || 'legacy';
-        const lastRequestString = localStorage.getItem('cashu_last_ecash_request_string');
-
-        if (lastRequestId) {
-          console.log('[Init] Found pending eCash request:', lastRequestId, 'type:', lastRequestType);
-          setEcashRequestId(lastRequestId);
-          setEcashRequestMode(lastRequestType);
-          if (lastRequestString) {
-            setEcashRequest(lastRequestString);
-            setReceiveTab('ecash');
-            const parsedPending = parseEcashRequest(lastRequestString);
-            if (parsedPending?.amount && !receiveAmount) {
-              setReceiveAmount(String(parsedPending.amount));
-            }
-          } else if (lastAmount) {
-            setReceiveAmount(lastAmount);
-          }
-
-          let checkUrl = null;
-          if (lastRequestType === 'nut18') {
-            checkUrl = `/api/payment-request/${encodeURIComponent(lastRequestId)}`;
-          } else if (ecashRequestData && ecashRequestData.length > 0) {
-            checkUrl = `/api/cashu/ecash-request/check?requestId=${encodeURIComponent(lastRequestId)}`;
-          } else {
-            console.warn('[Init] Legacy eCash request pending but missing output data; cannot resume automatically');
-          }
-
-          if (checkUrl) {
-            const checkResp = await fetch(apiUrl(checkUrl));
-            if (!checkResp.ok) {
-              if (checkResp.status !== 404) {
-                console.error('[Init] Failed to check pending eCash request:', checkResp.status);
-              }
-            } else {
-              const data = await checkResp.json();
-              const hasPayment = data.paid && (
-                (lastRequestType === 'nut18' && Array.isArray(data.proofs)) ||
-                (lastRequestType !== 'nut18' && Array.isArray(data.signatures))
-              );
-
-              if (hasPayment) {
-                console.log('[Init] eCash/NUT-18 request was already paid, processing...');
-                await handleEcashRequestCompletion(data, lastRequestId, lastRequestType);
-              } else if (isReceiveView) {
-                console.log('[Init] Request still pending, subscribing via WebSocket...');
-                setCheckingPayment(true);
-                subscribeToEcashRequest(lastRequestId);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to initialize pending eCash request:', err);
-      }
-    })();
+    // Removed: Auto-restore of pending eCash/NUT-18 request to prevent showing previous request on page load
 
     const handler = (event) => {
       console.log('[payment_received EVENT] Received payment_received event:', event);
@@ -3629,11 +3570,6 @@ function Wallet() {
                           )}
                         </div>
                       </div>
-                      {checkingPayment && (
-                        <div className="secondary-btn" style={{ marginTop: '1rem', cursor: 'default' }}>
-                          {wsConnected ? t('wallet.waitingForPayment') : t('wallet.wsReconnecting')}
-                        </div>
-                      )}
                       <div className="receive-actions">
                         <div className="qr-detail-card qr-detail-textarea">
                           <div className="qr-detail-row">
