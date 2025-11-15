@@ -188,6 +188,7 @@ function Wallet() {
   const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
   const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
   const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
+  const [showRequestDetails, setShowRequestDetails] = useState(false); // Toggle for eCash request details
 
   // WebSocket state and refs
   const wsRef = useRef(null);
@@ -3187,37 +3188,53 @@ function Wallet() {
                       <span>{t('wallet.afterBalance')}</span>
                       <strong>{formatAmount(ecashBalance - requestAmount)} sats</strong>
                     </div>
-                    {requestPayload.id && (
-                      <div className="detail-row narrow">
-                        <span>{t('wallet.paymentRequestId')}</span>
-                        <span className="muted">{requestPayload.id}</span>
-                      </div>
-                    )}
                     {requestMemo && (
                       <div className="detail-row narrow">
                         <span>{t('wallet.paymentRequestMemoLabel')}</span>
                         <span className="muted">{requestMemo}</span>
                       </div>
                     )}
-                    {allowedMints.length > 0 && (
-                      <div className="detail-row narrow">
-                        <span>{t('wallet.allowedMints')}</span>
-                        <span className="muted">{allowedMints.map(formatMintLabel).join(', ')}</span>
+                    {(requestPayload.id || allowedMints.length > 0 || transport) && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => setShowRequestDetails(!showRequestDetails)}
+                          style={{ fontSize: '0.9rem', padding: '0.25rem 0' }}
+                        >
+                          {showRequestDetails ? '△ 접기' : '▽ 더보기'}
+                        </button>
                       </div>
                     )}
-                    {transport && (
-                      <div className="detail-row narrow">
-                        <span>{t('wallet.transport')}</span>
-                        <span className="muted">
-                          {transportLabel}
-                          {transport?.a && (
-                            <>
-                              {' · '}
-                              <span style={{ wordBreak: 'break-all' }}>{transport.a}</span>
-                            </>
-                          )}
-                        </span>
-                      </div>
+                    {showRequestDetails && (
+                      <>
+                        {requestPayload.id && (
+                          <div className="detail-row narrow">
+                            <span>{t('wallet.paymentRequestId')}</span>
+                            <span className="muted">{requestPayload.id}</span>
+                          </div>
+                        )}
+                        {allowedMints.length > 0 && (
+                          <div className="detail-row narrow">
+                            <span>{t('wallet.allowedMints')}</span>
+                            <span className="muted">{allowedMints.map(formatMintLabel).join(', ')}</span>
+                          </div>
+                        )}
+                        {transport && (
+                          <div className="detail-row narrow">
+                            <span>{t('wallet.transport')}</span>
+                            <span className="muted">
+                              {transportLabel}
+                              {transport?.a && (
+                                <>
+                                  {' · '}
+                                  <span style={{ wordBreak: 'break-all' }}>{transport.a}</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
