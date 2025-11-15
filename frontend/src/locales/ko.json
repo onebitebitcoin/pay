@@ -26,7 +26,9 @@
     "copyFailed": "복사에 실패했습니다",
     "openMenu": "메뉴 열기",
     "unlock": "잠금 해제",
-    "logoAlt": "한입 로고"
+    "logoAlt": "한입 로고",
+    "showMore": "더보기",
+    "showLess": "접기"
   },
   "nav": {
     "wallet": "지갑",
