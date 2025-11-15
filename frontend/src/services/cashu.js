@@ -195,7 +195,7 @@ export async function syncProofsWithMint(apiBaseUrl, mintUrl) {
 // Swap all proofs for fresh ones (refresh proofs)
 export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signaturesToProofsFn, mintUrl) {
   const proofs = loadProofs();
-  if (proofs.length === 0) return { success: false, error: '새로고침할 토큰이 없습니다' };
+  if (proofs.length === 0) return { success: false, error: 'No tokens to refresh' };
 
   try {
     // Get total amount
@@ -203,7 +203,7 @@ export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signatur
 
     // Get mint keys
     const keysResp = await fetch(`${apiBaseUrl}/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl || '')}`);
-    if (!keysResp.ok) throw new Error('Mint 키 조회 실패');
+    if (!keysResp.ok) throw new Error('Failed to fetch mint keys');
     const mintKeys = await keysResp.json();
 
     // Create new blinded outputs for the same amount
@@ -222,14 +222,14 @@ export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signatur
 
     if (!swapResp.ok) {
       const err = await swapResp.json();
-      throw new Error(err?.error || 'Swap 실패');
+      throw new Error(err?.error || 'Swap failed');
     }
 
     const swapResult = await swapResp.json();
     const signatures = swapResult?.signatures || swapResult?.promises || [];
 
     if (!Array.isArray(signatures) || signatures.length === 0) {
-      throw new Error('Swap 응답에서 서명을 받지 못했습니다');
+      throw new Error('No signatures received from swap response');
     }
 
     // Convert signatures to proofs

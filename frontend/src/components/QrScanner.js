@@ -234,11 +234,11 @@ function QrScanner({ onScan, onError, className = '' }) {
           }
         }
       } catch (err) {
-        let message = err?.message || '카메라를 시작할 수 없습니다.';
+        let message = err?.message || t('messages.cameraStartFailed');
         if (err?.name === 'NotAllowedError' || message.includes('Permission')) {
-          message = '카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.';
+          message = t('messages.cameraPermissionDenied');
         } else if (message.includes('NotFoundError') || message.includes('Camera')) {
-          message = '사용 가능한 카메라를 찾을 수 없습니다.';
+          message = t('messages.cameraNotFound');
         }
         setErrorMessage(message);
         if (typeof onError === 'function') onError(err);
@@ -309,7 +309,7 @@ function QrScanner({ onScan, onError, className = '' }) {
       {errorMessage ? (
         <div className="qr-scanner__error">
           {errorMessage}
-          <span className="qr-scanner__fallback">QR 코드 내용을 직접 입력하거나 붙여넣어 주세요.</span>
+          <span className="qr-scanner__fallback">{t('messages.qrInputFallback')}</span>
         </div>
       ) : (
         <div className="qr-scanner__viewport">

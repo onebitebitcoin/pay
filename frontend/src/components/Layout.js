@@ -105,8 +105,8 @@ const Layout = ({ children }) => {
         <div className="header-content">
           <div className="brand">
             <h1 className="header-title">
-              <img src="/logo-192.png" alt="한입 로고" className="header-logo" />
-              {i18n.language === 'ko' ? '한입만' : 'Hanibman'}
+              <img src="/logo-192.png" alt={t('common.logoAlt')} className="header-logo" />
+              {t('wallet.title')}
             </h1>
           </div>
           <nav className="topnav">

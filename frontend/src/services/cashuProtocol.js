@@ -19,7 +19,7 @@ async function loadCashu() {
 
 // Create blinded outputs for a given amount using provided mint keys
 export async function createBlindedOutputs(amount, mintKeys) {
-  if (!amount || amount <= 0) throw new Error('amount 필요');
+  if (!amount || amount <= 0) throw new Error('Amount is required');
   const mod = await loadCashu();
   const { OutputData } = mod;
   const mk = Array.isArray(mintKeys?.keysets) ? mintKeys.keysets[0] : (Array.isArray(mintKeys) ? mintKeys[0] : mintKeys);

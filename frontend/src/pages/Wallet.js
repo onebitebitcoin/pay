@@ -1958,7 +1958,7 @@ function Wallet() {
         body: JSON.stringify({ amount, outputs, mintUrl })
       });
       if (!resp.ok) {
-        let msg = '인보이스 생성 실패';
+        let msg = t('messages.invoiceIssueFailed');
         try {
           const err = await resp.json();
           // Check for mint backend error (code 20000)
@@ -1968,7 +1968,7 @@ function Wallet() {
           } else {
             if (err?.error) msg = translateErrorMessage(err.error);
             else if (err?.detail) msg = err.detail;
-            if (err?.code) msg += ` (코드: ${err.code})`;
+            if (err?.code) msg += ` ${t('messages.errorCodeSuffix', { code: err.code })}`;
           }
         } catch {}
         throw new Error(msg);
@@ -2379,7 +2379,7 @@ function Wallet() {
         });
 
         if (!q.ok) {
-          let msg = '유효하지 않은 인보이스입니다';
+          let msg = t('messages.invalidInvoice');
           try {
             const err = await q.json();
             if (err?.error) {
@@ -2409,7 +2409,7 @@ function Wallet() {
                 /^[0-9]+$/.test(errorMsg.trim()) // Just numbers
               );
 
-              msg = isMeaningless ? '유효하지 않은 인보이스입니다' : errorMsg;
+              msg = isMeaningless ? t('messages.invalidInvoice') : errorMsg;
             } else if (err?.detail) {
               // Some errors come with detail field directly
               let detailMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
@@ -2421,7 +2421,7 @@ function Wallet() {
                 /^[0-9]+$/.test(detailMsg.trim())
               );
 
-              msg = isMeaningless ? '유효하지 않은 인보이스입니다' : detailMsg;
+              msg = isMeaningless ? t('messages.invalidInvoice') : detailMsg;
             } else if (err?.message) {
               msg = err.message;
             }
@@ -2978,7 +2978,7 @@ function Wallet() {
       });
     } catch (error) {
       console.error('Failed to send payment:', error);
-      const translatedMsg = translateErrorMessage(error?.message) || '송금에 실패했습니다';
+      const translatedMsg = translateErrorMessage(error?.message) || t('messages.sendFailed');
       setInvoiceError(translatedMsg);
       showInfoMessage(translatedMsg, 'error');
     } finally {
@@ -3697,7 +3697,7 @@ function Wallet() {
       ) : (
         <>
       <div className="wallet-header">
-        <img src="/logo-192.png" alt="한입 로고" className="wallet-logo" />
+        <img src="/logo-192.png" alt={t('common.logoAlt')} className="wallet-logo" />
         <p className="wallet-subtitle">{t('wallet.subtitle')}</p>
         {walletName && <h2 className="wallet-name-title">{t('wallet.walletTitle', { name: walletName })}</h2>}
       </div>
@@ -3834,10 +3834,10 @@ function Wallet() {
                 />
                 <small>
                   {isBolt11Invoice(sendAddress)
-                    ? '✓ 인보이스가 감지되었습니다'
+                    ? t('wallet.invoiceDetected')
                     : isLightningAddress(sendAddress)
-                      ? '✓ 라이트닝 주소가 감지되었습니다'
-                      : '라이트닝 인보이스(lnbc...) 또는 주소(user@domain)를 입력하세요'}
+                      ? t('wallet.addressDetected')
+                      : t('wallet.invoiceOrAddressHint')}
                 </small>
                 {!enableSendScanner && (
                   <div className="qr-rescan">
@@ -3846,7 +3846,7 @@ function Wallet() {
                       className="link-btn"
                       onClick={() => setEnableSendScanner(true)}
                     >
-                      QR 다시 스캔하기
+                      {t('wallet.rescanQr')}
                     </button>
                   </div>
                 )}
@@ -3908,8 +3908,8 @@ function Wallet() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>송금 확인</h3>
-              <button onClick={() => { setShowSendConfirm(false); }} aria-label="닫기"><Icon name="close" size={20} /></button>
+              <h3>{t('wallet.sendConfirmation')}</h3>
+              <button onClick={() => { setShowSendConfirm(false); }} aria-label={t('common.close')}><Icon name="close" size={20} /></button>
             </div>
             <div className="modal-body">
               {pendingSendDetails ? (
@@ -3917,12 +3917,12 @@ function Wallet() {
                   <div className="conversion-info" style={{gridTemplateColumns:'1fr 1fr'}}>
                     <div className="info-item"><Icon name="bolt" size={16} /> {t('wallet.invoiceAmount')}: {formatAmount(pendingSendDetails.invoiceAmount)} sats</div>
                     <div className="info-item"><Icon name="info" size={16} /> {t('wallet.feeReserve')}: {formatAmount(pendingSendDetails.feeReserve)} sats</div>
-                    <div className="info-item"><Icon name="diamond" size={16} /> 총 필요: {formatAmount(pendingSendDetails.need)} sats</div>
-                    <div className="info-item"><Icon name="shield" size={16} /> 보유 eCash: {formatAmount(pendingSendDetails.available)} sats</div>
+                    <div className="info-item"><Icon name="diamond" size={16} /> {t('wallet.totalRequired')}: {formatAmount(pendingSendDetails.need)} sats</div>
+                    <div className="info-item"><Icon name="shield" size={16} /> {t('wallet.available')}: {formatAmount(pendingSendDetails.available)} sats</div>
                   </div>
                   {pendingSendDetails.available < pendingSendDetails.need && (
                     <div className="warning-banner danger" style={{marginTop:'1rem'}}>
-                      부족: {formatAmount(pendingSendDetails.need - pendingSendDetails.available)} sats · 먼저 eCash를 더 받으세요.
+                      {t('wallet.insufficient')}: {formatAmount(pendingSendDetails.need - pendingSendDetails.available)} sats · {t('wallet.insufficientHint')}
                     </div>
                   )}
                   <div className="modal-actions" style={{marginTop:'1rem'}}>
@@ -3933,7 +3933,7 @@ function Wallet() {
                   </div>
                 </>
               ) : (
-                <div className="loading">견적 정보를 불러오는 중...</div>
+                <div className="loading">{t('wallet.loadingQuote')}</div>
               )}
             </div>
           </div>
@@ -3945,8 +3945,8 @@ function Wallet() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>Lightning ↔ eCash 전환</h3>
-              <button onClick={() => setShowConvert(false)} aria-label="닫기"><Icon name="close" size={20} /></button>
+              <h3>{t('wallet.lightningEcashConversion')}</h3>
+              <button onClick={() => setShowConvert(false)} aria-label={t('common.close')}><Icon name="close" size={20} /></button>
             </div>
             <div className="modal-body">
               <div className="conversion-direction">
@@ -3970,7 +3970,7 @@ function Wallet() {
                 </div>
               </div>
               <div className="input-group">
-                <label>전환할 금액 (sats)</label>
+                <label>{t('wallet.amountToConvert')}</label>
                 <input
                   type="number"
                   value={convertAmount}
@@ -4007,7 +4007,7 @@ function Wallet() {
                   className="primary-btn"
                   disabled={loading || !convertAmount}
                 >
-                  {loading ? '전환 중...' : '전환하기'}
+                  {loading ? t('wallet.converting') : t('wallet.convert')}
                 </button>
               </div>
             </div>
@@ -4020,7 +4020,7 @@ function Wallet() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>{passphraseAction === 'backup' ? '암호화 백업' : '암호화된 백업 복구'}</h3>
+              <h3>{passphraseAction === 'backup' ? t('wallet.encryptedBackup') : t('wallet.restoreEncryptedBackup')}</h3>
               <button onClick={() => { setShowPassphraseModal(false); setPassphrase(''); setPassphraseConfirm(''); }} aria-label={t('common.close')}>
                 <Icon name="close" size={20} />
               </button>
@@ -4029,23 +4029,23 @@ function Wallet() {
               {passphraseAction === 'backup' ? (
                 <>
                   <div className="input-group">
-                    <label>패스프레이즈 (최소 8자)</label>
+                    <label>{t('wallet.passphraseMinimum')}</label>
                     <input
                       type="password"
                       value={passphrase}
                       onChange={(e) => setPassphrase(e.target.value)}
-                      placeholder="안전한 패스프레이즈를 입력하세요"
+                      placeholder={t('wallet.passphraseInput')}
                       minLength="8"
                     />
-                    <small>이 패스프레이즈는 백업 파일 복구 시 필요합니다. 안전하게 보관하세요.</small>
+                    <small>{t('wallet.passphraseHint')}</small>
                   </div>
                   <div className="input-group">
-                    <label>패스프레이즈 확인</label>
+                    <label>{t('wallet.passphraseConfirm')}</label>
                     <input
                       type="password"
                       value={passphraseConfirm}
                       onChange={(e) => setPassphraseConfirm(e.target.value)}
-                      placeholder="패스프레이즈를 다시 입력하세요"
+                      placeholder={t('wallet.passphraseReenter')}
                       minLength="8"
                     />
                   </div>
@@ -4055,7 +4055,7 @@ function Wallet() {
                       onClick={executeBackup}
                       disabled={loading || !passphrase || passphrase !== passphraseConfirm}
                     >
-                      {loading ? '암호화 중...' : '백업 다운로드'}
+                      {loading ? t('wallet.encrypting') : t('wallet.downloadBackup')}
                     </button>
                     <button
                       className="secondary-btn"
@@ -4069,14 +4069,14 @@ function Wallet() {
               ) : (
                 <>
                   <div className="input-group">
-                    <label>패스프레이즈</label>
+                    <label>{t('wallet.passphrase')}</label>
                     <input
                       type="password"
                       value={passphrase}
                       onChange={(e) => setPassphrase(e.target.value)}
-                      placeholder="백업 시 사용한 패스프레이즈를 입력하세요"
+                      placeholder={t('wallet.enterBackupPassphrase')}
                     />
-                    <small>암호화된 백업 파일을 복구하려면 백업 시 사용한 패스프레이즈가 필요합니다.</small>
+                    <small>{t('wallet.restorePassphraseHint')}</small>
                   </div>
                   <div className="modal-actions">
                     <button
@@ -4084,7 +4084,7 @@ function Wallet() {
                       onClick={executeRestore}
                       disabled={loading || !passphrase}
                     >
-                      {loading ? '복구 중...' : '복구하기'}
+                      {loading ? t('wallet.restoring') : t('wallet.restore')}
                     </button>
                     <button
                       className="secondary-btn"
@@ -4137,21 +4137,21 @@ function Wallet() {
                   <div className="tx-detail-item">
                     <Icon name="clock" size={18} />
                     <div>
-                      <strong>거래 일시</strong>
+                      <strong>{t('transaction.datetime')}</strong>
                       <p>{formatDate(selectedTx.timestamp)}</p>
                     </div>
                   </div>
                   <div className="tx-detail-item">
                     <Icon name={selectedTx.type === 'receive' ? 'inbox' : selectedTx.type === 'send' ? 'send' : 'repeat'} size={18} />
                     <div>
-                      <strong>거래 유형</strong>
-                      <p>{selectedTx.type === 'receive' ? '수신' : selectedTx.type === 'send' ? '송신' : '전환'}</p>
+                      <strong>{t('transaction.type')}</strong>
+                      <p>{selectedTx.type === 'receive' ? t('transaction.typeReceive') : selectedTx.type === 'send' ? t('transaction.typeSend') : t('transaction.typeConvert')}</p>
                     </div>
                   </div>
                   <div className="tx-detail-item">
                     <Icon name="info" size={18} />
                     <div>
-                      <strong>상태</strong>
+                      <strong>{t('transaction.status')}</strong>
                       <p className="tx-status-badge">{selectedTx.status === 'confirmed' ? t('messages.statusConfirmed') : t('messages.statusPending')}</p>
                     </div>
                   </div>
@@ -4185,7 +4185,7 @@ function Wallet() {
                   <div className="tx-detail-item">
                     <Icon name="shield" size={18} />
                     <div>
-                      <strong>거래 ID</strong>
+                      <strong>{t('transaction.id')}</strong>
                       <p style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>{selectedTx.id}</p>
                     </div>
                   </div>

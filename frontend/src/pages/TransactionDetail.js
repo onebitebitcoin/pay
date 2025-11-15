@@ -1,9 +1,11 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
 import './TransactionDetail.css';
 
 function TransactionDetail() {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const transaction = location.state?.transaction;
@@ -12,9 +14,9 @@ function TransactionDetail() {
     return (
       <div className="transaction-detail-page">
         <div className="detail-error">
-          <p>거래 정보를 찾을 수 없습니다</p>
+          <p>{t('transaction.notFound')}</p>
           <button onClick={() => navigate('/wallet')} className="back-btn">
-            지갑으로 돌아가기
+            {t('wallet.backToWallet')}
           </button>
         </div>
       </div>
@@ -22,19 +24,21 @@ function TransactionDetail() {
   }
 
   const formatAmount = (sats) => {
-    return new Intl.NumberFormat('ko-KR').format(sats);
+    const locale = i18n.language === 'ko' ? 'ko-KR' : i18n.language === 'ja' ? 'ja-JP' : 'en-US';
+    return new Intl.NumberFormat(locale).format(sats);
   };
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
+    const locale = i18n.language === 'ko' ? 'ko-KR' : i18n.language === 'ja' ? 'ja-JP' : 'en-US';
     return {
-      date: date.toLocaleDateString('ko-KR', {
+      date: date.toLocaleDateString(locale, {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
         weekday: 'long'
       }),
-      time: date.toLocaleTimeString('ko-KR', {
+      time: date.toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
@@ -45,13 +49,13 @@ function TransactionDetail() {
   const getTypeInfo = (type) => {
     switch (type) {
       case 'receive':
-        return { icon: 'inbox', label: '수신', color: '#10b981' };
+        return { icon: 'inbox', label: t('transaction.typeReceive'), color: '#10b981' };
       case 'send':
-        return { icon: 'send', label: '송신', color: '#f59e0b' };
+        return { icon: 'send', label: t('transaction.typeSend'), color: '#f59e0b' };
       case 'convert':
-        return { icon: 'repeat', label: '전환', color: '#6366f1' };
+        return { icon: 'repeat', label: t('transaction.typeConvert'), color: '#6366f1' };
       default:
-        return { icon: 'info', label: '기타', color: '#6b7280' };
+        return { icon: 'info', label: t('transaction.typeOther'), color: '#6b7280' };
     }
   };
 
@@ -63,7 +67,7 @@ function TransactionDetail() {
       <div className="detail-header">
         <button onClick={() => navigate('/wallet')} className="back-button">
           <Icon name="arrow-left" size={20} />
-          <span>거래 내역</span>
+          <span>{t('transaction.detail')}</span>
         </button>
       </div>
 
@@ -85,7 +89,7 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="info" size={18} />
-              <span>거래 유형</span>
+              <span>{t('transaction.type')}</span>
             </div>
             <div className="info-value">
               <span className="type-badge" style={{ backgroundColor: `${typeInfo.color}15`, color: typeInfo.color }}>
@@ -97,11 +101,11 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="check-circle" size={18} />
-              <span>상태</span>
+              <span>{t('transaction.status')}</span>
             </div>
             <div className="info-value">
               <span className={`status-badge ${transaction.status}`}>
-                {transaction.status === 'confirmed' ? '완료' : transaction.status === 'pending' ? '대기 중' : '실패'}
+                {transaction.status === 'confirmed' ? t('messages.statusConfirmed') : transaction.status === 'pending' ? t('messages.statusPending') : t('transaction.statusFailed')}
               </span>
             </div>
           </div>
@@ -109,7 +113,7 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="calendar" size={18} />
-              <span>날짜</span>
+              <span>{t('transaction.date')}</span>
             </div>
             <div className="info-value">{dateInfo.date}</div>
           </div>
@@ -117,7 +121,7 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="clock" size={18} />
-              <span>시간</span>
+              <span>{t('transaction.time')}</span>
             </div>
             <div className="info-value">{dateInfo.time}</div>
           </div>
@@ -125,7 +129,7 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="hash" size={18} />
-              <span>거래 ID</span>
+              <span>{t('transaction.id')}</span>
             </div>
             <div className="info-value monospace">{transaction.id}</div>
           </div>
@@ -135,7 +139,7 @@ function TransactionDetail() {
               <div className="info-row">
                 <div className="info-label">
                   <Icon name="diamond" size={18} />
-                  <span>실제 전환 금액</span>
+                  <span>{t('transaction.actualAmount')}</span>
                 </div>
                 <div className="info-value">{formatAmount(transaction.actualAmount)} sats</div>
               </div>
@@ -143,7 +147,7 @@ function TransactionDetail() {
               <div className="info-row">
                 <div className="info-label">
                   <Icon name="zap" size={18} />
-                  <span>수수료</span>
+                  <span>{t('wallet.fee')}</span>
                 </div>
                 <div className="info-value">{formatAmount(transaction.fee)} sats</div>
               </div>
@@ -154,7 +158,7 @@ function TransactionDetail() {
             <div className="info-row">
               <div className="info-label">
                 <Icon name="file-text" size={18} />
-                <span>Quote ID</span>
+                <span>{t('transaction.quoteId')}</span>
               </div>
               <div className="info-value monospace">{transaction.quote}</div>
             </div>
@@ -163,7 +167,7 @@ function TransactionDetail() {
           <div className="info-row">
             <div className="info-label">
               <Icon name="database" size={18} />
-              <span>타임스탬프</span>
+              <span>{t('transaction.timestamp')}</span>
             </div>
             <div className="info-value monospace">{new Date(transaction.timestamp).getTime()}</div>
           </div>
@@ -171,7 +175,7 @@ function TransactionDetail() {
 
         <div className="detail-actions">
           <button onClick={() => navigate('/wallet')} className="primary-action-btn">
-            지갑으로 돌아가기
+            {t('wallet.backToWallet')}
           </button>
         </div>
       </div>
