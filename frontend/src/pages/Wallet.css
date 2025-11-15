@@ -765,14 +765,15 @@
 }
 
 :root.dark .secondary-btn {
-  background: linear-gradient(120deg, rgba(253, 224, 71, 0.25), rgba(250, 204, 21, 0.45));
-  color: #fef9c3;
-  border: 1px solid rgba(250, 204, 21, 0.5);
+  background: linear-gradient(120deg, #fef3c7 0%, #fde68a 60%, #fcd34d 100%);
+  color: #92400e;
+  border: 1px solid rgba(250, 204, 21, 0.65);
+  -webkit-text-fill-color: #92400e;
 }
 
 :root.dark .secondary-btn:hover {
-  background: rgba(250, 204, 21, 0.35);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55);
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 12px 24px rgba(251, 191, 36, 0.35);
 }
 
 .primary-btn:disabled {
@@ -2087,15 +2088,17 @@
 
 :root.dark .receive-actions .secondary-btn,
 :root.dark .send-actions .secondary-btn {
-  background: linear-gradient(120deg, rgba(253, 224, 71, 0.25), rgba(250, 204, 21, 0.45));
-  color: #fef9c3;
-  border: 1px solid rgba(250, 204, 21, 0.5);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(120deg, #fef3c7 0%, #fde68a 60%, #fcd34d 100%);
+  color: #92400e;
+  border: 1px solid rgba(250, 204, 21, 0.65);
+  box-shadow: 0 12px 24px rgba(251, 191, 36, 0.25);
+  -webkit-text-fill-color: #92400e;
 }
 
 :root.dark .receive-actions .secondary-btn:hover,
 :root.dark .send-actions .secondary-btn:hover {
-  background: rgba(250, 204, 21, 0.35);
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 18px 32px rgba(251, 191, 36, 0.35);
 }
 
 .receive-actions .link-btn {

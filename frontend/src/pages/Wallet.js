@@ -173,17 +173,7 @@ function Wallet() {
   const [receiveAmountTooLow, setReceiveAmountTooLow] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
-  const [receiveTab, setReceiveTab] = useState(() => {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return 'lightning';
-    }
-    try {
-      const pending = localStorage.getItem('cashu_last_ecash_request_id');
-      return pending ? 'ecash' : 'lightning';
-    } catch {
-      return 'lightning';
-    }
-  });
+  const [receiveTab, setReceiveTab] = useState('lightning');
   const [ecashRequestMode, setEcashRequestMode] = useState(() => {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
       return 'legacy';
@@ -3640,7 +3630,7 @@ function Wallet() {
                         </div>
                       </div>
                       {checkingPayment && (
-                        <div className="network-warning" style={{ marginTop: '1rem' }}>
+                        <div className="secondary-btn" style={{ marginTop: '1rem', cursor: 'default' }}>
                           {wsConnected ? t('wallet.waitingForPayment') : t('wallet.wsReconnecting')}
                         </div>
                       )}

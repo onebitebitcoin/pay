@@ -46,7 +46,7 @@
     "receiveTitle": "라이트닝 받기",
     "lightningTab": "라이트닝",
     "ecashTab": "eCash",
-    "receiveViaLightning": "Lightning invoice로 받기 (Mint가 금액을 알게 되지만 모든 지갑과 호환됩니다)",
+    "receiveViaLightning": "라이트닝 인보이스로 받기 (라이트닝 지갑과 호환)",
     "receiveViaEcash": "NUT-18 결제 요청서를 만들어 eCash로 직접 받기 (cashu.me 호환).",
     "sendTitle": "라이트닝 보내기",
     "amount": "금액",
