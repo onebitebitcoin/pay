@@ -2052,6 +2052,7 @@ function Wallet() {
     setReceiveAmount('');
     setReceiveAmountTooLow(false);
     setEcashRequestMode('legacy');
+    setReceiveTab('lightning'); // Reset to Lightning tab
 
     // Clear eCash request from localStorage
     localStorage.removeItem('cashu_last_ecash_request_id');
