@@ -697,6 +697,10 @@
   padding: 0;
 }
 
+:root.dark .link-btn {
+  color: var(--primary);
+}
+
 .invoice-actions {
   display: flex;
   gap: 0.5rem;
