@@ -5,7 +5,7 @@ import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config'
 // Cashu mode: no join/federation or gateway UI
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
-import { createPaymentRequest, parsePaymentRequest, createPaymentPayload } from '../services/nut18';
+import { createPaymentRequest, parsePaymentRequest, createPaymentPayload, sendPaymentViaPost } from '../services/nut18';
 import { sendPaymentViaNostr, ensureNostrIdentity, decodeNprofile, subscribeToNostrDms } from '../services/nostrTransport';
 import './Wallet.css';
 import Icon from '../components/Icon';
@@ -960,11 +960,18 @@ function Wallet() {
       nostrHandledEventsRef.current.add(eventId);
     }
 
-    const proofs = Array.isArray(payload.proofs) ? payload.proofs : [];
+    const tokenProofs = Array.isArray(payload.token) && payload.token[0]?.proofs
+      ? payload.token[0].proofs
+      : [];
+    const proofs = Array.isArray(payload.proofs) && payload.proofs.length
+      ? payload.proofs
+      : Array.isArray(tokenProofs) ? tokenProofs : [];
+
     if (!proofs.length || payload.unit !== undefined && payload.unit !== 'sat') {
       return;
     }
-    const mintForProofs = payload.mint || mintUrl;
+    const mintFromToken = Array.isArray(payload.token) ? payload.token[0]?.mint : null;
+    const mintForProofs = payload.mint || mintFromToken || mintUrl;
     const creditedAmount = proofs.reduce((sum, p) => sum + (parseInt(p?.amount, 10) || 0), 0);
 
     addProofs(proofs, mintForProofs);
@@ -1748,7 +1755,7 @@ function Wallet() {
       setEcashRequest(requestString);
       setEcashRequestId(requestId);
       setEcashRequestMode('nut18');
-      setReceiveTab('ecash');
+      setReceiveTab('lightning');
       setQrLoaded(true);
 
       localStorage.setItem('cashu_last_ecash_request_id', requestId);
@@ -2166,25 +2173,24 @@ function Wallet() {
         throw new Error(t('messages.invalidAmount'));
       }
 
-      const nostrTransport = transports.find((transport) => {
-        const type = transport?.t || transport?.type;
-        const address = transport?.a || transport?.address || transport?.url;
-        return type === 'nostr' && typeof address === 'string' && address.length > 0;
+      const transportList = Array.isArray(transports) ? transports : [];
+      const getAddress = (t) => t?.a || t?.address || t?.url || '';
+      const normalizedType = (t) => (t?.t || t?.type || '').toString().toLowerCase();
+      const postTransport = transportList.find((transport) => {
+        const type = normalizedType(transport);
+        const address = getAddress(transport);
+        const isHttpType = type === 'post' || type === 'http' || type === 'https';
+        const isHttpUrl = typeof address === 'string' && /^https?:\/\//i.test(address.trim());
+        return isHttpType || isHttpUrl;
+      });
+      const nostrTransport = transportList.find((transport) => {
+        const type = normalizedType(transport);
+        const address = getAddress(transport);
+        return (type === 'nostr' || (!type && address)) && address;
       });
 
-      const nostrEndpoint = nostrTransport?.a || nostrTransport?.address || nostrTransport?.url || '';
-      const nostrTags = Array.isArray(nostrTransport?.g) ? nostrTransport.g : [];
-
-      if (!nostrEndpoint) {
-        throw new Error(t('messages.paymentRequestMissingTransport'));
-      }
-
-      if (nostrEndpoint) {
-        const hasNip17Tag = nostrTags.some((tag) => Array.isArray(tag) && tag[0] === 'n' && tag[1] === '17');
-        if (!hasNip17Tag) {
-          throw new Error(t('messages.paymentRequestUnsupportedNostr'));
-        }
-      }
+      const postEndpoint = (postTransport && getAddress(postTransport)) || '';
+      const nostrEndpoint = (nostrTransport && getAddress(nostrTransport)) || '';
 
       if (Array.isArray(allowedMints) && allowedMints.length > 0) {
         const currentMint = normalizeMintForCompare(mintUrl);
@@ -2268,10 +2274,16 @@ function Wallet() {
       });
 
       try {
-        await sendPaymentViaNostr({
-          nprofile: nostrEndpoint,
-          payload: paymentPayload
-        });
+        if (postEndpoint) {
+          await sendPaymentViaPost(postEndpoint, paymentPayload);
+        } else if (nostrEndpoint) {
+          await sendPaymentViaNostr({
+            nprofile: nostrEndpoint,
+            payload: paymentPayload
+          });
+        } else {
+          throw new Error(t('messages.paymentRequestMissingTransport'));
+        }
         removeProofs(uniquePicked, mintUrl);
         if (changeProofs.length) {
           addProofs(changeProofs, mintUrl);
@@ -3005,17 +3017,11 @@ function Wallet() {
               >
                 <Icon name="bolt" size={14} /> {t('wallet.lightningTab')}
               </button>
-              <button
-                className={`receive-tab ${receiveTab === 'ecash' ? 'active' : ''}`}
-                onClick={() => setReceiveTab('ecash')}
-              >
-                <Icon name="shield" size={14} /> {t('wallet.ecashTab')}
-              </button>
             </div>
 
             <div className="receive-info" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--card-bg)', borderRadius: '8px', fontSize: '0.875rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Icon name="info" size={16} />
-              {receiveTab === 'lightning' ? t('wallet.receiveViaLightning') : t('wallet.receiveViaEcash')}
+              {t('wallet.receiveViaLightning')}
             </div>
 
             <div className="receive-card-body">

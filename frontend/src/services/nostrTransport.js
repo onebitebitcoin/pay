@@ -10,8 +10,30 @@ export const DEFAULT_RELAYS = [
 const IDENTITY_STORAGE_KEY = 'nostr_identity_v1';
 
 let nostrToolsPromise = null;
+let sharedPoolPromise = null;
 
 const dynamicImport = (url) => new Function('u', 'return import(u)')(url);
+
+const bytesToHex = (bytes) => Array.from(bytes || [], (b) => b.toString(16).padStart(2, '0')).join('');
+
+function normalizeSecretKey(secretKey) {
+  const ensureHexLength = (hex) => (hex && hex.length === 64 ? hex : null);
+  if (!secretKey) return null;
+  if (typeof secretKey === 'string') {
+    return ensureHexLength(secretKey);
+  }
+  if (secretKey instanceof Uint8Array) {
+    return ensureHexLength(bytesToHex(secretKey));
+  }
+  if (Array.isArray(secretKey)) {
+    return ensureHexLength(bytesToHex(Uint8Array.from(secretKey)));
+  }
+  if (typeof secretKey === 'object') {
+    const values = Object.values(secretKey).map(Number);
+    return ensureHexLength(bytesToHex(Uint8Array.from(values)));
+  }
+  return null;
+}
 
 async function loadNostrTools() {
   if (!nostrToolsPromise) {
@@ -20,23 +42,43 @@ async function loadNostrTools() {
   return nostrToolsPromise;
 }
 
+async function getSharedPool() {
+  if (!sharedPoolPromise) {
+    sharedPoolPromise = loadNostrTools().then(({ SimplePool }) => new SimplePool());
+  }
+  return sharedPoolPromise;
+}
+
 export async function ensureNostrIdentity() {
   if (typeof window === 'undefined') {
     throw new Error('Nostr is only available in browser environments');
   }
 
+  const tools = await loadNostrTools();
+  const { generateSecretKey, getPublicKey, nip19 } = tools;
+
   try {
-    const cached = JSON.parse(localStorage.getItem(IDENTITY_STORAGE_KEY) || 'null');
-    if (cached?.secretKey && cached?.pubkey && cached?.nprofile) {
-      return cached;
+    const cached = JSON.parse(localStorage.getItem(IDENTITY_STORAGE_KEY) || 'null') || undefined;
+    const normalizedSecretKey = normalizeSecretKey(cached?.secretKey);
+    if (normalizedSecretKey && cached?.pubkey && cached?.nprofile) {
+      const identity = {
+        ...cached,
+        relays: uniqueRelays(cached.relays || DEFAULT_RELAYS),
+        secretKey: normalizedSecretKey
+      };
+      // rewrite the cache with normalized/serializable values to avoid future shape issues
+      try {
+        localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
+      } catch (err) {
+        console.warn('Failed to refresh cached nostr identity:', err);
+      }
+      return identity;
     }
   } catch (err) {
     console.warn('Failed to read cached nostr identity:', err);
   }
 
-  const tools = await loadNostrTools();
-  const { generateSecretKey, getPublicKey, nip19 } = tools;
-  const secretKey = generateSecretKey();
+  const secretKey = normalizeSecretKey(generateSecretKey());
   const pubkey = getPublicKey(secretKey);
   const nprofile = nip19.nprofileEncode({ pubkey, relays: DEFAULT_RELAYS });
   const identity = { secretKey, pubkey, nprofile, relays: DEFAULT_RELAYS };
@@ -49,13 +91,34 @@ export async function ensureNostrIdentity() {
 }
 
 function uniqueRelays(relays = []) {
-  return Array.from(new Set((relays || []).filter(Boolean)));
+  const normalizeUrl = (url) => {
+    if (typeof url !== 'string') return null;
+    const trimmed = url.trim().toLowerCase().replace(/\/+$/, '');
+    return trimmed || null;
+  };
+  return Array.from(new Set((relays || []).map(normalizeUrl).filter(Boolean)));
 }
 
 export async function decodeNprofile(nprofile) {
   const tools = await loadNostrTools();
   const { nip19 } = tools;
-  const decoded = nip19.decode(nprofile);
+  if (!nprofile || typeof nprofile !== 'string') throw new Error('Invalid nprofile');
+  const trimmed = nprofile.trim();
+
+  // npub…
+  if (/^npub/i.test(trimmed)) {
+    const decoded = nip19.decode(trimmed);
+    if (!decoded?.data) throw new Error('Invalid npub');
+    return { pubkey: decoded.data, relays: DEFAULT_RELAYS };
+  }
+
+  // raw 64-hex pubkey
+  if (/^[0-9a-f]{64}$/i.test(trimmed)) {
+    return { pubkey: trimmed.toLowerCase(), relays: DEFAULT_RELAYS };
+  }
+
+  // expect nprofile otherwise
+  const decoded = nip19.decode(trimmed);
   if (!decoded || decoded.type !== 'nprofile' || !decoded.data?.pubkey) {
     throw new Error('Invalid nprofile');
   }
@@ -85,6 +148,16 @@ const publishWithAck = (pool, relays, event, timeoutMs = 6000) => new Promise((r
       clearTimeout(timer);
       resolve();
     }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      // Some relays respond with "blocked: the event doesn't match the allowed filters" when they reject DMs.
+      // Treat that case as non-fatal because other relays often accept the event.
+      if (/blocked:.*allowed filters/i.test(message)) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+        return;
+      }
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -131,13 +204,11 @@ export async function sendPaymentViaNostr(options) {
 
   const event = finalizeEvent(eventTemplate, sender.secretKey);
 
-  const pool = new (await loadNostrTools()).SimplePool();
+  const pool = await getSharedPool();
   try {
     await publishWithAck(pool, relayCandidates, event, publishTimeoutMs);
-    pool.close(relayCandidates);
     return { relay: relayCandidates[0], eventId: event.id };
   } catch (error) {
-    try { pool.close(relayCandidates); } catch {}
     throw error instanceof Error ? error : new Error('Failed to send via Nostr transport');
   }
 }
@@ -150,8 +221,8 @@ export async function subscribeToNostrDms({ relays = DEFAULT_RELAYS, onMessage, 
   }
 
   const tools = await loadNostrTools();
-  const { nip04, SimplePool } = tools;
-  const pool = new SimplePool();
+  const { nip04 } = tools;
+  const pool = await getSharedPool();
   let closed = false;
 
   const sub = pool.subscribeMany(relayList, [{ kinds: [14], '#p': [identity.pubkey] }], {
@@ -185,6 +256,5 @@ export async function subscribeToNostrDms({ relays = DEFAULT_RELAYS, onMessage, 
     if (closed) return;
     closed = true;
     try { sub.close(); } catch {}
-    try { pool.close(relayList); } catch {}
   };
 }
