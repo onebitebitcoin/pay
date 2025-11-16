@@ -61,7 +61,7 @@ export async function sendPaymentViaNostr(options) {
   }
 
   const tools = await loadNostrTools();
-  const { nip19, relayInit, nip04, generatePrivateKey, finalizeEvent } = tools;
+  const { nip19, relayInit, nip04, generateSecretKey, finalizeEvent } = tools;
 
   const decoded = nip19.decode(nprofile);
   if (!decoded || decoded.type !== 'nprofile' || !decoded.data?.pubkey) {
@@ -77,7 +77,7 @@ export async function sendPaymentViaNostr(options) {
     throw new Error('No relays available for Nostr transport');
   }
 
-  const senderPrivKey = generatePrivateKey();
+  const senderPrivKey = generateSecretKey();
   const plaintext = JSON.stringify(payload);
   const encrypted = await nip04.encrypt(senderPrivKey, targetPubkey, plaintext);
 
