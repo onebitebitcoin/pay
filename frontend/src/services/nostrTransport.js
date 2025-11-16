@@ -19,9 +19,8 @@ async function loadNostrTools() {
   return nostrToolsPromise;
 }
 
-const publishWithAck = (relay, event, timeoutMs = 6000) => new Promise((resolve, reject) => {
+const publishWithAck = (pool, relays, event, timeoutMs = 6000) => new Promise((resolve, reject) => {
   try {
-    const pub = relay.publish(event);
     let settled = false;
     const timer = setTimeout(() => {
       if (settled) return;
@@ -29,18 +28,21 @@ const publishWithAck = (relay, event, timeoutMs = 6000) => new Promise((resolve,
       reject(new Error('Relay publish timeout'));
     }, timeoutMs);
 
-    pub.on('ok', () => {
+    const publishPromises = pool.publish(relays, event);
+
+    Promise.race([
+      publishPromises,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Relay publish timeout')), timeoutMs))
+    ]).then(() => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve();
-    });
-
-    pub.on('failed', (reason) => {
+    }).catch((error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      reject(new Error(reason || 'Relay rejected event'));
+      reject(error instanceof Error ? error : new Error(String(error)));
     });
   } catch (error) {
     reject(error instanceof Error ? error : new Error(String(error)));
@@ -61,7 +63,7 @@ export async function sendPaymentViaNostr(options) {
   }
 
   const tools = await loadNostrTools();
-  const { nip19, relayInit, nip04, generateSecretKey, finalizeEvent } = tools;
+  const { nip19, SimplePool, nip04, generateSecretKey, finalizeEvent } = tools;
 
   const decoded = nip19.decode(nprofile);
   if (!decoded || decoded.type !== 'nprofile' || !decoded.data?.pubkey) {
@@ -90,23 +92,13 @@ export async function sendPaymentViaNostr(options) {
 
   const event = finalizeEvent(eventTemplate, senderPrivKey);
 
-  let lastError = null;
-  for (const relayUrl of relayCandidates) {
-    const relay = relayInit(relayUrl);
-    try {
-      await Promise.race([
-        relay.connect(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Relay connection timeout')), connectTimeoutMs))
-      ]);
-
-      await publishWithAck(relay, event, publishTimeoutMs);
-      relay.close();
-      return { relay: relayUrl };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      try { relay.close(); } catch {}
-    }
+  const pool = new SimplePool();
+  try {
+    await publishWithAck(pool, relayCandidates, event, publishTimeoutMs);
+    pool.close(relayCandidates);
+    return { relay: relayCandidates[0] };
+  } catch (error) {
+    try { pool.close(relayCandidates); } catch {}
+    throw error instanceof Error ? error : new Error('Failed to send via Nostr transport');
   }
-
-  throw lastError || new Error('Failed to send via Nostr transport');
 }
