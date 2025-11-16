@@ -946,6 +946,11 @@
   color: var(--danger);
 }
 
+.proof-status.pending {
+  background: rgba(var(--faq-accent-rgb), 0.14);
+  color: var(--faq-accent);
+}
+
 .proof-secret {
   font-size: 0.85rem;
   color: var(--muted);
@@ -955,6 +960,23 @@
 .proof-id {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.pending-proof {
+  cursor: not-allowed;
+}
+
+.pending-proof .proof-amount {
+  color: var(--muted);
+}
+
+.proof-pending-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.15rem 0;
 }
 
 .monospace {

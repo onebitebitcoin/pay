@@ -5,8 +5,8 @@ import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config'
 // Cashu mode: no join/federation or gateway UI
 import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
-import { createPaymentRequest, parsePaymentRequest, createPaymentPayload, sendPaymentViaPost, createHttpPostTransport } from '../services/nut18';
-import { sendPaymentViaNostr } from '../services/nostrTransport';
+import { createPaymentRequest, parsePaymentRequest, createPaymentPayload } from '../services/nut18';
+import { sendPaymentViaNostr, ensureNostrIdentity, decodeNprofile, subscribeToNostrDms } from '../services/nostrTransport';
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
@@ -26,27 +26,6 @@ const normalizeQrValue = (rawValue = '') => {
     return compact.toLowerCase();
   }
   return compact;
-};
-
-const buildWebSocketUrl = (baseUrl) => {
-  try {
-    const url = new URL(baseUrl);
-    if (url.protocol === 'https:') {
-      url.protocol = 'wss:';
-    } else if (url.protocol === 'http:') {
-      url.protocol = 'ws:';
-    }
-    const trimmedPath = url.pathname.replace(/\/$/, '');
-    if (trimmedPath.startsWith('/api')) {
-      url.pathname = `${trimmedPath}/ws`;
-    } else {
-      url.pathname = `${trimmedPath || ''}/api/ws`;
-    }
-    return url.toString();
-  } catch (error) {
-    const normalized = baseUrl.replace(/^http/, 'ws').replace(/\/$/, '');
-    return `${normalized}/api/ws`;
-  }
 };
 
 const RECEIVE_MIN_AMOUNT = 1;
@@ -170,6 +149,12 @@ function Wallet() {
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
+  const proofs = useMemo(() => loadProofs(), [ecashBalance, txUpdateCounter]);
+  const pendingEcashTransactions = useMemo(
+    () => transactions.filter((tx) => tx?.type === 'receive' && tx?.status === 'pending'),
+    [transactions]
+  );
+  const totalEcashItems = proofs.length + pendingEcashTransactions.length;
   const [receiveAmountTooLow, setReceiveAmountTooLow] = useState(false);
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
@@ -186,15 +171,13 @@ function Wallet() {
   });
   // Removed eCash receive tab - Lightning only for privacy
   const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
-  const [ecashRequestData, setEcashRequestData] = useState(null); // Stored output data for eCash request
   const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
   const [showRequestDetails, setShowRequestDetails] = useState(false); // Toggle for eCash request details
 
-  // WebSocket state and refs
-  const wsRef = useRef(null);
-  const wsReconnectTimerRef = useRef(null);
-  const wsSubscriptionIdRef = useRef(null);
-  const [wsConnected, setWsConnected] = useState(false);
+  const nostrSubscriptionRef = useRef(null);
+  const nostrHandledEventsRef = useRef(new Set());
+  const [nostrIdentity, setNostrIdentity] = useState(null);
+  const [nostrError, setNostrError] = useState('');
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
   const pendingMintRef = useRef(null);
@@ -967,294 +950,92 @@ function Wallet() {
     };
   }, [apiUrl, showInfoMessage, t]);
 
-  // WebSocket connection management with auto-reconnect
-  const connectWebSocket = useCallback(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('[WS] Already connected');
+  const handleIncomingNostrPayment = useCallback(async ({ payload, event }) => {
+    if (!payload || typeof payload !== 'object') return;
+    const eventId = event?.id;
+    if (eventId && nostrHandledEventsRef.current.has(eventId)) {
       return;
     }
-
-    const wsUrl = buildWebSocketUrl(API_BASE_URL);
-    console.log('[WS] Connecting to:', wsUrl);
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[WS] Connected');
-        setWsConnected(true);
-        // Clear reconnect timer
-        if (wsReconnectTimerRef.current) {
-          clearTimeout(wsReconnectTimerRef.current);
-          wsReconnectTimerRef.current = null;
-        }
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[WS] Received:', data);
-
-          // Handle connection confirmation
-          if (data.type === 'connected') {
-            wsSubscriptionIdRef.current = data.subscriptionId;
-            console.log('[WS] Subscription ID:', data.subscriptionId);
-
-            // Re-subscribe to pending eCash request if exists
-            const pendingRequestId = localStorage.getItem('cashu_last_ecash_request_id');
-            if (pendingRequestId) {
-              console.log('[WS] Re-subscribing to pending eCash request:', pendingRequestId);
-              ws.send(JSON.stringify({
-                type: 'subscribeEcashRequest',
-                requestId: pendingRequestId
-              }));
-            }
-          }
-
-          // Handle eCash request subscription confirmation
-          if (data.type === 'ecashRequestSubscribed') {
-            console.log('[WS] Subscribed to eCash request:', data.requestId);
-          }
-
-          // Handle eCash request payment notification
-          if (data.type === 'ecash_request_paid') {
-            console.log('[WS] eCash request paid:', data.requestId);
-            const mode = Array.isArray(data.proofs) ? 'nut18' : 'legacy';
-            handleEcashRequestCompletion(data, data.requestId, mode);
-          }
-        } catch (error) {
-          console.error('[WS] Message parse error:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[WS] Error:', error);
-      };
-
-      ws.onclose = () => {
-        console.log('[WS] Disconnected');
-        setWsConnected(false);
-        wsRef.current = null;
-
-        // Auto-reconnect after 3 seconds
-        wsReconnectTimerRef.current = setTimeout(() => {
-          console.log('[WS] Attempting reconnect...');
-          connectWebSocket();
-        }, 3000);
-      };
-    } catch (error) {
-      console.error('[WS] Connection error:', error);
+    if (eventId) {
+      nostrHandledEventsRef.current.add(eventId);
     }
-  }, [ecashRequestId]);
 
-  // Subscribe to eCash request via WebSocket
-  const subscribeToEcashRequest = useCallback((requestId) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('[WS] Subscribing to eCash request:', requestId);
-      wsRef.current.send(JSON.stringify({
-        type: 'subscribeEcashRequest',
-        requestId
-      }));
-    } else {
-      console.log('[WS] Cannot subscribe - WebSocket not connected');
-    }
-  }, []);
-
-  // Unsubscribe from eCash request via WebSocket
-  const unsubscribeFromEcashRequest = useCallback((requestId) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('[WS] Unsubscribing from eCash request:', requestId);
-      wsRef.current.send(JSON.stringify({
-        type: 'unsubscribeEcashRequest',
-        requestId
-      }));
-    }
-  }, []);
-
-  // Handle eCash request completion - supports legacy (cashu:request) and NUT-18 creqA flows
-  const handleEcashRequestCompletion = useCallback(async (payload, requestId, mode = 'legacy') => {
-    if (!payload) {
-      console.warn('[handleEcashRequestCompletion] No payload provided');
+    const proofs = Array.isArray(payload.proofs) ? payload.proofs : [];
+    if (!proofs.length || payload.unit !== undefined && payload.unit !== 'sat') {
       return;
     }
+    const mintForProofs = payload.mint || mintUrl;
+    const creditedAmount = proofs.reduce((sum, p) => sum + (parseInt(p?.amount, 10) || 0), 0);
 
-    const timestamp = payload.timestamp || new Date().toISOString();
-    let creditedAmount = 0;
+    addProofs(proofs, mintForProofs);
+    addTransaction({
+      id: Date.now(),
+      type: 'receive',
+      amount: creditedAmount,
+      timestamp: new Date().toISOString(),
+      status: 'confirmed',
+      description: t('wallet.ecashReceive'),
+      memo: payload.memo || '',
+      mintUrl: mintForProofs,
+      sender: event?.pubkey
+    });
 
-    try {
-      let proofsToAdd = [];
-      let mintForProofs = mintUrl;
-
-      if (mode === 'nut18') {
-        const incomingProofs = Array.isArray(payload.proofs) ? payload.proofs : [];
-        if (!incomingProofs.length) {
-          throw new Error(t('messages.paymentRequestNoProofs'));
-        }
-        mintForProofs = payload.mint || mintUrl;
-        proofsToAdd = incomingProofs;
-        creditedAmount = payload.amount || incomingProofs.reduce((sum, proof) => sum + (parseInt(proof.amount, 10) || 0), 0);
-      } else {
-        const signatures = Array.isArray(payload.signatures) ? payload.signatures : [];
-        if (!signatures.length) {
-          throw new Error(t('messages.autoReflectFailed'));
-        }
-        if (!ecashRequestData || ecashRequestData.length === 0) {
-          console.error('[handleEcashRequestCompletion] No ecashRequestData found for legacy request');
-          showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
-          return;
-        }
-
-        const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-        if (!keysResp.ok) {
-          throw new Error(t('messages.mintKeysFailed'));
-        }
-        const mintKeys = await keysResp.json();
-        proofsToAdd = await signaturesToProofs(signatures, mintKeys, ecashRequestData);
-        creditedAmount = proofsToAdd.reduce((sum, p) => sum + (parseInt(p.amount, 10) || 0), 0);
-      }
-
-      addProofs(proofsToAdd, mintForProofs);
-
-      addTransaction({
-        id: Date.now(),
-        type: 'receive',
-        amount: creditedAmount,
-        timestamp,
-        status: 'confirmed',
-        description: t('wallet.ecashReceive'),
-        memo: '',
-        mintUrl: mintForProofs || mintUrl
-      });
-
-      await loadWalletData();
-      setReceiveCompleted(true);
-      setReceivedAmount(creditedAmount);
-      closeQrModal();
-
-      showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
-
-      if (requestId) {
-        try {
-          if (mode === 'nut18') {
-            await fetch(apiUrl(`/api/payment-request/${encodeURIComponent(requestId)}?consume=true`));
-          } else {
-            await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}&consume=true`));
-          }
-          unsubscribeFromEcashRequest(requestId);
-        } catch (err) {
-          console.error('[handleEcashRequestCompletion] Failed to consume request:', err);
-        }
-      }
-
+    await loadWalletData();
+    setReceiveCompleted(true);
+    setReceivedAmount(creditedAmount);
+    setLastReceiveMode('ecash');
+    if (payload.id && payload.id === ecashRequestId) {
+      setEcashRequestId(null);
+      setEcashRequest('');
+      setCheckingPayment(false);
       localStorage.removeItem('cashu_last_ecash_request_id');
       localStorage.removeItem('cashu_last_ecash_request_amount');
       localStorage.removeItem('cashu_last_ecash_request_type');
       localStorage.removeItem('cashu_last_ecash_request_string');
-
-      const pollingIntervalId = localStorage.getItem('cashu_polling_interval');
-      if (pollingIntervalId) {
-        clearInterval(Number(pollingIntervalId));
-        localStorage.removeItem('cashu_polling_interval');
-      }
-
-      setEcashRequestId(null);
-      setEcashRequest('');
-      setEcashRequestData(null);
-      setEcashRequestMode('legacy');
-      setCheckingPayment(false);
-      setLastReceiveMode('ecash');
-
-      console.log('[handleEcashRequestCompletion] Successfully credited:', creditedAmount, 'sats');
-    } catch (error) {
-      console.error('[handleEcashRequestCompletion] Error:', error);
-      showInfoMessage(t('messages.autoReflectFailed'), 'error', 6000);
     }
-  }, [ecashRequestData, apiUrl, mintUrl, signaturesToProofs, addProofs, addTransaction, loadWalletData, showInfoMessage, t, unsubscribeFromEcashRequest, closeQrModal]);
+    showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
+  }, [addProofs, addTransaction, ecashRequestId, loadWalletData, mintUrl, showInfoMessage, t]);
 
-  // Polling function to check eCash request status
-  const startEcashRequestPolling = useCallback((requestId, amount, mode = 'legacy') => {
-    console.log('[startEcashRequestPolling] Starting poll for requestId:', requestId, 'mode:', mode);
-
-    const MAX_POLLS = 60;
-    let pollCount = 0;
-    let isPollingActive = true;
-
-    const pollForPayment = async () => {
-      if (pollCount >= MAX_POLLS || !isPollingActive) {
-        console.log('[startEcashRequestPolling] Polling stopped - max attempts reached or cancelled for requestId:', requestId);
-        setCheckingPayment(false);
-
-        if (pollCount >= MAX_POLLS) {
-          showInfoMessage(t('wallet.pollingTimeout'), 'warning', 8000);
-        }
-        return;
-      }
-
-      try {
-        const checkUrl = mode === 'nut18'
-          ? apiUrl(`/api/payment-request/${encodeURIComponent(requestId)}`)
-          : apiUrl(`/api/cashu/ecash-request/check?requestId=${encodeURIComponent(requestId)}`);
-        const checkResp = await fetch(checkUrl);
-        if (!checkResp.ok) {
-          if (checkResp.status !== 404) {
-            console.error('[startEcashRequestPolling] Failed to check payment request:', requestId, checkResp.status);
-          }
-        } else {
-          const data = await checkResp.json();
-          console.log('[startEcashRequestPolling] Check response:', data, 'for requestId:', requestId);
-
-          const hasProofs = data.paid && (
-            (mode === 'nut18' && Array.isArray(data.proofs)) ||
-            (mode !== 'nut18' && Array.isArray(data.signatures))
-          );
-
-          if (hasProofs) {
-            console.log('[startEcashRequestPolling] Payment completed for requestId:', requestId);
-            isPollingActive = false;
-            setCheckingPayment(false);
-            await handleEcashRequestCompletion(data, requestId, mode);
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('[startEcashRequestPolling] Error polling for requestId:', requestId, error);
-      }
-
-      pollCount += 1;
-      setTimeout(() => {
-        if (isPollingActive) {
-          pollForPayment();
-        }
-      }, 3000);
-    };
-
-    setCheckingPayment(true);
-    pollForPayment();
-
-    pollingCancelRef.current = () => {
-      isPollingActive = false;
-      setCheckingPayment(false);
-      console.log('[startEcashRequestPolling] Polling cancelled for requestId:', requestId);
-    };
-  }, [apiUrl, handleEcashRequestCompletion, showInfoMessage, t]);
-
-  // WebSocket connection management
   useEffect(() => {
-    connectWebSocket();
+    let cancelled = false;
+    let unsubscribe = null;
+
+    const setupNostr = async () => {
+      try {
+        const identity = await ensureNostrIdentity();
+        if (cancelled) return;
+        setNostrIdentity(identity);
+        setNostrError('');
+        unsubscribe = await subscribeToNostrDms({
+          relays: identity.relays,
+          onMessage: handleIncomingNostrPayment,
+          onError: (err) => {
+            console.error('[Nostr] Subscription error:', err);
+            setNostrError(err?.message || 'Nostr subscription failed');
+          }
+        });
+        nostrSubscriptionRef.current = unsubscribe;
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[Nostr] Failed to initialize:', error);
+        setNostrError(error?.message || 'Failed to initialize Nostr');
+      }
+    };
+
+    setupNostr();
 
     return () => {
-      // Clean up WebSocket on unmount
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (wsReconnectTimerRef.current) {
-        clearTimeout(wsReconnectTimerRef.current);
-        wsReconnectTimerRef.current = null;
-      }
+      cancelled = true;
+      try { if (unsubscribe) unsubscribe(); } catch {}
+      nostrSubscriptionRef.current = null;
     };
-  }, [connectWebSocket]);
+  }, [handleIncomingNostrPayment]);
+
+  useEffect(() => {
+    if (nostrError) {
+      showInfoMessage(nostrError, 'error');
+    }
+  }, [nostrError, showInfoMessage]);
 
   useEffect(() => {
     // Auto-connect to mint on mount
@@ -1288,13 +1069,13 @@ function Wallet() {
     };
 
     window.addEventListener('payment_received', handler);
-    console.log('[payment_received EVENT] Event listener registered');
+      console.log('[payment_received EVENT] Event listener registered');
 
-    return () => {
-      try { stopAutoRedeem(); } catch {}
-      window.removeEventListener('payment_received', handler);
-    };
-  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, ecashRequestData, apiUrl, handleEcashRequestCompletion, isReceiveView, subscribeToEcashRequest]);
+      return () => {
+        try { stopAutoRedeem(); } catch {}
+        window.removeEventListener('payment_received', handler);
+      };
+  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, apiUrl, isReceiveView]);
   
 
 
@@ -1309,48 +1090,6 @@ function Wallet() {
       console.log('App resumed, checking payment status...');
 
       try {
-        // Check if waiting for eCash request
-        if (ecashRequestId) {
-          console.log('Checking eCash request status after resume:', ecashRequestId, 'mode:', ecashRequestMode);
-
-          try {
-            const checkUrl = ecashRequestMode === 'nut18'
-              ? `/api/payment-request/${encodeURIComponent(ecashRequestId)}`
-              : `/api/cashu/ecash-request/check?requestId=${encodeURIComponent(ecashRequestId)}`;
-            const checkResp = await fetch(apiUrl(checkUrl));
-            if (!checkResp.ok) {
-              if (checkResp.status !== 404) {
-                console.error('Failed to check eCash request on resume:', checkResp.status);
-              }
-            } else {
-              const data = await checkResp.json();
-              const hasPayment = data.paid && (
-                (ecashRequestMode === 'nut18' && Array.isArray(data.proofs)) ||
-                (ecashRequestMode !== 'nut18' && Array.isArray(data.signatures))
-              );
-
-              if (hasPayment) {
-                console.log('eCash request completed while app was in background:', data);
-
-                if (pollingCancelRef.current) {
-                  pollingCancelRef.current();
-                  pollingCancelRef.current = null;
-                }
-
-                await handleEcashRequestCompletion(data, ecashRequestId, ecashRequestMode);
-                setCheckingPayment(false);
-                return;
-              }
-
-              console.log('eCash request still pending after resume, re-subscribing...');
-              subscribeToEcashRequest(ecashRequestId);
-              return;
-            }
-          } catch (error) {
-            console.error('Error checking eCash request on resume:', error);
-          }
-        }
-
         // Check if waiting for Lightning invoice
         const lastQuote = localStorage.getItem('cashu_last_quote');
         if (!lastQuote) return;
@@ -1414,7 +1153,7 @@ function Wallet() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, ecashRequestId, ecashRequestMode, handleEcashRequestCompletion, subscribeToEcashRequest, receiveAmount]);
+  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, receiveAmount]);
 
   // Sync mintUrl from settings when page becomes visible
   useEffect(() => {
@@ -1982,10 +1721,19 @@ function Wallet() {
       setQrLoaded(false);
       setReceiveCompleted(false);
       setInvoiceError('');
+      if (nostrError) {
+        throw new Error(nostrError);
+      }
+      if (!nostrIdentity?.nprofile) {
+        throw new Error(t('messages.nostrIdentityUnavailable'));
+      }
 
       const requestId = `pr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const transportUrl = apiUrl(`/api/payment-request/${encodeURIComponent(requestId)}`);
-      const transports = [createHttpPostTransport(transportUrl)];
+      const transports = [{
+        t: 'nostr',
+        a: nostrIdentity.nprofile,
+        g: [['n', '17']]
+      }];
 
       const requestString = createPaymentRequest({
         id: requestId,
@@ -1999,7 +1747,6 @@ function Wallet() {
 
       setEcashRequest(requestString);
       setEcashRequestId(requestId);
-      setEcashRequestData(null);
       setEcashRequestMode('nut18');
       setReceiveTab('ecash');
       setQrLoaded(true);
@@ -2008,6 +1755,7 @@ function Wallet() {
       localStorage.setItem('cashu_last_ecash_request_amount', amount.toString());
       localStorage.setItem('cashu_last_ecash_request_type', 'nut18');
       localStorage.setItem('cashu_last_ecash_request_string', requestString);
+      setLastReceiveMode('ecash');
 
       console.log('[DEBUG] Payment request generated:', {
         amount,
@@ -2015,14 +1763,6 @@ function Wallet() {
         requestId
       });
 
-      if (pollingCancelRef.current) {
-        pollingCancelRef.current();
-        pollingCancelRef.current = null;
-      }
-
-      setCheckingPayment(true);
-      subscribeToEcashRequest(requestId);
-      pollingCancelRef.current = startEcashRequestPolling(requestId, amount, 'nut18');
     } catch (error) {
       console.error('Failed to generate eCash request:', error);
       const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');
@@ -2033,20 +1773,10 @@ function Wallet() {
   };
 
   const exitReceiveFlow = useCallback(() => {
-    // Stop any active polling
-    if (pollingCancelRef.current) {
-      pollingCancelRef.current();
-      pollingCancelRef.current = null;
-    }
-
     try { stopAutoRedeem(); } catch {}
-    if (ecashRequestId) {
-      unsubscribeFromEcashRequest(ecashRequestId);
-    }
     setCheckingPayment(false);
     setInvoice('');
     setEcashRequest('');
-    setEcashRequestData(null);
     setEcashRequestId(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
@@ -2063,7 +1793,7 @@ function Wallet() {
 
     const target = receiveOriginRef.current || '/wallet';
     navigate(target, { replace: true });
-  }, [navigate, stopAutoRedeem, ecashRequestId, unsubscribeFromEcashRequest]);
+  }, [navigate, stopAutoRedeem]);
 
   const handleReceiveNavigation = useCallback(() => {
     const origin = location.pathname || '/wallet';
@@ -2072,7 +1802,6 @@ function Wallet() {
     try { stopAutoRedeem(); } catch {}
     setInvoice('');
     setEcashRequest('');
-    setEcashRequestData(null);
     setEcashRequestId(null);
     setReceiveCompleted(false);
     setReceivedAmount(0);
@@ -2149,7 +1878,7 @@ function Wallet() {
     return lower.startsWith('cashu:request:') || lower.startsWith('creqa');
   };
 
-  const parseEcashRequest = (val) => {
+  function parseEcashRequest(val) {
     try {
       if (!val || typeof val !== 'string') return null;
       const trimmed = val.trim();
@@ -2168,7 +1897,7 @@ function Wallet() {
       console.error('Failed to parse eCash request:', error);
       return null;
     }
-  };
+  }
 
   const isLightningAddress = (val) => {
     if (!val || typeof val !== 'string') return false;
@@ -2437,23 +2166,16 @@ function Wallet() {
         throw new Error(t('messages.invalidAmount'));
       }
 
-      const postTransport = transports.find((transport) => {
-        const type = transport?.t || transport?.type;
-        const address = transport?.a || transport?.address || transport?.url;
-        return type === 'post' && typeof address === 'string' && address.length > 0;
-      });
-
       const nostrTransport = transports.find((transport) => {
         const type = transport?.t || transport?.type;
         const address = transport?.a || transport?.address || transport?.url;
         return type === 'nostr' && typeof address === 'string' && address.length > 0;
       });
 
-      const transportUrl = postTransport?.a || postTransport?.address || postTransport?.url;
       const nostrEndpoint = nostrTransport?.a || nostrTransport?.address || nostrTransport?.url || '';
       const nostrTags = Array.isArray(nostrTransport?.g) ? nostrTransport.g : [];
 
-      if (!transportUrl && !nostrEndpoint) {
+      if (!nostrEndpoint) {
         throw new Error(t('messages.paymentRequestMissingTransport'));
       }
 
@@ -2546,16 +2268,10 @@ function Wallet() {
       });
 
       try {
-        if (transportUrl) {
-          await sendPaymentViaPost(transportUrl, paymentPayload);
-        } else if (nostrEndpoint) {
-          await sendPaymentViaNostr({
-            nprofile: nostrEndpoint,
-            payload: paymentPayload
-          });
-        } else {
-          throw new Error(t('messages.paymentRequestMissingTransport'));
-        }
+        await sendPaymentViaNostr({
+          nprofile: nostrEndpoint,
+          payload: paymentPayload
+        });
         removeProofs(uniquePicked, mintUrl);
         if (changeProofs.length) {
           addProofs(changeProofs, mintUrl);
@@ -2730,7 +2446,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate, mintUrl, normalizeMintForCompare, formatMintLabel, sendPaymentViaPost, createPaymentPayload, sendPaymentViaNostr]);
+  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate, mintUrl, normalizeMintForCompare, formatMintLabel, createPaymentPayload, sendPaymentViaNostr]);
 
   const prepareSend = useCallback(async () => {
     if (enableSendScanner) {
@@ -3166,11 +2882,13 @@ function Wallet() {
                 const transport = Array.isArray(requestPayload.transports) && requestPayload.transports.length
                   ? requestPayload.transports[0]
                   : null;
-                const transportLabel = transport?.t === 'post'
-                  ? t('wallet.httpTransport')
-                  : transport?.t
-                    ? transport.t.toUpperCase()
-                    : t('wallet.unknownTransport');
+                const transportLabel = transport?.t === 'nostr'
+                  ? t('wallet.nostrTransport')
+                  : transport?.t === 'post'
+                    ? t('wallet.httpTransport')
+                    : transport?.t
+                      ? transport.t.toUpperCase()
+                      : t('wallet.unknownTransport');
 
                 return (
                   <div className="payment-request-details">
@@ -3473,7 +3191,6 @@ function Wallet() {
                             try { stopAutoRedeem(); } catch {}
                             setInvoice('');
                             setEcashRequest('');
-                            setEcashRequestData(null);
                             setEcashRequestId(null);
                             setCheckingPayment(false);
                             setReceiveCompleted(false);
@@ -3605,7 +3322,7 @@ function Wallet() {
                           </div>
                           <div className="qr-detail-line">
                             <span className="label">{t('wallet.transport')}</span>
-                            <span className="value">{t('wallet.httpTransport')}</span>
+                            <span className="value">{t('wallet.nostrTransport')}</span>
                           </div>
                           {ecashRequestId && (
                             <div className="qr-detail-line">
@@ -3625,9 +3342,6 @@ function Wallet() {
                           type="button"
                           className="primary-btn"
                           onClick={() => {
-                            if (ecashRequestId) {
-                              unsubscribeFromEcashRequest(ecashRequestId);
-                            }
                             setEcashRequest('');
                             setEcashRequestId(null);
                             setCheckingPayment(false);
@@ -4224,7 +3938,7 @@ function Wallet() {
       <div className="proofs-section">
         <div className="proofs-header">
           <h3 onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer', flex: 1 }}>
-            {t('wallet.ecashHoldings')} ({t('wallet.ecashCount', { count: loadProofs().length })})
+            {t('wallet.ecashHoldings')} ({t('wallet.ecashCount', { count: totalEcashItems })})
           </h3>
           <div onClick={() => setShowProofs(!showProofs)} style={{ cursor: 'pointer' }}>
             <Icon name={showProofs ? 'chevron-up' : 'chevron-down'} size={20} />
@@ -4232,52 +3946,87 @@ function Wallet() {
         </div>
         {showProofs && (
           <div className="proofs-list">
-            {loadProofs().length === 0 ? (
+            {totalEcashItems === 0 ? (
               <div className="empty-state">{t('wallet.noEcash')}</div>
             ) : (
-              loadProofs().map((proof, index) => {
-                const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
-                const isDisabled = proof?.disabled || false;
-                const mintUrl = proof?.mintUrl || 'Unknown Mint';
-                const displayMintUrl = mintUrl.length > 40 ? mintUrl.substring(0, 37) + '...' : mintUrl;
-
-                return (
-                  <div
-                    key={proof?.secret || index}
-                    className="proof-item"
-                    style={{ opacity: isDisabled ? 0.5 : 1 }}
-                  >
-                    <div className="proof-info">
-                      <div className="proof-amount-status">
-                        <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
-                        <div className={`proof-status ${isDisabled ? 'disabled' : (isValid ? 'valid' : 'invalid')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {isDisabled ? t('wallet.disabled') : (isValid ? t('wallet.valid') : t('wallet.invalid'))}
-                          <button
-                            onClick={() => {
-                              toggleProofDisabled(proof?.secret || JSON.stringify(proof));
-                              loadWalletData();
-                            }}
-                            className="icon-btn"
-                            title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
-                            style={{ marginLeft: '0', padding: '0.25rem' }}
-                          >
-                            <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
-                          </button>
+              <>
+                {pendingEcashTransactions.map((tx) => {
+                  const pendingMintUrl = tx?.mintUrl || mintUrl || 'Unknown Mint';
+                  const displayMintUrl = pendingMintUrl.length > 40 ? pendingMintUrl.substring(0, 37) + '...' : pendingMintUrl;
+                  return (
+                    <div
+                      key={`pending-${tx.id}`}
+                      className="proof-item pending-proof"
+                      style={{ opacity: 0.6 }}
+                    >
+                      <div className="proof-info">
+                        <div className="proof-amount-status">
+                          <span className="proof-amount">{formatAmount(tx?.amount || 0)} sats</span>
+                          <div className="proof-status pending" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <Icon name="clock" size={14} />
+                            {t('messages.statusPending')}
+                          </div>
                         </div>
                       </div>
+                      <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                        {t('wallet.mintLabel')}: <span className="monospace" title={pendingMintUrl}>{displayMintUrl}</span>
+                      </div>
+                      <div className="proof-pending-note">
+                        <Icon name="lock" size={14} />
+                        <span>{t('wallet.pendingEcashDisabled')}</span>
+                      </div>
+                      <div className="proof-pending-note">
+                        <Icon name="clock" size={14} />
+                        <span>{t('wallet.pendingSince', { date: formatDate(tx?.timestamp || Date.now()) })}</span>
+                      </div>
                     </div>
-                    <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-                      Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>
+                  );
+                })}
+
+                {proofs.map((proof, index) => {
+                  const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
+                  const isDisabled = proof?.disabled || false;
+                  const mintUrl = proof?.mintUrl || 'Unknown Mint';
+                  const displayMintUrl = mintUrl.length > 40 ? mintUrl.substring(0, 37) + '...' : mintUrl;
+
+                  return (
+                    <div
+                      key={proof?.secret || index}
+                      className="proof-item"
+                      style={{ opacity: isDisabled ? 0.5 : 1 }}
+                    >
+                      <div className="proof-info">
+                        <div className="proof-amount-status">
+                          <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
+                          <div className={`proof-status ${isDisabled ? 'disabled' : (isValid ? 'valid' : 'invalid')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {isDisabled ? t('wallet.disabled') : (isValid ? t('wallet.valid') : t('wallet.invalid'))}
+                            <button
+                              onClick={() => {
+                                toggleProofDisabled(proof?.secret || JSON.stringify(proof));
+                                loadWalletData();
+                              }}
+                              className="icon-btn"
+                              title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
+                              style={{ marginLeft: '0', padding: '0.25rem' }}
+                            >
+                              <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
+                        Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>
+                      </div>
+                      <div className="proof-secret">
+                        Secret: <span className="monospace">{(proof?.secret || '').substring(0, 16)}...</span>
+                      </div>
+                      <div className="proof-id monospace">
+                        ID: {(proof?.id || proof?.C || '').substring(0, 12)}...
+                      </div>
                     </div>
-                    <div className="proof-secret">
-                      Secret: <span className="monospace">{(proof?.secret || '').substring(0, 16)}...</span>
-                    </div>
-                    <div className="proof-id monospace">
-                      ID: {(proof?.id || proof?.C || '').substring(0, 12)}...
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </>
             )}
           </div>
         )}
