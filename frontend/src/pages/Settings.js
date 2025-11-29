@@ -69,8 +69,7 @@ function Settings() {
     mintUrl: '',
     backupMintUrl: '',
     autoBackup: false,
-    pinEnabled: false,
-    ecashEnabled: true
+    pinEnabled: false
   });
 
   const [showPinSetup, setShowPinSetup] = useState(false);
@@ -133,8 +132,7 @@ function Settings() {
         mintUrl: DEFAULT_MINT_URL,
         backupMintUrl: '',
         autoBackup: false,
-        pinEnabled: false,
-        ecashEnabled: true
+        pinEnabled: false
       };
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -169,8 +167,7 @@ function Settings() {
         mintUrl: DEFAULT_MINT_URL,
         backupMintUrl: '',
         autoBackup: false,
-        pinEnabled: false,
-        ecashEnabled: true
+        pinEnabled: false
       };
       setSettings(fallback);
       applyTheme(fallback.theme);
@@ -429,21 +426,6 @@ function Settings() {
               <option value="SATS">{t('settings.sats')}</option>
               <option value="BTC">{t('settings.btc')}</option>
             </select>
-          </div>
-
-          <div className="setting-item">
-            <div className="setting-info">
-              <div className="setting-title">{t('settings.ecashPayment')}</div>
-              <div className="setting-description">{t('settings.ecashPaymentDesc')}</div>
-            </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={settings.ecashEnabled}
-                onChange={(e) => handleSettingChange('ecashEnabled', e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
           </div>
 
         </div>
