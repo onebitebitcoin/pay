@@ -72,13 +72,14 @@ function Wallet() {
     document.title = t('pageTitle.wallet');
   }, [t, i18n.language]);
 
-  // Load wallet name from settings
+  // Load wallet name and ecash setting from settings
   useEffect(() => {
     try {
       const settings = JSON.parse(localStorage.getItem('app_settings') || '{}');
       setWalletName(settings.walletName || '');
+      setEcashEnabled(settings.ecashEnabled !== undefined ? settings.ecashEnabled : true);
     } catch (e) {
-      console.error('Failed to load wallet name:', e);
+      console.error('Failed to load wallet settings:', e);
     }
   }, []);
 
@@ -107,6 +108,7 @@ function Wallet() {
   const TX_STORAGE_KEY = 'cashu_tx_v1';
   const [displayedTxCount, setDisplayedTxCount] = useState(10);
   const [walletName, setWalletName] = useState('');
+  const [ecashEnabled, setEcashEnabled] = useState(true);
   const [showSend, setShowSend] = useState(false);
   const [txUpdateCounter, setTxUpdateCounter] = useState(0);
   const [showConvert, setShowConvert] = useState(false);
@@ -3262,11 +3264,22 @@ function Wallet() {
                           {t('wallet.fiatApprox', { value: receiveFiatDisplay, source: rateSourceLabel })}
                         </div>
                       )}
+                      {!ecashEnabled && (
+                        <div className="receive-error" style={{
+                          backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                          border: '1px solid rgba(255, 193, 7, 0.3)',
+                          padding: '0.75rem',
+                          borderRadius: '0.5rem',
+                          marginTop: '0.5rem'
+                        }}>
+                          {t('wallet.ecashDisabledMessage')}
+                        </div>
+                      )}
                       <div className="receive-actions">
                         <button
                           onClick={generateEcashRequest}
                           className="primary-btn"
-                          disabled={loading || !receiveAmount || receiveAmountTooLow || receiveAmountTooHigh || !isConnected}
+                          disabled={!ecashEnabled || loading || !receiveAmount || receiveAmountTooLow || receiveAmountTooHigh || !isConnected}
                         >
                           {loading ? t('wallet.generatingRequest') : t('wallet.createPaymentRequest')}
                         </button>
