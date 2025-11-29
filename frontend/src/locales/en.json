@@ -111,7 +111,7 @@
     "receiveRequestHint": "Share the NUT-18 link or QR code so the sender can pay with a compatible wallet.",
     "receiveAmountMinimum": "Invoices must be at least {{amount}} sats",
     "receiveAmountMaximum": "Maximum invoice amount is {{amount}} sats",
-    "receiveMinBeta": "Beta notice: You can receive payments up to 10 sats only",
+    "receiveMinBeta": "Beta notice: You can receive payments up to {{amount}} sats",
     "fiatApprox": "Approx. {{value}} ({{source}})",
     "fiatRateLoading": "Fetching exchange rate...",
     "fiatRateUnavailable": "Exchange rate unavailable",

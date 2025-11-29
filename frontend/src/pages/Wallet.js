@@ -29,7 +29,7 @@ const normalizeQrValue = (rawValue = '') => {
 };
 
 const RECEIVE_MIN_AMOUNT = 1;
-const RECEIVE_MAX_AMOUNT = 10;
+const RECEIVE_MAX_AMOUNT = 100000;
 
 const createInitialFiatState = (language = 'en') => {
   switch (language) {
@@ -3057,7 +3057,7 @@ function Wallet() {
                 <>
                   <div className="warning-banner warning">
                     <div className="warning-content">
-                      {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
+                      {t('wallet.receiveMinBeta', { amount: RECEIVE_MAX_AMOUNT })}
                     </div>
                   </div>
                   {!invoice ? (
@@ -3378,7 +3378,7 @@ function Wallet() {
 
       <div className="warning-banner warning">
         <div className="warning-content">
-          {t('wallet.receiveMinBeta', { amount: RECEIVE_MIN_AMOUNT })}
+          {t('wallet.receiveMinBeta', { amount: RECEIVE_MAX_AMOUNT })}
         </div>
       </div>
 

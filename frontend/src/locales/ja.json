@@ -111,7 +111,7 @@
     "receiveRequestHint": "NUT-18リンクまたはQRコードを共有すると、対応ウォレットからeCashを送ってもらえます。",
     "receiveAmountMinimum": "{{amount}} sats 以上を入力してください",
     "receiveAmountMaximum": "{{amount}} sats 以下で入力してください",
-    "receiveMinBeta": "現在のベータ版では最大 10 sats までしか受け取れません",
+    "receiveMinBeta": "現在のベータ版では最大 {{amount}} sats までしか受け取れません",
     "fiatApprox": "概算 {{value}} ({{source}} 基準)",
     "fiatRateLoading": "為替レートを取得中...",
     "fiatRateUnavailable": "為替レートを取得できませんでした",
