@@ -181,6 +181,8 @@ function Wallet() {
 
   const PENDING_MINT_STORAGE_KEY = 'cashu_pending_mint_v1';
   const pendingMintRef = useRef(null);
+  const ecashPollingRef = useRef(null);
+  const swapFeeHintsRef = useRef({});
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -949,6 +951,69 @@ function Wallet() {
       console.log('[startInvoicePolling] Polling cancelled for quote:', quoteId);
     };
   }, [apiUrl, showInfoMessage, t]);
+
+  const startEcashPolling = useCallback((requestId) => {
+    if (ecashPollingRef.current) clearInterval(ecashPollingRef.current);
+
+    setCheckingPayment(true);
+    const poll = async () => {
+      try {
+        const resp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${requestId}&consume=true`));
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.paid && data.signatures) {
+            clearInterval(ecashPollingRef.current);
+            ecashPollingRef.current = null;
+
+            const storedRaw = localStorage.getItem(`cashu_ecash_req_${requestId}`);
+            if (storedRaw) {
+              const stored = JSON.parse(storedRaw);
+              const outputDatas = await deserializeOutputDatas(stored.outputDatas);
+              
+              const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+              const mintKeys = await keysResp.json();
+
+              const proofs = await signaturesToProofs(data.signatures, mintKeys, outputDatas);
+              addProofs(proofs, mintUrl);
+
+              addTransaction({
+                id: Date.now(),
+                type: 'receive',
+                amount: stored.amount,
+                timestamp: new Date().toISOString(),
+                status: 'confirmed',
+                description: t('wallet.ecashReceive'),
+                mintUrl
+              });
+
+              await loadWalletData();
+              setReceiveCompleted(true);
+              setReceivedAmount(stored.amount);
+              setLastReceiveMode('ecash');
+              setCheckingPayment(false);
+              
+              localStorage.removeItem(`cashu_ecash_req_${requestId}`);
+              localStorage.removeItem('cashu_last_ecash_request_id');
+              localStorage.removeItem('cashu_last_ecash_request_amount');
+              localStorage.removeItem('cashu_last_ecash_request_type');
+              localStorage.removeItem('cashu_last_ecash_request_string');
+              setEcashRequest('');
+              setEcashRequestId(null);
+              
+              showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('eCash polling error:', e);
+      }
+    };
+
+    ecashPollingRef.current = setInterval(poll, 3000);
+    return () => {
+      if (ecashPollingRef.current) clearInterval(ecashPollingRef.current);
+    };
+  }, [apiUrl, mintUrl, loadWalletData, showInfoMessage, t, addTransaction]);
 
   const handleIncomingNostrPayment = useCallback(async ({ payload, event }) => {
     if (!payload || typeof payload !== 'object') return;
@@ -1728,43 +1793,48 @@ function Wallet() {
       setQrLoaded(false);
       setReceiveCompleted(false);
       setInvoiceError('');
-      if (nostrError) {
-        throw new Error(nostrError);
-      }
-      if (!nostrIdentity?.nprofile) {
-        throw new Error(t('messages.nostrIdentityUnavailable'));
-      }
 
-      const requestId = `pr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const transports = [{
-        t: 'nostr',
-        a: nostrIdentity.nprofile,
-        g: [['n', '17']]
-      }];
+      // Legacy generation
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+      if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
+      const mintKeys = await keysResp.json();
+      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
 
-      const requestString = createPaymentRequest({
-        id: requestId,
-        amount,
-        unit: 'sat',
-        single_use: true,
-        mints: [mintUrl],
-        description: walletName ? t('wallet.paymentRequestMemo', { name: walletName }) : '',
-        transports
-      });
+      const pendingData = {
+          requestId,
+          amount,
+          outputDatas: serializeOutputDatas(outputDatas),
+          timestamp: Date.now()
+      };
+      localStorage.setItem(`cashu_ecash_req_${requestId}`, JSON.stringify(pendingData));
+
+      const payload = {
+          mint: mintUrl,
+          amount,
+          outputs,
+          requestId
+      };
+      const jsonStr = JSON.stringify(payload);
+      const base64Data = btoa(jsonStr);
+      const requestString = `cashu:request:${base64Data}`;
 
       setEcashRequest(requestString);
       setEcashRequestId(requestId);
-      setEcashRequestMode('nut18');
+      setEcashRequestMode('legacy');
       setReceiveTab('lightning');
       setQrLoaded(true);
 
       localStorage.setItem('cashu_last_ecash_request_id', requestId);
       localStorage.setItem('cashu_last_ecash_request_amount', amount.toString());
-      localStorage.setItem('cashu_last_ecash_request_type', 'nut18');
+      localStorage.setItem('cashu_last_ecash_request_type', 'legacy');
       localStorage.setItem('cashu_last_ecash_request_string', requestString);
       setLastReceiveMode('ecash');
+      
+      startEcashPolling(requestId);
 
-      console.log('[DEBUG] Payment request generated:', {
+      console.log('[DEBUG] Legacy eCash request generated:', {
         amount,
         mintUrl,
         requestId
@@ -1923,6 +1993,57 @@ function Wallet() {
     if (!url || typeof url !== 'string') return '';
     return url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
   }, []);
+
+  const getSwapFeeHint = useCallback((url) => {
+    if (!url) return 0;
+    const key = normalizeMintForCompare(url);
+    if (!key) return 0;
+    const value = swapFeeHintsRef.current[key];
+    return typeof value === 'number' && value > 0 ? value : 0;
+  }, [normalizeMintForCompare]);
+
+  const rememberSwapFeeHint = useCallback((url, fee) => {
+    if (!url || typeof fee !== 'number' || Number.isNaN(fee) || fee < 0) return;
+    const key = normalizeMintForCompare(url);
+    if (!key) return;
+    swapFeeHintsRef.current[key] = fee;
+  }, [normalizeMintForCompare]);
+
+  const extractSwapFeeFromError = useCallback((payload) => {
+    if (!payload) return null;
+    if (typeof payload.fee === 'number') return payload.fee;
+    if (typeof payload.fees === 'number') return payload.fees;
+    const texts = [];
+    const pushIfString = (value) => {
+      if (typeof value === 'string' && value.trim()) {
+        texts.push(value);
+      }
+    };
+    pushIfString(payload.detail);
+    pushIfString(payload.error);
+    pushIfString(payload.message);
+    if (typeof payload === 'string') {
+      pushIfString(payload);
+    }
+    for (const text of texts) {
+      const match = text.match(/fees?\s*(?:\(|:)?\s*(\d+)/i);
+      if (match) {
+        const parsed = Number(match[1]);
+        if (!Number.isNaN(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  const parseJsonSafely = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
 
   const isMeaninglessErrorCode = (value) => {
     if (!value || typeof value !== 'string') return false;
@@ -2206,151 +2327,166 @@ function Wallet() {
         }
       }
 
-      const available = getBalanceSats();
-      if (available < amount) {
-        throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(amount - available) }));
-      }
+      const attemptNut18Send = async (feeReserve = getSwapFeeHint(mintUrl), attempt = 1) => {
+        const feeValue = Number(feeReserve) > 0 ? Number(feeReserve) : 0;
+        const required = amount + feeValue;
+        const available = getBalanceSats();
+        if (available < required) {
+          throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(required - available) }));
+        }
 
-      const { ok, picked, total } = selectProofsForAmount(amount);
-      if (!ok) throw new Error(t('messages.insufficientBalance'));
-      const mintMismatchMessage = getMintMismatchMessage(picked);
-      if (mintMismatchMessage) {
-        setInvoiceError(mintMismatchMessage);
-        showInfoMessage(mintMismatchMessage, 'error');
-        throw new Error(mintMismatchMessage);
-      }
-      const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
+        const { ok, picked } = selectProofsForAmount(required);
+        if (!ok) throw new Error(t('messages.insufficientBalance'));
+        const mintMismatchMessage = getMintMismatchMessage(picked);
+        if (mintMismatchMessage) {
+          setInvoiceError(mintMismatchMessage);
+          showInfoMessage(mintMismatchMessage, 'error');
+          throw new Error(mintMismatchMessage);
+        }
+        const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
 
-      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-      if (!keysResp.ok) {
-        throw new Error(t('messages.mintKeysFailed'));
-      }
-      const mintKeys = await keysResp.json();
+        const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+        if (!keysResp.ok) {
+          throw new Error(t('messages.mintKeysFailed'));
+        }
+        const mintKeys = await keysResp.json();
 
-      // Calculate actual input total after deduplication
-      const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      console.log('[eCash Send] Input proofs:', uniquePicked.map(p => ({ amount: p.amount, id: p.id?.slice(0, 8) })));
-      console.log('[eCash Send] Input total:', actualInputTotal, 'Payment amount:', amount);
+        // Calculate actual input total after deduplication
+        const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        if (actualInputTotal < required) {
+          throw new Error(t('messages.insufficientBalance'));
+        }
+        console.log('[eCash Send] Input proofs:', uniquePicked.map(p => ({ amount: p.amount, id: p.id?.slice(0, 8) })));
+        console.log('[eCash Send] Input total:', actualInputTotal, 'Payment amount:', amount, 'Fee reserve:', feeValue);
 
-      const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
-      console.log('[eCash Send] Payment outputs created:', paymentOutputs.outputs.length, 'outputs');
-      console.log('[eCash Send] Payment outputs amounts:', paymentOutputs.outputs.map(o => o.amount));
-      const paymentOutputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-      console.log('[eCash Send] Payment output total:', paymentOutputTotal, 'Expected:', amount);
+        const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
+        console.log('[eCash Send] Payment outputs created:', paymentOutputs.outputs.length, 'outputs');
+        console.log('[eCash Send] Payment outputs amounts:', paymentOutputs.outputs.map(o => o.amount));
+        const paymentOutputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+        console.log('[eCash Send] Payment output total:', paymentOutputTotal, 'Expected:', amount);
 
-      const change = Math.max(0, actualInputTotal - Number(amount));
-      console.log('[eCash Send] Change calculated:', change);
+        const changeAmount = Math.max(0, actualInputTotal - Number(amount) - feeValue);
+        console.log('[eCash Send] Change calculated:', changeAmount);
 
-      const changeOutputs = change > 0 ? await createBlindedOutputs(change, mintKeys) : { outputs: [], outputDatas: [] };
-      if (change > 0) {
-        console.log('[eCash Send] Change outputs created:', changeOutputs.outputs.length, 'outputs');
-        console.log('[eCash Send] Change outputs amounts:', changeOutputs.outputs.map(o => o.amount));
-        const changeOutputTotal = changeOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-        console.log('[eCash Send] Change output total:', changeOutputTotal, 'Expected:', change);
-      }
+        const changeOutputs = changeAmount > 0 ? await createBlindedOutputs(changeAmount, mintKeys) : { outputs: [], outputDatas: [] };
+        if (changeAmount > 0) {
+          console.log('[eCash Send] Change outputs created:', changeOutputs.outputs.length, 'outputs');
+          console.log('[eCash Send] Change outputs amounts:', changeOutputs.outputs.map(o => o.amount));
+          const changeOutputTotal = changeOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+          console.log('[eCash Send] Change output total:', changeOutputTotal, 'Expected:', changeAmount);
+        }
 
-      const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
-      const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
+        const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
+        const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
 
-      // Calculate output total for verification
-      const outputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0) +
-                         (changeOutputs.outputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0);
-      console.log('[eCash Send] === BALANCE CHECK ===');
-      console.log('[eCash Send] Input total:', actualInputTotal);
-      console.log('[eCash Send] Output total:', outputTotal);
-      console.log('[eCash Send] Difference:', actualInputTotal - outputTotal);
-      console.log('[eCash Send] Payment amount:', amount);
-      console.log('[eCash Send] Change amount:', change);
-      console.log('[eCash Send] Input count:', uniquePicked.length);
-      console.log('[eCash Send] Output count:', combinedOutputs.length);
+        // Calculate output total for verification
+        const outputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0) +
+                           (changeOutputs.outputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0);
+        console.log('[eCash Send] === BALANCE CHECK ===');
+        console.log('[eCash Send] Input total:', actualInputTotal);
+        console.log('[eCash Send] Output total:', outputTotal);
+        console.log('[eCash Send] Difference (should equal fee):', actualInputTotal - outputTotal);
+        console.log('[eCash Send] Payment amount:', amount);
+        console.log('[eCash Send] Fee reserve:', feeValue);
+        console.log('[eCash Send] Change amount:', changeAmount);
+        console.log('[eCash Send] Input count:', uniquePicked.length);
+        console.log('[eCash Send] Output count:', combinedOutputs.length);
 
-      const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputs: uniquePicked,
-          outputs: combinedOutputs,
-          mintUrl,
-          requestId: id
-        })
-      });
+        const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputs: uniquePicked,
+            outputs: combinedOutputs,
+            mintUrl,
+            requestId: id
+          })
+        });
 
-      if (!swapResp.ok) {
-        let msg = t('messages.ecashSendFailed');
-        try {
-          const err = await swapResp.json();
-          if (err?.error) {
-            msg = translateErrorMessage(err.error);
+        if (!swapResp.ok) {
+          const err = await parseJsonSafely(swapResp);
+          const parsedFee = extractSwapFeeFromError(err);
+          if (parsedFee !== null && parsedFee !== feeValue && attempt < 3) {
+            console.warn('[eCash Send] Mint reported fee, retrying with fee reserve:', parsedFee);
+            rememberSwapFeeHint(mintUrl, parsedFee);
+            return attemptNut18Send(parsedFee, attempt + 1);
           }
-        } catch {}
-        throw new Error(msg);
-      }
-
-      const swapData = await swapResp.json();
-      const signatures = swapData?.signatures || swapData?.promises || [];
-      if (!signatures.length) {
-        throw new Error(t('messages.ecashSendFailed'));
-      }
-      const allProofs = await signaturesToProofs(signatures, mintKeys, combinedOutputDatas);
-      const paymentProofCount = paymentOutputs.outputDatas.length;
-      const paymentProofs = allProofs.slice(0, paymentProofCount);
-      const changeProofs = allProofs.slice(paymentProofCount);
-
-      const paymentPayload = createPaymentPayload({
-        id,
-        memo,
-        mint: mintUrl,
-        unit: unit || 'sat',
-        proofs: paymentProofs
-      });
-
-      try {
-        if (postEndpoint) {
-          await sendPaymentViaPost(postEndpoint, paymentPayload);
-        } else if (nostrEndpoint) {
-          await sendPaymentViaNostr({
-            nprofile: nostrEndpoint,
-            payload: paymentPayload
-          });
-        } else {
-          throw new Error(t('messages.paymentRequestMissingTransport'));
+          let msg = t('messages.ecashSendFailed');
+          const errMessage = err?.error || err?.detail || err?.message;
+          if (typeof errMessage === 'string' && errMessage.trim()) {
+            msg = translateErrorMessage(errMessage);
+          }
+          throw new Error(msg);
         }
-        removeProofs(uniquePicked, mintUrl);
-        if (changeProofs.length) {
-          addProofs(changeProofs, mintUrl);
+
+        const swapData = await swapResp.json();
+        const signatures = swapData?.signatures || swapData?.promises || [];
+        if (!signatures.length) {
+          throw new Error(t('messages.ecashSendFailed'));
         }
-      } catch (error) {
-        console.error('Payment transport failed:', error);
-        removeProofs(uniquePicked, mintUrl);
-        const fallbackProofs = [...paymentProofs, ...changeProofs];
-        if (fallbackProofs.length) {
-          addProofs(fallbackProofs, mintUrl);
+        const allProofs = await signaturesToProofs(signatures, mintKeys, combinedOutputDatas);
+        const paymentProofCount = paymentOutputs.outputDatas.length;
+        const paymentProofs = allProofs.slice(0, paymentProofCount);
+        const changeProofs = allProofs.slice(paymentProofCount);
+
+        const paymentPayload = createPaymentPayload({
+          id,
+          memo,
+          mint: mintUrl,
+          unit: unit || 'sat',
+          proofs: paymentProofs
+        });
+
+        try {
+          if (postEndpoint) {
+            await sendPaymentViaPost(postEndpoint, paymentPayload);
+          } else if (nostrEndpoint) {
+            await sendPaymentViaNostr({
+              nprofile: nostrEndpoint,
+              payload: paymentPayload
+            });
+          } else {
+            throw new Error(t('messages.paymentRequestMissingTransport'));
+          }
+          removeProofs(uniquePicked, mintUrl);
+          if (changeProofs.length) {
+            addProofs(changeProofs, mintUrl);
+          }
+        } catch (error) {
+          console.error('Payment transport failed:', error);
+          removeProofs(uniquePicked, mintUrl);
+          const fallbackProofs = [...paymentProofs, ...changeProofs];
+          if (fallbackProofs.length) {
+            addProofs(fallbackProofs, mintUrl);
+          }
+          throw error instanceof Error ? error : new Error(String(error));
         }
-        throw error instanceof Error ? error : new Error(String(error));
-      }
 
-      addTransaction({
-        id: Date.now(),
-        type: 'send',
-        amount,
-        timestamp: new Date().toISOString(),
-        status: 'confirmed',
-        description: t('wallet.ecashSend'),
-        memo: memo || '',
-        mintUrl
-      });
-
-      await loadWalletData();
-      showInfoMessage(t('messages.ecashSendSuccess'), 'success');
-
-      navigate('/wallet/payment-success', {
-        state: {
+        addTransaction({
+          id: Date.now(),
+          type: 'send',
           amount,
-          type: 'ecash_send',
-          from: '/wallet/send'
-        },
-        replace: true
-      });
+          timestamp: new Date().toISOString(),
+          status: 'confirmed',
+          description: t('wallet.ecashSend'),
+          memo: memo || '',
+          mintUrl
+        });
+
+        await loadWalletData();
+        showInfoMessage(t('messages.ecashSendSuccess'), 'success');
+
+        navigate('/wallet/payment-success', {
+          state: {
+            amount,
+            type: 'ecash_send',
+            from: '/wallet/send'
+          },
+          replace: true
+        });
+      };
+
+      await attemptNut18Send(getSwapFeeHint(mintUrl));
     };
 
     try {
@@ -2400,8 +2536,13 @@ function Wallet() {
         throw new Error(mintMismatchMessage);
       }
 
-      const receiverOutputDatas = await deserializeOutputDatas(serializedOutputs);
-      const receiverOutputs = receiverOutputDatas.map(od => od.blindedMessage);
+      // Handle both old (OutputData with secrets) and new (blinded messages only) legacy formats
+      let receiverOutputs = serializedOutputs;
+      if (Array.isArray(serializedOutputs) && serializedOutputs.length > 0 && serializedOutputs[0].blindedMessage) {
+        // Old format: Extract blindedMessage from OutputData structure
+        receiverOutputs = serializedOutputs.map(item => item.blindedMessage);
+      }
+
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
 
       // Calculate actual input total after deduplication
