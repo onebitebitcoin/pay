@@ -2229,23 +2229,40 @@ function Wallet() {
 
       // Calculate actual input total after deduplication
       const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      console.log('[eCash Send] Input proofs:', uniquePicked.map(p => ({ amount: p.amount, id: p.id?.slice(0, 8) })));
+      console.log('[eCash Send] Input total:', actualInputTotal, 'Payment amount:', amount);
+
       const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
+      console.log('[eCash Send] Payment outputs created:', paymentOutputs.outputs.length, 'outputs');
+      console.log('[eCash Send] Payment outputs amounts:', paymentOutputs.outputs.map(o => o.amount));
+      const paymentOutputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+      console.log('[eCash Send] Payment output total:', paymentOutputTotal, 'Expected:', amount);
+
       const change = Math.max(0, actualInputTotal - Number(amount));
+      console.log('[eCash Send] Change calculated:', change);
+
       const changeOutputs = change > 0 ? await createBlindedOutputs(change, mintKeys) : { outputs: [], outputDatas: [] };
+      if (change > 0) {
+        console.log('[eCash Send] Change outputs created:', changeOutputs.outputs.length, 'outputs');
+        console.log('[eCash Send] Change outputs amounts:', changeOutputs.outputs.map(o => o.amount));
+        const changeOutputTotal = changeOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+        console.log('[eCash Send] Change output total:', changeOutputTotal, 'Expected:', change);
+      }
+
       const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
       const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
 
       // Calculate output total for verification
       const outputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0) +
                          (changeOutputs.outputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0);
-      console.log('[eCash Send] Swap balance check:', {
-        inputTotal: actualInputTotal,
-        outputTotal,
-        paymentAmount: amount,
-        changeAmount: change,
-        inputCount: uniquePicked.length,
-        outputCount: combinedOutputs.length
-      });
+      console.log('[eCash Send] === BALANCE CHECK ===');
+      console.log('[eCash Send] Input total:', actualInputTotal);
+      console.log('[eCash Send] Output total:', outputTotal);
+      console.log('[eCash Send] Difference:', actualInputTotal - outputTotal);
+      console.log('[eCash Send] Payment amount:', amount);
+      console.log('[eCash Send] Change amount:', change);
+      console.log('[eCash Send] Input count:', uniquePicked.length);
+      console.log('[eCash Send] Output count:', combinedOutputs.length);
 
       const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
         method: 'POST',

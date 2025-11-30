@@ -927,6 +927,17 @@ app.post('/api/cashu/swap', async (req, res) => {
     if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
       return res.status(400).json({ error: 'outputs 배열 필요' });
     }
+
+    // Calculate and log input/output totals
+    const inputTotal = inputs.reduce((sum, inp) => sum + (parseInt(inp.amount, 10) || 0), 0);
+    const outputTotal = outputs.reduce((sum, out) => sum + (parseInt(out.amount, 10) || 0), 0);
+    console.log('[Swap] === BALANCE CHECK ===');
+    console.log('[Swap] Input amounts:', inputs.map(i => i.amount));
+    console.log('[Swap] Input total:', inputTotal);
+    console.log('[Swap] Output amounts:', outputs.map(o => o.amount));
+    console.log('[Swap] Output total:', outputTotal);
+    console.log('[Swap] Difference (input - output):', inputTotal - outputTotal);
+
     const result = await cashu.swap({ inputs, outputs, mintUrl });
     console.log('[Swap] Swap result:', {
       hasSignatures: !!result?.signatures,
