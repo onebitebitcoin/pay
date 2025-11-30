@@ -15,6 +15,7 @@ const SATS_PER_BTC = 100000000;
 const normalizeQrValue = (rawValue = '') => {
   if (!rawValue) return '';
   let cleaned = String(rawValue).trim();
+  cleaned = cleaned.replace(/^payment:(\/\/)?/i, '');
   cleaned = cleaned.replace(/^lightning:(\/\/)?/i, '');
   if (/^bitcoin:(\/\/)?/i.test(cleaned)) {
     cleaned = cleaned.replace(/^bitcoin:(\/\/)?/i, '');
@@ -1952,7 +1953,7 @@ function Wallet() {
     if (!val || typeof val !== 'string') return false;
     const trimmed = val.trim();
     const lower = trimmed.toLowerCase();
-    return lower.startsWith('cashu:request:') || lower.startsWith('creqa');
+    return lower.startsWith('cashu:request:') || lower.startsWith('creqa') || lower.startsWith('req_');
   };
 
   function parseEcashRequest(val) {
@@ -1968,6 +1969,39 @@ function Wallet() {
       if (/^creqa/i.test(trimmed)) {
         const payload = parsePaymentRequest(trimmed);
         return { ...payload, protocol: 'nut18' };
+      }
+      if (trimmed.startsWith('req_')) {
+        const parts = trimmed.split(':');
+        const requestId = parts[0];
+        
+        try {
+          const stored = localStorage.getItem(`cashu_ecash_req_${requestId}`);
+          if (stored) {
+            const data = JSON.parse(stored);
+            let outputs = [];
+            if (Array.isArray(data.outputDatas)) {
+              const outputDatas = typeof data.outputDatas === 'string' 
+                ? JSON.parse(data.outputDatas) 
+                : data.outputDatas;
+                
+              outputs = outputDatas.map(od => ({
+                amount: od.amount,
+                B_: od.B_
+              }));
+            }
+            
+            return {
+              requestId,
+              amount: data.amount,
+              outputs,
+              mint: '',
+              protocol: 'legacy'
+            };
+          }
+        } catch (e) {
+          console.warn('Failed to lookup req_ ID:', e);
+        }
+        return { requestId, protocol: 'legacy' };
       }
       return null;
     } catch (error) {
@@ -2509,12 +2543,13 @@ function Wallet() {
         throw new Error(t('messages.invalidAmount'));
       }
 
+      const targetMint = mint || mintUrl;
       const currentMint = normalizeMintForCompare(mintUrl);
-      const requestMint = normalizeMintForCompare(mint);
+      const requestMint = normalizeMintForCompare(targetMint);
 
       if (currentMint !== requestMint) {
         const errorMsg = t('messages.ecashRequestMintMismatch', {
-          requestMint: formatMintLabel(mint),
+          requestMint: formatMintLabel(targetMint),
           currentMint: formatMintLabel(mintUrl)
         });
         setInvoiceError(errorMsg);
@@ -2552,7 +2587,7 @@ function Wallet() {
       const change = Math.max(0, actualInputTotal - Number(amount));
 
       if (change > 0) {
-        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`));
+        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(targetMint)}`));
         if (!kr.ok) throw new Error(t('messages.mintKeysFetchError'));
         const mintKeys = await kr.json();
         const built = await createBlindedOutputs(change, mintKeys);
@@ -2580,7 +2615,7 @@ function Wallet() {
         body: JSON.stringify({
           inputs: uniquePicked,
           outputs: allOutputs,
-          mintUrl: mint,
+          mintUrl: targetMint,
           requestId
         })
       });
@@ -2602,7 +2637,7 @@ function Wallet() {
 
       let changeProofs = [];
       if (change > 0 && changeSignatures.length > 0 && changeOutputDatas) {
-        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`));
+        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(targetMint)}`));
         if (kr.ok) {
           const mintKeys = await kr.json();
           changeProofs = await signaturesToProofs(changeSignatures, mintKeys, changeOutputDatas);
@@ -2611,7 +2646,7 @@ function Wallet() {
 
       removeProofs(uniquePicked);
       if (changeProofs.length > 0) {
-        addProofs(changeProofs, mint);
+        addProofs(changeProofs, targetMint);
       }
 
       addTransaction({
@@ -2622,7 +2657,7 @@ function Wallet() {
         status: 'confirmed',
         description: t('wallet.ecashSend'),
         memo: '',
-        mintUrl: mint
+        mintUrl: targetMint
       });
 
       await loadWalletData();
