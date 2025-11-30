@@ -2227,11 +2227,25 @@ function Wallet() {
       }
       const mintKeys = await keysResp.json();
 
+      // Calculate actual input total after deduplication
+      const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
       const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
-      const change = Math.max(0, Number(total) - Number(amount));
+      const change = Math.max(0, actualInputTotal - Number(amount));
       const changeOutputs = change > 0 ? await createBlindedOutputs(change, mintKeys) : { outputs: [], outputDatas: [] };
       const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
       const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
+
+      // Calculate output total for verification
+      const outputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0) +
+                         (changeOutputs.outputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0);
+      console.log('[eCash Send] Swap balance check:', {
+        inputTotal: actualInputTotal,
+        outputTotal,
+        paymentAmount: amount,
+        changeAmount: change,
+        inputCount: uniquePicked.length,
+        outputCount: combinedOutputs.length
+      });
 
       const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
         method: 'POST',
@@ -2373,9 +2387,11 @@ function Wallet() {
       const receiverOutputs = receiverOutputDatas.map(od => od.blindedMessage);
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
 
+      // Calculate actual input total after deduplication
+      const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
       let changeOutputs = undefined;
       let changeOutputDatas = undefined;
-      const change = Math.max(0, Number(total) - Number(amount));
+      const change = Math.max(0, actualInputTotal - Number(amount));
 
       if (change > 0) {
         const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`));
@@ -2387,6 +2403,18 @@ function Wallet() {
       }
 
       const allOutputs = [...receiverOutputs, ...(changeOutputs || [])];
+
+      // Calculate output total for verification
+      const receiverTotal = receiverOutputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+      const changeTotal = changeOutputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0;
+      console.log('[eCash Send Legacy] Swap balance check:', {
+        inputTotal: actualInputTotal,
+        outputTotal: receiverTotal + changeTotal,
+        receiverAmount: amount,
+        changeAmount: change,
+        inputCount: uniquePicked.length,
+        outputCount: allOutputs.length
+      });
 
       const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
         method: 'POST',
