@@ -68,18 +68,20 @@ install_dependencies() {
 start_services() {
     echo ""
     echo "서비스를 시작하는 중..."
-    
+
     echo "백엔드 서버 시작 중..."
     cd backend
-    npm start &
+    # Redirect backend logs to backend.log
+    HOST=127.0.0.1 PORT=5001 npm start >> backend.log 2>&1 &
     BACKEND_PID=$!
+    echo "백엔드 로그: backend/backend.log"
     cd ..
-    
+
     sleep 3
-    
+
     echo "프론트엔드 개발 서버 시작 중..."
     cd frontend
-    npm start &
+    HOST=127.0.0.1 PORT=3000 npm start &
     FRONTEND_PID=$!
     cd ..
     

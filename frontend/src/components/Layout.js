@@ -5,7 +5,7 @@ import './Layout.css';
 import Icon from './Icon';
 
 const Layout = ({ children }) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const [pinLocked, setPinLocked] = useState(false);

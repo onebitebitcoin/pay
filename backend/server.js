@@ -26,6 +26,7 @@ const subscriptions = new Map(); // subscriptionId -> ws
 const quoteToSubscription = new Map(); // quoteId -> subscriptionId for payment notifications
 const ecashRequestToSubscription = new Map(); // requestId -> subscriptionId for eCash request notifications
 const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || '0.0.0.0';
 
 /**
  * Lightweight helper to fetch JSON over HTTPS without adding extra deps.
@@ -283,6 +284,86 @@ function cacheRedeemedQuote(quoteId, data) {
       redeemedQuotes.delete(quoteId);
     }
   }, 10 * 60 * 1000); // keep for 10 minutes
+}
+
+function flattenKeysetsResponse(resp) {
+  const list = [];
+  if (Array.isArray(resp?.keysets)) {
+    list.push(...resp.keysets);
+  } else if (resp?.keysets && typeof resp.keysets === 'object') {
+    list.push(...Object.values(resp.keysets));
+  } else if (Array.isArray(resp)) {
+    list.push(...resp);
+  } else if (resp && typeof resp === 'object' && (resp.id || resp.keyset_id || resp.keysetId)) {
+    list.push(resp);
+  }
+
+  const current = resp?.current_keyset || resp?.currentKeyset || resp?.current;
+  return {
+    keysets: list.filter(Boolean),
+    current,
+  };
+}
+
+function resolveKeysetId(keyset) {
+  return keyset?.id || keyset?.keyset_id || keyset?.keysetId || null;
+}
+
+function isActiveKeyset(keyset) {
+  return keyset?.active === true || keyset?.state === 'active' || keyset?.current === true || keyset?.is_active === true;
+}
+
+async function ensureOutputsUseMintKeyset(outputs, mintUrl) {
+  if (!Array.isArray(outputs) || outputs.length === 0) {
+    return outputs;
+  }
+
+  try {
+    const keysetResp = await cashu.getKeysets(mintUrl);
+    const { keysets, current } = flattenKeysetsResponse(keysetResp);
+    if (!keysets.length) {
+      return outputs;
+    }
+
+    const currentId = current ? String(current) : null;
+    const activeKeyset =
+      keysets.find((keyset) => {
+        const id = resolveKeysetId(keyset);
+        return id && currentId && String(id) === currentId;
+      }) || keysets.find(isActiveKeyset) || keysets[0];
+
+    const activeId = resolveKeysetId(activeKeyset);
+    if (!activeId) {
+      return outputs;
+    }
+
+    const validIds = new Set(
+      keysets
+        .map((keyset) => resolveKeysetId(keyset))
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+    let changed = false;
+
+    const sanitized = outputs.map((output) => {
+      const outputId = output?.id || output?.keyset_id || output?.keysetId;
+      const normalizedId = outputId ? String(outputId) : null;
+      const nextId = normalizedId && validIds.has(normalizedId) ? normalizedId : String(activeId);
+      if (nextId !== normalizedId) {
+        changed = true;
+      }
+      return { ...output, id: nextId };
+    });
+
+    if (changed) {
+      console.log('[Swap] Outputs updated with active keyset id', { activeId: String(activeId) });
+    }
+
+    return sanitized;
+  } catch (error) {
+    console.warn('[Swap] Failed to refresh mint keysets, using provided outputs', error?.message || error);
+    return outputs;
+  }
 }
 
 // Monitor quote status and auto-redeem when paid
@@ -849,6 +930,14 @@ app.post('/api/cashu/melt/quote', async (req, res) => {
 app.post('/api/cashu/melt', async (req, res) => {
   try {
     const { quote, inputs, proofs, mintUrl } = req.body || {};
+    console.log('[Melt] Request:', {
+      quote,
+      inputsCount: inputs?.length,
+      proofsCount: proofs?.length,
+      mintUrl,
+      firstInput: inputs?.[0]
+    });
+
     if (!quote) return res.status(400).json({ error: 'quote 필요' });
     if ((!inputs || !Array.isArray(inputs)) && (!proofs || !Array.isArray(proofs))) {
       return res.status(400).json({ error: 'inputs 또는 proofs 배열 필요' });
@@ -938,7 +1027,8 @@ app.post('/api/cashu/swap', async (req, res) => {
     console.log('[Swap] Output total:', outputTotal);
     console.log('[Swap] Difference (input - output):', inputTotal - outputTotal);
 
-    const result = await cashu.swap({ inputs, outputs, mintUrl });
+    const sanitizedOutputs = await ensureOutputsUseMintKeyset(outputs, mintUrl);
+    const result = await cashu.swap({ inputs, outputs: sanitizedOutputs, mintUrl });
     console.log('[Swap] Swap result:', {
       hasSignatures: !!result?.signatures,
       signaturesIsArray: Array.isArray(result?.signatures),
@@ -1146,9 +1236,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '서버 내부 오류' });
 });
 
-server.listen(PORT, () => {
-  console.log(`비트코인 매장 API 서버가 포트 ${PORT}에서 실행 중입니다`);
-  console.log(`WebSocket 서버가 포트 ${PORT}에서 실행 중입니다`);
+server.listen(PORT, HOST, () => {
+  console.log(`비트코인 매장 API 서버가 ${HOST}:${PORT}에서 실행 중입니다`);
+  console.log(`WebSocket 서버가 ${HOST}:${PORT}에서 실행 중입니다`);
   console.log(`사용 가능한 엔드포인트:`);
   console.log(`   GET /api/stores - 모든 매장 조회`);
   console.log(`   GET /api/stores/random - 랜덤 매장 조회`);

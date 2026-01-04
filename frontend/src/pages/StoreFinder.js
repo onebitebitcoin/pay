@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import './StoreFinder.css';
 import Icon from '../components/Icon';
@@ -35,28 +35,28 @@ function StoreFinder() {
   const isKakao = i18n.language === 'ko';
 
   // Helper function to get localized store name
-  const getStoreName = (store) => {
+  const getStoreName = useCallback((store) => {
     if ((i18n.language === 'en' || i18n.language === 'ja') && store.name_en) {
       return store.name_en;
     }
     return store.name;
-  };
+  }, [i18n.language]);
 
   // Helper function to get localized address
-  const getStoreAddress = (store) => {
+  const getStoreAddress = useCallback((store) => {
     if ((i18n.language === 'en' || i18n.language === 'ja') && store.address_en) {
       return store.address_en;
     }
     return store.address;
-  };
+  }, [i18n.language]);
 
   // Helper function to get localized category
-  const getStoreCategory = (store) => {
+  const getStoreCategory = useCallback((store) => {
     if ((i18n.language === 'en' || i18n.language === 'ja') && store.category_en) {
       return store.category_en;
     }
     return store.category;
-  };
+  }, [i18n.language]);
 
   useEffect(() => {
     document.title = t('pageTitle.map');
@@ -67,7 +67,6 @@ function StoreFinder() {
   // const [loading, setLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
-  const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [sortByDistance, setSortByDistance] = useState(false);
@@ -90,7 +89,7 @@ function StoreFinder() {
     fetchStores();
   }, []);
 
-  const resetKakaoArtifacts = () => {
+  const resetKakaoArtifacts = useCallback(() => {
     markersRef.current.forEach(marker => {
       if (marker && typeof marker.setMap === 'function') {
         marker.setMap(null);
@@ -103,7 +102,7 @@ function StoreFinder() {
     }
     userMarkerRef.current = null;
     currentInfowindowRef.current = null;
-  };
+  }, []);
 
   const clearLeafletStoreMarkers = () => {
     leafletMarkersRef.current.forEach(item => {
@@ -115,14 +114,14 @@ function StoreFinder() {
     currentLeafletPopupRef.current = null;
   };
 
-  const resetLeafletArtifacts = () => {
+  const resetLeafletArtifacts = useCallback(() => {
     clearLeafletStoreMarkers();
     if (leafletUserMarkerRef.current) {
       leafletUserMarkerRef.current.remove();
     }
     leafletUserMarkerRef.current = null;
     currentLeafletPopupRef.current = null;
-  };
+  }, []);
 
   useEffect(() => {
     setMapReady(false);
@@ -147,6 +146,8 @@ function StoreFinder() {
       kakaoMapRef.current = null;
       setMapReady(false);
     };
+  // We intentionally only react to provider changes to avoid reinitializing maps on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isKakao]);
 
   useEffect(() => {
@@ -193,6 +194,8 @@ function StoreFinder() {
       setMapReady(false);
       console.log('[StoreFinder] ♻️ Leaflet map cleaned up');
     };
+  // Only switch maps when provider changes to prevent unnecessary reinitialization.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isKakao]);
 
   useEffect(() => {
@@ -655,7 +658,7 @@ function StoreFinder() {
     updateMapMarkers(filtered);
   };
 
-  const focusStoreOnMap = (store) => {
+  const focusStoreOnMap = useCallback((store) => {
     if (!store) return false;
 
     console.log('[StoreFinder] 🎯 Focusing store on map:', {
@@ -711,7 +714,7 @@ function StoreFinder() {
     }
 
     return false;
-  };
+  }, [getStoreName, isKakao]);
 
   const handleStoreClick = (store) => {
     if (!store) return;
@@ -789,7 +792,7 @@ function StoreFinder() {
         clearTimeout(timeoutId);
       }
     };
-  }, [mapReady, pendingStoreId, stores, isKakao]);
+  }, [mapReady, pendingStoreId, stores, isKakao, focusStoreOnMap]);
 
   useEffect(() => {
     hasAutoFocusedRef.current = false;
@@ -813,7 +816,7 @@ function StoreFinder() {
       hasAutoFocusedRef.current = true;
       console.log('[StoreFinder] ✅ Auto-focused the first store on map load');
     }
-  }, [mapReady, filteredStores, pendingStoreId, isKakao]);
+  }, [mapReady, filteredStores, pendingStoreId, isKakao, focusStoreOnMap]);
 
   const openStoreDetail = (store) => {
     setSelectedStore(store);
@@ -832,32 +835,6 @@ function StoreFinder() {
     } catch (err) {
       console.error('Copy failed:', err);
       alert(t('common.copyFailed'));
-    }
-  };
-
-  const handleDeleteStore = async (store) => {
-    if (!store || !store.id) return;
-    if (deleteLoadingId) return;
-    if (!window.confirm(t('storeFinder.deleteConfirm', { name: store.name }))) return;
-
-    try {
-      setDeleteLoadingId(store.id);
-      const resp = await fetch(apiUrl(`/api/stores/${store.id}`), {
-        method: 'DELETE',
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || t('storeFinder.deleteFailed'));
-      }
-      await fetchStores();
-      if (selectedStore && selectedStore.id === store.id) {
-        closeStoreDetail();
-      }
-    } catch (error) {
-      console.error('Failed to delete store:', error);
-      alert(error.message || t('storeFinder.deleteFailed'));
-    } finally {
-      setDeleteLoadingId(null);
     }
   };
 

@@ -12,7 +12,7 @@ const IDENTITY_STORAGE_KEY = 'nostr_identity_v1';
 let nostrToolsPromise = null;
 let sharedPoolPromise = null;
 
-const dynamicImport = (url) => new Function('u', 'return import(u)')(url);
+const dynamicImport = (url) => import(/* webpackIgnore: true */ url);
 
 const bytesToHex = (bytes) => Array.from(bytes || [], (b) => b.toString(16).padStart(2, '0')).join('');
 

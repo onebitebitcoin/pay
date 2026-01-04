@@ -53,7 +53,25 @@ async function getInfo(mintUrl) {
 
 async function getKeys(mintUrl) {
   const url = normalizeMintUrl(mintUrl);
-  return reqJSON(`${url}/v1/keys`);
+  const keys = await reqJSON(`${url}/v1/keys`);
+  console.log('[Cashu] Mint keys response:', JSON.stringify(keys, null, 2));
+  return keys;
+}
+
+async function getKeysets(mintUrl) {
+  const url = normalizeMintUrl(mintUrl);
+  try {
+    const keysets = await reqJSON(`${url}/v1/keysets`);
+    console.log('[Cashu] Mint keysets response:', JSON.stringify(keysets, null, 2));
+    return keysets;
+  } catch (error) {
+    if (error && (error.status === 404 || error.status === 405)) {
+      console.warn('[Cashu] /v1/keysets not available, falling back to /v1/keys');
+      const fallback = await getKeys(url);
+      return fallback?.keysets || fallback;
+    }
+    throw error;
+  }
 }
 
 async function mintQuoteBolt11({ amount, mintUrl }) {
@@ -85,10 +103,24 @@ async function meltQuoteBolt11({ invoice, request, mintUrl }) {
 
 async function meltBolt11(payload, mintUrl) {
   const url = normalizeMintUrl(mintUrl);
-  return reqJSON(`${url}/v1/melt/bolt11`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: payload
-  });
+  console.log('[Cashu] Melt request to:', `${url}/v1/melt/bolt11`);
+  console.log('[Cashu] Melt payload:', JSON.stringify(payload, null, 2));
+
+  try {
+    const result = await reqJSON(`${url}/v1/melt/bolt11`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+    console.log('[Cashu] Melt success:', result);
+    return result;
+  } catch (error) {
+    console.error('[Cashu] Melt error:', {
+      status: error.status,
+      data: error.data,
+      message: error.message
+    });
+    throw error;
+  }
 }
 
 async function checkMintQuote({ quote, mintUrl }) {
@@ -112,10 +144,25 @@ async function checkMintQuote({ quote, mintUrl }) {
 
 async function swap({ inputs, outputs, mintUrl }) {
   const url = normalizeMintUrl(mintUrl);
-  return reqJSON(`${url}/v1/swap`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: { inputs, outputs }
-  });
+  console.log('[Cashu] Swap request to:', `${url}/v1/swap`);
+  console.log('[Cashu] Swap inputs:', JSON.stringify(inputs, null, 2));
+  console.log('[Cashu] Swap outputs:', JSON.stringify(outputs, null, 2));
+
+  try {
+    const result = await reqJSON(`${url}/v1/swap`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: { inputs, outputs }
+    });
+    console.log('[Cashu] Swap success');
+    return result;
+  } catch (error) {
+    console.error('[Cashu] Swap error:', {
+      status: error.status,
+      data: error.data,
+      message: error.message
+    });
+    throw error;
+  }
 }
 
 async function checkProofsState({ proofs, mintUrl }) {
@@ -131,6 +178,7 @@ async function checkProofsState({ proofs, mintUrl }) {
 module.exports = {
   getInfo,
   getKeys,
+  getKeysets,
   mintQuoteBolt11,
   mintBolt11,
   meltQuoteBolt11,
@@ -138,4 +186,5 @@ module.exports = {
   swap,
   checkMintQuote,
   checkProofsState,
+  normalizeMintUrl,
 };

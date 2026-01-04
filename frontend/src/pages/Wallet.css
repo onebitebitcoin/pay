@@ -899,6 +899,8 @@
   padding: 0.875rem 0;
   border-bottom: 1px solid var(--border);
   transition: background-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .proof-item:last-child {
@@ -955,11 +957,20 @@
   font-size: 0.85rem;
   color: var(--muted);
   margin-bottom: 0.25rem;
+  word-break: break-all;
+  width: 100%;
 }
 
 .proof-id {
   font-size: 0.8rem;
   color: var(--muted);
+  word-break: break-all;
+  width: 100%;
+}
+
+.proof-mint {
+  word-break: break-all;
+  width: 100%;
 }
 
 .pending-proof {
@@ -2202,6 +2213,142 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.send-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.send-tab {
+  flex: 1;
+  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.send-tab:hover {
+  color: var(--text);
+  background: rgba(var(--primary-rgb), 0.05);
+}
+
+.send-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.send-info {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--card-muted);
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ecash-keypad-card {
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: var(--card-bg);
+}
+
+.ecash-keypad-display {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.ecash-keypad-display .label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.ecash-keypad-display .value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  color: var(--text);
+}
+
+.ecash-keypad-display .value .unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.35rem;
+}
+
+.ecash-keypad-display .fiat,
+.ecash-keypad-display .available {
+  margin-top: 0.35rem;
+  color: var(--muted);
+}
+
+.ecash-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.ecash-keypad-button {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.85rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  background: var(--card-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ecash-keypad-button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.08);
+}
+
+.ecash-keypad-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.keypad-actions {
+  margin-top: 1rem;
+}
+
+.ecash-token-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  margin-top: 0.85rem;
+}
+
+.ecash-token-note.info {
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--primary);
+}
+
+.ecash-token-note.warning {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error, #dc2626);
 }
 
 .qr-scanner-section {

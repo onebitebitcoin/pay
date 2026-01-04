@@ -30,8 +30,6 @@ function AddStoreForm() {
   });
   const [newStore, setNewStore] = useState(createEmptyStore);
   const [hoursRange, setHoursRange] = useState({ open: '', close: '' });
-  const [showAddressModal, setShowAddressModal] = useState(false);
-  const [tempAddress, setTempAddress] = useState('');
   const geocoderRef = useRef(null);
   const geocodeAbortRef = useRef(null);
 

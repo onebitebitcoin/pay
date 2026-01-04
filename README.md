@@ -22,7 +22,7 @@ A modern, responsive web application that helps users find Bitcoin-accepting sto
 
 2. **Run the application:**
    ```bash
-   ./run.sh
+   ./dev.sh
    ```
 
 3. **Set up Kakao Maps API (무료):**
@@ -95,7 +95,7 @@ bitcoin-store/
 ├── backend/           # Express API server
 │   ├── server.js     # Main server file
 │   └── package.json
-├── run.sh            # Startup script
+├── dev.sh            # Startup script
 └── README.md
 ```
 

@@ -2,6 +2,73 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import QrScannerLib from 'qr-scanner';
 
+const normalizeModes = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  return [value];
+};
+
+const getMacroFocusValue = (range = {}) => {
+  const { min = 0, max = 1 } = range;
+  const delta = max - min;
+  if (!Number.isFinite(delta) || delta <= 0) {
+    return min;
+  }
+  // bias heavily towards macro (closest focus distance)
+  return Math.max(min, Math.min(max, min + delta * 0.03));
+};
+
+const appendTrackFocusConstraints = (capabilities = {}, advanced = []) => {
+  const focusModes = normalizeModes(capabilities.focusMode);
+  const supportsManual = focusModes.includes('manual') && capabilities.focusDistance;
+  if (supportsManual) {
+    advanced.push({
+      focusMode: 'manual',
+      focusDistance: getMacroFocusValue(capabilities.focusDistance)
+    });
+    return true;
+  }
+
+  if (focusModes.includes('continuous') || focusModes.includes('auto')) {
+    advanced.push({
+      focusMode: focusModes.includes('continuous') ? 'continuous' : 'auto'
+    });
+    return true;
+  }
+
+  if (focusModes.includes('single-shot')) {
+    advanced.push({ focusMode: 'single-shot' });
+    return true;
+  }
+
+  return false;
+};
+
+const applyPhotoFocusOptions = async (imageCapture, photoCaps) => {
+  if (!imageCapture || !photoCaps) return false;
+  const focusModes = normalizeModes(photoCaps.focusMode);
+
+  if (focusModes.includes('manual') && photoCaps.focusDistance) {
+    await imageCapture.setOptions({
+      focusMode: 'manual',
+      focusDistance: getMacroFocusValue(photoCaps.focusDistance)
+    });
+    return true;
+  }
+
+  if (focusModes.includes('continuous')) {
+    await imageCapture.setOptions({ focusMode: 'continuous' });
+    return true;
+  }
+
+  if (focusModes.includes('single-shot')) {
+    await imageCapture.setOptions({ focusMode: 'single-shot' });
+    return true;
+  }
+
+  return false;
+};
+
 function QrScanner({ onScan, onError, className = '' }) {
   const { t } = useTranslation();
   const videoRef = useRef(null);
@@ -14,73 +81,6 @@ function QrScanner({ onScan, onError, className = '' }) {
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [focusSupported, setFocusSupported] = useState(false);
   const [enhancingCamera, setEnhancingCamera] = useState(false);
-
-  const normalizeModes = (value) => {
-    if (!value) return [];
-    if (Array.isArray(value)) return value;
-    return [value];
-  };
-
-  const getMacroFocusValue = (range = {}) => {
-    const { min = 0, max = 1 } = range;
-    const delta = max - min;
-    if (!Number.isFinite(delta) || delta <= 0) {
-      return min;
-    }
-    // bias heavily towards macro (closest focus distance)
-    return Math.max(min, Math.min(max, min + delta * 0.03));
-  };
-
-  const appendTrackFocusConstraints = (capabilities = {}, advanced = []) => {
-    const focusModes = normalizeModes(capabilities.focusMode);
-    const supportsManual = focusModes.includes('manual') && capabilities.focusDistance;
-    if (supportsManual) {
-      advanced.push({
-        focusMode: 'manual',
-        focusDistance: getMacroFocusValue(capabilities.focusDistance)
-      });
-      return true;
-    }
-
-    if (focusModes.includes('continuous') || focusModes.includes('auto')) {
-      advanced.push({
-        focusMode: focusModes.includes('continuous') ? 'continuous' : 'auto'
-      });
-      return true;
-    }
-
-    if (focusModes.includes('single-shot')) {
-      advanced.push({ focusMode: 'single-shot' });
-      return true;
-    }
-
-    return false;
-  };
-
-  const applyPhotoFocusOptions = async (imageCapture, photoCaps) => {
-    if (!imageCapture || !photoCaps) return false;
-    const focusModes = normalizeModes(photoCaps.focusMode);
-
-    if (focusModes.includes('manual') && photoCaps.focusDistance) {
-      await imageCapture.setOptions({
-        focusMode: 'manual',
-        focusDistance: getMacroFocusValue(photoCaps.focusDistance)
-      });
-      return true;
-    }
-
-    if (focusModes.includes('continuous')) {
-      await imageCapture.setOptions({ focusMode: 'continuous' });
-      return true;
-    }
-
-    if (focusModes.includes('single-shot')) {
-      await imageCapture.setOptions({ focusMode: 'single-shot' });
-      return true;
-    }
-
-    return false;
-  };
 
   useEffect(() => {
     let scanner = null;
@@ -257,7 +257,7 @@ function QrScanner({ onScan, onError, className = '' }) {
       photoCapabilitiesRef.current = null;
       cancelled = true;
     };
-  }, [onScan, onError]);
+  }, [onScan, onError, t]);
 
   const toggleTorch = async () => {
     if (!torchSupported || !imageCaptureRef.current) return;

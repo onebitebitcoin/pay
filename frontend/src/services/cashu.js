@@ -43,18 +43,34 @@ function uniqueBySecret(arr) {
   return Array.from(map.values());
 }
 
-export function getBalanceSats() {
-  // Only count enabled (non-disabled) proofs
-  return uniqueBySecret(loadProofs())
-    .filter(p => !p.disabled)
+// Check if a proof is valid and usable
+function isProofUsable(p) {
+  // Exclude disabled proofs
+  if (p.disabled) return false;
+  // Exclude invalid proofs (missing required fields)
+  if (!p.amount || p.amount <= 0) return false;
+  if (!p.secret) return false;
+  if (!p.id && !p.C) return false;
+  return true;
+}
+
+export function calculateBalanceFromProofs(proofs) {
+  const list = Array.isArray(proofs) ? proofs : [];
+  return uniqueBySecret(list)
+    .filter(isProofUsable)
     .reduce((sum, p) => sum + Number(p?.amount || 0), 0);
 }
 
+export function getBalanceSats() {
+  // Only count valid and enabled proofs
+  return calculateBalanceFromProofs(loadProofs());
+}
+
 // Very naive coin selection: pick largest-first until reaching target
-// Only selects enabled (non-disabled) proofs
+// Only selects valid and enabled proofs
 export function selectProofsForAmount(target) {
   const proofs = uniqueBySecret(loadProofs())
-    .filter(p => !p.disabled) // Skip disabled proofs
+    .filter(isProofUsable)
     .slice()
     .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
   const picked = [];
@@ -81,10 +97,12 @@ export function addProofs(newProofs, mintUrl) {
   if (!Array.isArray(newProofs)) return;
   const current = loadProofs();
 
-  // Add mint URL to new proofs
+  // Add mint URL and creation timestamp to new proofs
+  const timestamp = new Date().toISOString();
   const proofsWithMint = newProofs.map(p => ({
     ...p,
-    mintUrl: p.mintUrl || mintUrl || process.env.REACT_APP_MINT_URL || 'https://mint.minibits.cash/Bitcoin'
+    mintUrl: p.mintUrl || mintUrl || process.env.REACT_APP_MINT_URL || 'https://mint.minibits.cash/Bitcoin',
+    createdAt: p.createdAt || timestamp  // Add timestamp if not already present
   }));
 
   const merged = uniqueBySecret([...current, ...proofsWithMint]);
@@ -96,7 +114,32 @@ export function toggleProofDisabled(proofSecret) {
   const proofs = loadProofs();
   const updated = proofs.map(p => {
     if ((p?.secret || JSON.stringify(p)) === proofSecret) {
-      return { ...p, disabled: !p.disabled };
+      if (p?.disabled && p?.disabledReason === 'swap_failed') {
+        // Do not allow enabling proofs that were locked due to swap failure
+        return p;
+      }
+
+      const newDisabled = !p.disabled;
+
+      // If enabling, remove disabled metadata
+      if (!newDisabled) {
+        const { disabled, disabledReason, disabledMessage, disabledAt, ...rest } = p;
+        return rest;
+      }
+
+      // If disabling, add metadata (only if not already present)
+      const disabledProof = {
+        ...p,
+        disabled: true,
+        disabledReason: p.disabledReason || 'user',
+        disabledAt: p.disabledAt || new Date().toISOString()
+      };
+
+      if (p.disabledMessage) {
+        disabledProof.disabledMessage = p.disabledMessage;
+      }
+
+      return disabledProof;
     }
     return p;
   });
@@ -192,6 +235,40 @@ export async function syncProofsWithMint(apiBaseUrl, mintUrl) {
   }
 }
 
+// Normalize proofs for API calls - ensure witness/dleq is a JSON string
+function normalizeProofsForApi(proofs) {
+  if (!Array.isArray(proofs)) return proofs;
+  return proofs.map(proof => {
+    if (!proof) return proof;
+
+    const normalized = {
+      amount: proof.amount,
+      secret: proof.secret,
+      C: proof.C
+    };
+
+    // Add id if present
+    if (proof.id) {
+      normalized.id = proof.id;
+    }
+
+    // Handle witness field (convert object to JSON string)
+    if (proof.witness) {
+      normalized.witness = typeof proof.witness === 'object'
+        ? JSON.stringify(proof.witness)
+        : proof.witness;
+    }
+    // Handle legacy dleq field (rename to witness and convert to JSON string)
+    else if (proof.dleq) {
+      normalized.witness = typeof proof.dleq === 'object'
+        ? JSON.stringify(proof.dleq)
+        : proof.dleq;
+    }
+
+    return normalized;
+  });
+}
+
 // Swap all proofs for fresh ones (refresh proofs)
 export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signaturesToProofsFn, mintUrl) {
   const proofs = loadProofs();
@@ -209,12 +286,15 @@ export async function refreshProofs(apiBaseUrl, createBlindedOutputsFn, signatur
     // Create new blinded outputs for the same amount
     const { outputs, outputDatas } = await createBlindedOutputsFn(totalAmount, mintKeys);
 
+    // Normalize proofs before swap (ensure witness is JSON string)
+    const normalizedProofs = normalizeProofsForApi(proofs);
+
     // Swap old proofs for new ones
     const swapResp = await fetch(`${apiBaseUrl}/api/cashu/swap`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        inputs: proofs,
+        inputs: normalizedProofs,
         outputs,
         mintUrl
       })

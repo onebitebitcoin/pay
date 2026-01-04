@@ -3,14 +3,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_MINT_URL, ECASH_CONFIG, apiUrl, API_BASE_URL } from '../config';
 // Cashu mode: no join/federation or gateway UI
-import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled } from '../services/cashu';
+import { getBalanceSats, selectProofsForAmount, addProofs, removeProofs, loadProofs, exportProofsJson, importProofsFrom, syncProofsWithMint, toggleProofDisabled, calculateBalanceFromProofs } from '../services/cashu';
 import { createBlindedOutputs, signaturesToProofs, serializeOutputDatas, deserializeOutputDatas } from '../services/cashuProtocol';
-import { createPaymentRequest, parsePaymentRequest, createPaymentPayload, sendPaymentViaPost } from '../services/nut18';
-import { sendPaymentViaNostr, ensureNostrIdentity, decodeNprofile, subscribeToNostrDms } from '../services/nostrTransport';
+import { createPaymentRequest, parsePaymentRequest, createPaymentPayload, sendPaymentViaPost, createHttpPostTransport, isCashuToken, parseCashuToken, extractProofsFromToken, createCashuToken } from '../services/nut18';
+import { sendPaymentViaNostr, ensureNostrIdentity, subscribeToNostrDms } from '../services/nostrTransport';
 import './Wallet.css';
 import Icon from '../components/Icon';
 import QrScanner from '../components/QrScanner';
 const SATS_PER_BTC = 100000000;
+const MAX_CONVERSION_AMOUNT = ECASH_CONFIG.maxAmount;
+const CONVERSION_FEE_RATE = ECASH_CONFIG.feeRate;
+const ECASH_SEND_MAX_DIGITS = 10;
 
 const normalizeQrValue = (rawValue = '') => {
   if (!rawValue) return '';
@@ -29,8 +32,42 @@ const normalizeQrValue = (rawValue = '') => {
   return compact;
 };
 
+// Normalize proofs for API calls - ensure witness/dleq is a JSON string
+const normalizeProofsForApi = (proofs) => {
+  if (!Array.isArray(proofs)) return proofs;
+  return proofs.map(proof => {
+    if (!proof) return proof;
+
+    const normalized = {
+      amount: proof.amount,
+      secret: proof.secret,
+      C: proof.C
+    };
+
+    // Add id if present
+    if (proof.id) {
+      normalized.id = proof.id;
+    }
+
+    // Handle witness field (convert object to JSON string)
+    if (proof.witness) {
+      normalized.witness = typeof proof.witness === 'object'
+        ? JSON.stringify(proof.witness)
+        : proof.witness;
+    }
+    // Handle legacy dleq field (rename to witness and convert to JSON string)
+    else if (proof.dleq) {
+      normalized.witness = typeof proof.dleq === 'object'
+        ? JSON.stringify(proof.dleq)
+        : proof.dleq;
+    }
+
+    return normalized;
+  });
+};
+
 const RECEIVE_MIN_AMOUNT = 1;
-const RECEIVE_MAX_AMOUNT = 100000;
+const RECEIVE_MAX_AMOUNT = ECASH_CONFIG.maxAmount;
 
 const createInitialFiatState = (language = 'en') => {
   switch (language) {
@@ -136,7 +173,6 @@ function Wallet() {
   const [receiveCompleted, setReceiveCompleted] = useState(false);
   const [lastReceiveMode, setLastReceiveMode] = useState('lightning');
   const [receivedAmount, setReceivedAmount] = useState(0);
-  const [showEcashInfo, setShowEcashInfo] = useState(false);
   const [showPassphraseModal, setShowPassphraseModal] = useState(false);
   const [passphraseAction, setPassphraseAction] = useState('backup'); // 'backup' or 'restore'
   const [passphrase, setPassphrase] = useState('');
@@ -150,7 +186,10 @@ function Wallet() {
   const [infoMessage, setInfoMessage] = useState('');
   const [infoMessageType, setInfoMessageType] = useState('info'); // 'info', 'success', 'error'
   const [showProofs, setShowProofs] = useState(false);
-  const proofs = useMemo(() => loadProofs(), [ecashBalance, txUpdateCounter]);
+  const [proofs, setProofs] = useState(() => loadProofs());
+  useEffect(() => {
+    setProofs(loadProofs());
+  }, [ecashBalance, txUpdateCounter]);
   const pendingEcashTransactions = useMemo(
     () => transactions.filter((tx) => tx?.type === 'receive' && tx?.status === 'pending'),
     [transactions]
@@ -160,20 +199,19 @@ function Wallet() {
   const [receiveAmountTooHigh, setReceiveAmountTooHigh] = useState(false);
   const [fiatRate, setFiatRate] = useState(() => createInitialFiatState(i18n.language));
   const [receiveTab, setReceiveTab] = useState('lightning');
-  const [ecashRequestMode, setEcashRequestMode] = useState(() => {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return 'legacy';
-    }
-    try {
-      return localStorage.getItem('cashu_last_ecash_request_type') || 'legacy';
-    } catch {
-      return 'legacy';
-    }
-  });
+  const [sendTab, setSendTab] = useState('lightning');
+  const [ecashSendAmountInput, setEcashSendAmountInput] = useState('');
+  const [ecashSendToken, setEcashSendToken] = useState('');
+  const [ecashSendTokenAmount, setEcashSendTokenAmount] = useState(0);
+  const [ecashSendTokenMint, setEcashSendTokenMint] = useState('');
+  const [ecashSendError, setEcashSendError] = useState('');
+  const [ecashTokenCopied, setEcashTokenCopied] = useState(false);
   // Removed eCash receive tab - Lightning only for privacy
   const [ecashRequest, setEcashRequest] = useState(''); // eCash request string
   const [ecashRequestId, setEcashRequestId] = useState(null); // Request ID for polling
   const [showRequestDetails, setShowRequestDetails] = useState(false); // Toggle for eCash request details
+  const [ecashTokenInput, setEcashTokenInput] = useState(''); // eCash token input (cashuA...)
+  const [enableTokenScanner, setEnableTokenScanner] = useState(false); // QR scanner for token
 
   const nostrSubscriptionRef = useRef(null);
   const nostrHandledEventsRef = useRef(new Set());
@@ -313,11 +351,83 @@ function Wallet() {
     }
   }, [fiatRate.rate, fiatFormatter]);
 
+  // Parse eCash payment request (must be defined before pendingPaymentRequest useMemo)
+  const parseEcashRequest = useCallback((val) => {
+    try {
+      if (!val || typeof val !== 'string') return null;
+      const trimmed = val.trim();
+      if (/^creqA/.test(trimmed)) {
+        return parsePaymentRequest(trimmed);
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to parse eCash request:', error);
+      return null;
+    }
+  }, []);
+
+  // Translate common error messages (must be defined early for use in handlers)
+  const translateErrorMessage = useCallback((errorMsg) => {
+    if (!errorMsg || typeof errorMsg !== 'string') return errorMsg;
+
+    const msg = errorMsg.toLowerCase();
+
+    // Already paid errors
+    if (msg.includes('already paid') || msg.includes('alreday paid')) {
+      return t('messages.alreadyPaidInvoice');
+    }
+
+    // Invoice expired
+    if (msg.includes('expired') || msg.includes('expire')) {
+      return t('messages.expiredInvoice');
+    }
+
+    // Invalid invoice
+    if (msg.includes('invalid invoice') || msg.includes('invalid bolt11')) {
+      return t('messages.invalidInvoice');
+    }
+
+    // Insufficient balance
+    if (msg.includes('insufficient') || msg.includes('not enough')) {
+      return t('messages.insufficientBalanceSimple');
+    }
+
+    // Payment failed
+    if (msg.includes('payment failed') || msg.includes('failed to pay')) {
+      return t('messages.paymentFailed');
+    }
+
+    // Route not found
+    if (msg.includes('no route') || msg.includes('route not found')) {
+      return t('messages.noRouteFound');
+    }
+
+    // Timeout
+    if (msg.includes('timeout') || msg.includes('timed out')) {
+      return t('messages.requestTimeout');
+    }
+
+    // Connection error
+    if (msg.includes('connection') || msg.includes('network')) {
+      return t('messages.networkError');
+    }
+
+    if (msg.includes('keyset') || msg.includes('wrong mint') || msg.includes('other mint') || msg.includes('different mint') || msg.includes('unknown mint') || msg.includes('not from this mint')) {
+      return t('messages.mintMismatchSendShort');
+    }
+
+    // Return original message if no match
+    return errorMsg;
+  }, [t]);
+
   const rateSourceLabel = fiatRate.sourceKey ? t(`wallet.rateSource.${fiatRate.sourceKey}`) : '';
   const balanceFiatDisplay = formatFiatAmount(ecashBalance);
+  const ecashSendAmountValue = Number(ecashSendAmountInput || 0);
   const receiveFiatDisplay = formatFiatAmount(receiveAmount);
   const receivedFiatDisplay = formatFiatAmount(receivedAmount);
   const sendFiatDisplay = formatFiatAmount(sendAmount);
+  const ecashSendFiatDisplay = formatFiatAmount(ecashSendAmountValue);
+  const ecashTokenFiatDisplay = formatFiatAmount(ecashSendTokenAmount || 0);
   const pendingPaymentRequest = useMemo(() => {
     if (!ecashRequest) return null;
     try {
@@ -326,9 +436,26 @@ function Wallet() {
       console.error('Failed to parse pending payment request:', error);
       return null;
     }
-  }, [ecashRequest]);
+  }, [ecashRequest, parseEcashRequest]);
+  const formatTransportLabels = useCallback((transports = []) => {
+    if (!Array.isArray(transports) || transports.length === 0) {
+      return '';
+    }
+    return transports.map((transport) => {
+      const type = (transport?.t || transport?.type || '').toString().toLowerCase();
+      if (type === 'nostr') return t('wallet.nostrTransport');
+      if (type === 'post' || type === 'http' || type === 'https') return t('wallet.httpTransport');
+      return type ? type.toUpperCase() : t('wallet.unknownTransport');
+    }).join(', ');
+  }, [t]);
   const pendingRequestAmount = pendingPaymentRequest?.amount || Number(receiveAmount) || 0;
   const paymentRequestFiatDisplay = formatFiatAmount(pendingRequestAmount);
+  const activeTransportSummary = useMemo(() => {
+    if (!pendingPaymentRequest || !Array.isArray(pendingPaymentRequest.transports)) {
+      return '';
+    }
+    return formatTransportLabels(pendingPaymentRequest.transports);
+  }, [pendingPaymentRequest, formatTransportLabels]);
 
   const clearPendingMint = useCallback(() => {
     pendingMintRef.current = null;
@@ -454,7 +581,9 @@ function Wallet() {
   })();
   const qrModalAltText = qrModalPayload?.type === 'ecash'
     ? 'NUT-18 Payment Request QR Code'
-    : 'Lightning Invoice QR Code';
+    : qrModalPayload?.type === 'token'
+      ? 'Cashu Token QR Code'
+      : 'Lightning Invoice QR Code';
 
   useEffect(() => {
     // Check storage health
@@ -482,6 +611,12 @@ function Wallet() {
       }
     }
   }, [isReceiveView, isSendView, location.state]);
+
+  useEffect(() => {
+    if (sendTab === 'ecash' && enableSendScanner) {
+      setEnableSendScanner(false);
+    }
+  }, [sendTab, enableSendScanner]);
 
   useEffect(() => {
     // Show backup banner when there is balance and not dismissed
@@ -535,7 +670,7 @@ function Wallet() {
     }
   }, []);
 
-  const formatAmount = (sats) => {
+  const formatAmount = useCallback((sats) => {
     const localeMap = {
       ko: 'ko-KR',
       en: 'en-US',
@@ -543,7 +678,7 @@ function Wallet() {
     };
     const locale = localeMap[i18n.language] || 'en-US';
     return new Intl.NumberFormat(locale).format(sats);
-  };
+  }, [i18n.language]);
 
   const formatDate = (timestamp) => {
     // Map i18n language to locale
@@ -586,7 +721,21 @@ function Wallet() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [showInfoMessage, mintUrl]);
+  }, [showInfoMessage, mintUrl, t]);
+
+  const handleToggleProof = useCallback((proof) => {
+    if (!proof) return;
+    const proofKey = proof?.secret || JSON.stringify(proof);
+    const updatedProofs = toggleProofDisabled(proofKey);
+    if (Array.isArray(updatedProofs)) {
+      setProofs(updatedProofs);
+      setEcashBalance(calculateBalanceFromProofs(updatedProofs));
+    } else {
+      // Fallback to ensure UI stays in sync if toggle failed
+      setProofs(loadProofs());
+      setEcashBalance(getBalanceSats());
+    }
+  }, []);
 
   const persistTransactions = useCallback((list) => {
     const sanitizedList = Array.isArray(list)
@@ -662,16 +811,6 @@ function Wallet() {
     setTxUpdateCounter(prev => prev + 1);
   }, [persistTransactions, mintUrl]);
 
-  const hasQuoteRedeemed = useCallback((q) => {
-    try {
-      const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes(q);
-    } catch {
-      return false;
-    }
-  }, []);
-
   const markQuoteRedeemed = useCallback((q) => {
     try {
       const raw = localStorage.getItem('cashu_redeemed_quotes') || '[]';
@@ -740,7 +879,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [addToast, loadWalletData, mintUrl]);
+  }, [loadWalletData, mintUrl, showInfoMessage, t]);
 
   const applyRedeemedSignatures = useCallback(async (quote, signatures, amountHint = 0) => {
     if (!quote || !Array.isArray(signatures) || signatures.length === 0) {
@@ -771,7 +910,7 @@ function Wallet() {
       console.error('Failed to apply redeemed signatures:', error);
       return { ok: false, reason: 'apply_failed', error };
     }
-  }, [clearPendingMint, ensurePendingMint]);
+  }, [clearPendingMint, ensurePendingMint, mintUrl]);
 
   const processPaymentNotification = useCallback(async (detail) => {
     console.log('[processPaymentNotification] Called with detail:', detail);
@@ -864,7 +1003,7 @@ function Wallet() {
     console.log('[processPaymentNotification] Loading wallet data...');
     await loadWalletData();
     console.log('[processPaymentNotification] Completed');
-  }, [addTransaction, addToast, applyRedeemedSignatures, closeQrModal, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem, mintUrl]);
+  }, [addTransaction, applyRedeemedSignatures, closeQrModal, isReceiveView, loadWalletData, markQuoteRedeemed, stopAutoRedeem, mintUrl, t]);
 
   // Polling function to check invoice status
   const startInvoicePolling = useCallback((quoteId, amount) => {
@@ -954,67 +1093,70 @@ function Wallet() {
   }, [apiUrl, showInfoMessage, t]);
 
   const startEcashPolling = useCallback((requestId) => {
+    if (!requestId) return () => {};
     if (ecashPollingRef.current) clearInterval(ecashPollingRef.current);
 
-    setCheckingPayment(true);
-    const poll = async () => {
-      try {
-        const resp = await fetch(apiUrl(`/api/cashu/ecash-request/check?requestId=${requestId}&consume=true`));
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.paid && data.signatures) {
-            clearInterval(ecashPollingRef.current);
-            ecashPollingRef.current = null;
-
-            const storedRaw = localStorage.getItem(`cashu_ecash_req_${requestId}`);
-            if (storedRaw) {
-              const stored = JSON.parse(storedRaw);
-              const outputDatas = await deserializeOutputDatas(stored.outputDatas);
-              
-              const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-              const mintKeys = await keysResp.json();
-
-              const proofs = await signaturesToProofs(data.signatures, mintKeys, outputDatas);
-              addProofs(proofs, mintUrl);
-
-              addTransaction({
-                id: Date.now(),
-                type: 'receive',
-                amount: stored.amount,
-                timestamp: new Date().toISOString(),
-                status: 'confirmed',
-                description: t('wallet.ecashReceive'),
-                mintUrl
-              });
-
-              await loadWalletData();
-              setReceiveCompleted(true);
-              setReceivedAmount(stored.amount);
-              setLastReceiveMode('ecash');
-              setCheckingPayment(false);
-              
-              localStorage.removeItem(`cashu_ecash_req_${requestId}`);
-              localStorage.removeItem('cashu_last_ecash_request_id');
-              localStorage.removeItem('cashu_last_ecash_request_amount');
-              localStorage.removeItem('cashu_last_ecash_request_type');
-              localStorage.removeItem('cashu_last_ecash_request_string');
-              setEcashRequest('');
-              setEcashRequestId(null);
-              
-              showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
-            }
-          }
-        }
-      } catch (e) {
-        console.error('eCash polling error:', e);
+    const stopPolling = () => {
+      if (ecashPollingRef.current) {
+        clearInterval(ecashPollingRef.current);
+        ecashPollingRef.current = null;
       }
     };
 
-    ecashPollingRef.current = setInterval(poll, 3000);
-    return () => {
-      if (ecashPollingRef.current) clearInterval(ecashPollingRef.current);
+    const finalizeReceive = async ({ proofs, amount, mint = mintUrl, memo = '' }) => {
+      addProofs(proofs, mint);
+      addTransaction({
+        id: Date.now(),
+        type: 'receive',
+        amount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.ecashReceive'),
+        memo,
+        mintUrl: mint
+      });
+
+      await loadWalletData();
+      setReceiveCompleted(true);
+      setReceivedAmount(amount);
+      setLastReceiveMode('ecash');
+      setCheckingPayment(false);
+
+      localStorage.removeItem('cashu_last_ecash_request_id');
+      localStorage.removeItem('cashu_last_ecash_request_amount');
+      localStorage.removeItem('cashu_last_ecash_request_string');
+      setEcashRequest('');
+      setEcashRequestId(null);
+      showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
     };
-  }, [apiUrl, mintUrl, loadWalletData, showInfoMessage, t, addTransaction]);
+
+    setCheckingPayment(true);
+
+    const pollNut18 = async () => {
+      try {
+        const resp = await fetch(apiUrl(`/api/payment-request/${encodeURIComponent(requestId)}?consume=true`));
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.paid && Array.isArray(data.proofs) && data.proofs.length) {
+            stopPolling();
+            const amount = data.amount || data.proofs.reduce((sum, proof) => sum + (parseInt(proof?.amount, 10) || 0), 0);
+            await finalizeReceive({
+              proofs: data.proofs,
+              amount,
+              mint: data.mint || mintUrl,
+              memo: data.memo || ''
+            });
+          }
+        }
+      } catch (error) {
+        console.error('NUT-18 polling error:', error);
+      }
+    };
+
+    pollNut18();
+    ecashPollingRef.current = setInterval(pollNut18, 3000);
+    return stopPolling;
+  }, [addTransaction, loadWalletData, mintUrl, showInfoMessage, t]);
 
   const handleIncomingNostrPayment = useCallback(async ({ payload, event }) => {
     if (!payload || typeof payload !== 'object') return;
@@ -1033,7 +1175,7 @@ function Wallet() {
       ? payload.proofs
       : Array.isArray(tokenProofs) ? tokenProofs : [];
 
-    if (!proofs.length || payload.unit !== undefined && payload.unit !== 'sat') {
+    if (!proofs.length || (payload.unit !== undefined && payload.unit !== 'sat')) {
       return;
     }
     const mintFromToken = Array.isArray(payload.token) ? payload.token[0]?.mint : null;
@@ -1063,11 +1205,10 @@ function Wallet() {
       setCheckingPayment(false);
       localStorage.removeItem('cashu_last_ecash_request_id');
       localStorage.removeItem('cashu_last_ecash_request_amount');
-      localStorage.removeItem('cashu_last_ecash_request_type');
       localStorage.removeItem('cashu_last_ecash_request_string');
     }
     showInfoMessage(t('messages.ecashReceiveSuccess'), 'success');
-  }, [addProofs, addTransaction, ecashRequestId, loadWalletData, mintUrl, showInfoMessage, t]);
+  }, [addTransaction, ecashRequestId, loadWalletData, mintUrl, showInfoMessage, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1148,7 +1289,7 @@ function Wallet() {
         try { stopAutoRedeem(); } catch {}
         window.removeEventListener('payment_received', handler);
       };
-  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, apiUrl, isReceiveView]);
+  }, [connectMint, ensurePendingMint, processPaymentNotification, stopAutoRedeem, isReceiveView]);
   
 
 
@@ -1226,7 +1367,7 @@ function Wallet() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [apiUrl, isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, receiveAmount]);
+  }, [isReceiveView, checkingPayment, mintUrl, processPaymentNotification, startInvoicePolling, receiveAmount]);
 
   // Sync mintUrl from settings when page becomes visible
   useEffect(() => {
@@ -1287,151 +1428,6 @@ function Wallet() {
     };
   }, []); // Empty dependency - only run once on mount/unmount
 
-  // Manual sync proofs with Mint
-  const handleSyncProofs = async () => {
-    try {
-      setLoading(true);
-      showInfoMessage(t('messages.syncingTokens'), 'info', 2000);
-
-      const syncResult = await syncProofsWithMint(API_BASE_URL, mintUrl);
-
-      if (syncResult.removed > 0) {
-        showInfoMessage(t('messages.removedUsedTokens', { count: syncResult.removed }), 'success', 4000);
-        setEcashBalance(getBalanceSats());
-      } else {
-        showInfoMessage(t('messages.allTokensValid'), 'success', 3000);
-      }
-    } catch (error) {
-      console.error('Sync error:', error);
-      showInfoMessage(t('messages.syncFailed', { error: translateErrorMessage(error?.message) || t('messages.unknownError') }), 'error', 4000);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Check and recover pending quote
-  const checkPendingQuote = async () => {
-    try {
-      const lastQuote = localStorage.getItem('cashu_last_quote');
-      if (!lastQuote) {
-        showInfoMessage(t('messages.noPendingInvoice'), 'info');
-        return;
-      }
-
-      // Check if already redeemed
-      if (hasQuoteRedeemed(lastQuote)) {
-        showInfoMessage(t('messages.alreadyProcessed'), 'info');
-        return;
-      }
-
-      setLoading(true);
-      showInfoMessage(t('messages.checkingInvoiceStatus'), 'info', 2000);
-      
-      // Temp debug: set status when checking pending quote
-
-
-      // Check quote state
-      const checkResp = await fetch(apiUrl(`/api/cashu/mint/quote/check?quote=${encodeURIComponent(lastQuote)}&mintUrl=${encodeURIComponent(mintUrl)}`));
-      if (!checkResp.ok) throw new Error(t('messages.quoteCheckFailed'));
-
-      const quoteData = await checkResp.json();
-      const state = (quoteData?.state || '').toUpperCase();
-
-      if (state !== 'PAID' && state !== 'ISSUED') {
-        showInfoMessage(t('messages.invoiceNotPaid'), 'info');
-
-        return;
-      }
-
-      // Quote is paid, try to redeem existing signatures first
-      const cachedResultResp = await fetch(apiUrl(`/api/cashu/mint/result?quote=${encodeURIComponent(lastQuote)}`));
-      if (cachedResultResp.ok) {
-        const cachedJson = await cachedResultResp.json();
-        if (Array.isArray(cachedJson?.signatures) && cachedJson.signatures.length) {
-          const applied = await applyRedeemedSignatures(lastQuote, cachedJson.signatures, parseInt(quoteData?.amount || 0, 10));
-          if (applied.ok && applied.added) {
-            markQuoteRedeemed(lastQuote);
-            setReceiveCompleted(true);
-            setReceivedAmount(applied.added);
-        addTransaction({
-          id: Date.now(),
-          type: 'receive',
-          amount: applied.added,
-          timestamp: new Date().toISOString(),
-          status: 'confirmed',
-          description: t('wallet.lightningReceive'),
-          memo: '',
-          mintUrl
-        });
-
-            showInfoMessage(t('messages.recoveredSuccess', { amount: formatAmount(applied.added) }), 'success');
-            await loadWalletData();
-            return;
-          }
-        }
-      }
-
-      // Fallback: request new outputs and redeem manually
-      const amount = parseInt(quoteData?.amount || localStorage.getItem('cashu_last_mint_amount') || '0', 10);
-      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-      if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
-      const mintKeys = await keysResp.json();
-      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
-
-      const redeemResp = await fetch(apiUrl('/api/cashu/mint/redeem'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote: lastQuote, outputs, mintUrl })
-      });
-
-      if (!redeemResp.ok) {
-        const err = await redeemResp.json();
-        const errorMsg = typeof err?.error === 'string' ? err.error : JSON.stringify(err?.error || err);
-
-        // Check if already issued
-        if (errorMsg.includes('already issued') || errorMsg.includes('11000')) {
-          markQuoteRedeemed(lastQuote);
-          throw new Error(t('messages.alreadyIssuedNoRecovery'));
-        }
-
-        throw new Error(errorMsg || t('messages.redeemFailed'));
-      }
-
-      const redeemData = await redeemResp.json();
-      const signatures = redeemData?.signatures || redeemData?.promises || [];
-
-      if (Array.isArray(signatures) && signatures.length > 0) {
-        const proofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
-        addProofs(proofs, mintUrl);
-        const added = proofs.reduce((s, p) => s + Number(p?.amount || 0), 0);
-        setEcashBalance(getBalanceSats());
-        clearPendingMint();
-        markQuoteRedeemed(lastQuote);
-
-        addTransaction({
-          id: Date.now(),
-          type: 'receive',
-          amount: added,
-          timestamp: new Date().toISOString(),
-          status: 'confirmed',
-          description: t('wallet.lightningReceive'),
-          memo: '',
-          mintUrl
-        });
-        
-
-
-        showInfoMessage(t('messages.recoveredSuccess', { amount: formatAmount(added) }), 'success');
-      } else {
-        throw new Error(t('messages.noValidSignatures'));
-      }
-    } catch (error) {
-      console.error('Failed to check quote:', error);
-      showInfoMessage(translateErrorMessage(error?.message) || t('messages.quoteCheckError'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Encryption utilities using Web Crypto API
   const encryptData = async (plaintext, passphraseStr) => {
@@ -1641,13 +1637,238 @@ function Wallet() {
     setSendAddress(normalized);
     setEnableSendScanner(false);
     showInfoMessage(t('messages.qrCodeLoaded'), 'info', 2500);
-  }, [showInfoMessage]);
+  }, [showInfoMessage, t]);
 
   const handleSendQrError = useCallback((err) => {
     console.error('QR scanner error:', err);
     const message = err && err.message ? translateErrorMessage(err.message) : t('messages.qrScanUnavailable');
     showInfoMessage(message, 'error', 3500);
-  }, [showInfoMessage]);
+  }, [showInfoMessage, t, translateErrorMessage]);
+
+  const handleTokenQrScan = useCallback((rawValue) => {
+    const normalized = normalizeQrValue(rawValue);
+    if (!normalized) {
+      showInfoMessage(t('messages.qrCodeInvalid'), 'error', 3000);
+      return;
+    }
+    setEcashTokenInput(normalized);
+    setEnableTokenScanner(false);
+    showInfoMessage(t('messages.qrCodeLoaded'), 'info', 2500);
+  }, [showInfoMessage, t]);
+
+  const handleTokenQrError = useCallback((err) => {
+    console.error('QR scanner error:', err);
+    const message = err && err.message ? translateErrorMessage(err.message) : t('messages.qrScanUnavailable');
+    showInfoMessage(message, 'error', 3500);
+  }, [showInfoMessage, t, translateErrorMessage]);
+
+  const handleReceiveToken = useCallback(async () => {
+    try {
+      setLoading(true);
+      setInvoiceError('');
+
+      const trimmedToken = ecashTokenInput.trim();
+      if (!trimmedToken) {
+        throw new Error(t('messages.tokenRequired'));
+      }
+
+      if (!isCashuToken(trimmedToken)) {
+        throw new Error(t('messages.invalidTokenFormat'));
+      }
+
+      // Parse token
+      const parsedToken = parseCashuToken(trimmedToken);
+      const { proofs, totalAmount, mint, memo } = extractProofsFromToken(parsedToken);
+
+      if (!proofs || proofs.length === 0) {
+        throw new Error(t('messages.noProofsInToken'));
+      }
+
+      console.log(`[Token Receive] Received ${proofs.length} proofs, total ${totalAmount} sats`);
+      console.log(`[Token Receive] Starting swap to claim the token...`);
+
+      // Swap received proofs for new ones to claim the token
+      // This ensures the sender can't double-spend and their wallet shows "sent"
+      try {
+        // Get mint keys
+        const keysResp = await fetch(`${API_BASE_URL}/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`);
+        if (!keysResp.ok) throw new Error('Failed to fetch mint keys');
+        const mintKeys = await keysResp.json();
+
+        // Create new blinded outputs for the same amount
+        const { outputs, outputDatas } = await createBlindedOutputs(totalAmount, mintKeys);
+
+        // Swap the received proofs for new ones
+        const normalizedProofs = normalizeProofsForApi(proofs);
+        const swapResp = await fetch(`${API_BASE_URL}/api/cashu/swap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputs: normalizedProofs,
+            outputs,
+            mintUrl: mint
+          })
+        });
+
+        if (!swapResp.ok) {
+          const err = await swapResp.json();
+          throw new Error(err?.error || 'Swap failed');
+        }
+
+        const swapResult = await swapResp.json();
+        const signatures = swapResult?.signatures || swapResult?.promises || [];
+
+        if (!Array.isArray(signatures) || signatures.length === 0) {
+          throw new Error('No signatures received from swap');
+        }
+
+        // Convert signatures to new proofs
+        const newProofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
+
+        console.log(`[Token Receive] Swap successful! Got ${newProofs.length} new proofs`);
+
+        // Add the new proofs to wallet (not the old ones)
+        addProofs(newProofs, mint);
+      } catch (swapError) {
+        console.error('[Token Receive] Swap failed:', swapError);
+        // Fallback: add original proofs as DISABLED with reason
+        console.log('[Token Receive] Fallback: adding original proofs as disabled (swap failed)');
+
+        const disabledProofs = proofs.map(p => ({
+          ...p,
+          disabled: true,
+          disabledReason: 'swap_failed',
+          disabledMessage: swapError?.message || 'Swap failed',
+          disabledAt: new Date().toISOString()
+        }));
+
+        addProofs(disabledProofs, mint);
+
+        // Show warning to user
+        showInfoMessage(t('messages.tokenReceivedButSwapFailed'), 'warning');
+      }
+
+      const newBalance = getBalanceSats();
+      setEcashBalance(newBalance);
+
+      // Add transaction record
+      addTransaction({
+        id: Date.now(),
+        type: 'receive',
+        amount: totalAmount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.ecashReceive'),
+        memo: memo || '',
+        mintUrl: mint
+      });
+
+      await loadWalletData();
+
+      // Clear input
+      setEcashTokenInput('');
+      setReceiveCompleted(true);
+      setReceivedAmount(totalAmount);
+      setLastReceiveMode('token');
+
+      showInfoMessage(t('messages.tokenReceivedSuccess', { amount: totalAmount }), 'success');
+
+      console.log(`[Token Receive] Successfully received ${totalAmount} sats from token`);
+    } catch (error) {
+      console.error('Failed to receive token:', error);
+      const errorMessage = translateErrorMessage(error?.message) || t('messages.tokenReceiveFailed');
+      setInvoiceError(errorMessage);
+      showInfoMessage(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [ecashTokenInput, addProofs, getBalanceSats, setEcashBalance, addTransaction, loadWalletData, showInfoMessage, t, translateErrorMessage]);
+
+  // Retry swap for failed proofs
+  const retrySwap = useCallback(async (proof) => {
+    if (!proof || !proof.disabled || proof.disabledReason !== 'swap_failed') {
+      showInfoMessage(t('messages.invalidProofForRetry'), 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const mint = proof.mintUrl || mintUrl;
+      const amount = Number(proof.amount || 0);
+
+      console.log(`[Retry Swap] Attempting to swap proof: ${amount} sats from ${mint}`);
+
+      // Get mint keys
+      const keysResp = await fetch(`${API_BASE_URL}/api/cashu/keys?mintUrl=${encodeURIComponent(mint)}`);
+      if (!keysResp.ok) throw new Error('Failed to fetch mint keys');
+      const mintKeys = await keysResp.json();
+
+      // Create new blinded outputs
+      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
+
+      // Remove disabled/mintUrl/createdAt/etc fields before swap
+      const cleanProof = {
+        amount: proof.amount,
+        secret: proof.secret,
+        C: proof.C
+      };
+      if (proof.id) cleanProof.id = proof.id;
+      if (proof.witness) {
+        cleanProof.witness = typeof proof.witness === 'object'
+          ? JSON.stringify(proof.witness)
+          : proof.witness;
+      }
+      if (proof.dleq) {
+        cleanProof.witness = typeof proof.dleq === 'object'
+          ? JSON.stringify(proof.dleq)
+          : proof.dleq;
+      }
+
+      // Swap the proof
+      const swapResp = await fetch(`${API_BASE_URL}/api/cashu/swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: [cleanProof],
+          outputs,
+          mintUrl: mint
+        })
+      });
+
+      if (!swapResp.ok) {
+        const err = await swapResp.json();
+        throw new Error(err?.error || 'Swap failed');
+      }
+
+      const swapResult = await swapResp.json();
+      const signatures = swapResult?.signatures || swapResult?.promises || [];
+
+      if (!Array.isArray(signatures) || signatures.length === 0) {
+        throw new Error('No signatures received from swap');
+      }
+
+      // Convert signatures to proofs
+      const newProofs = await signaturesToProofs(signatures, mintKeys, outputDatas);
+
+      console.log(`[Retry Swap] Swap successful, got ${newProofs.length} new proofs`);
+
+      // Remove old disabled proof and add new ones
+      removeProofs([proof], mint);
+      addProofs(newProofs, mint);
+
+      // Refresh balance
+      const newBalance = getBalanceSats();
+      setEcashBalance(newBalance);
+      await loadWalletData();
+
+      showInfoMessage(t('messages.swapRetrySuccess', { amount }), 'success');
+    } catch (error) {
+      console.error('[Retry Swap] Failed:', error);
+      showInfoMessage(t('messages.swapRetryFailed') + ': ' + (error?.message || 'Unknown error'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [mintUrl, showInfoMessage, t, setLoading, removeProofs, addProofs, getBalanceSats, setEcashBalance, loadWalletData]);
 
   const handleReceiveAmountChange = useCallback((value) => {
     setReceiveAmount(value);
@@ -1667,6 +1888,256 @@ function Wallet() {
     setReceiveAmountTooLow(numeric > 0 && numeric < RECEIVE_MIN_AMOUNT);
     setReceiveAmountTooHigh(numeric > RECEIVE_MAX_AMOUNT);
   }, []);
+
+  const handleEcashKeypadPress = useCallback((value) => {
+    setEcashSendError('');
+    if (ecashSendToken) {
+      setEcashSendToken('');
+      setEcashSendTokenAmount(0);
+      setEcashSendTokenMint('');
+      setEcashTokenCopied(false);
+    }
+
+    setEcashSendAmountInput((prev) => {
+      const current = prev || '';
+      if (value === 'clear') {
+        return '';
+      }
+      if (value === 'del') {
+        return current.slice(0, -1);
+      }
+      if (value === '00') {
+        if (!current) return '';
+        const nextDoubleZero = (current + '00').slice(0, ECASH_SEND_MAX_DIGITS);
+        return nextDoubleZero;
+      }
+      if (/^\d$/.test(value)) {
+        const target = (current === '0' ? '' : current) + value;
+        const trimmed = target.replace(/^0+(?=\d)/, '');
+        return trimmed.slice(0, ECASH_SEND_MAX_DIGITS) || value;
+      }
+      return current;
+    });
+  }, [ecashSendToken]);
+
+  const handleResetEcashToken = useCallback(() => {
+    setEcashSendToken('');
+    setEcashSendTokenAmount(0);
+    setEcashSendTokenMint('');
+    setEcashTokenCopied(false);
+    setEcashSendError('');
+  }, []);
+
+  const normalizeMintForCompare = useCallback((url) => {
+    if (!url || typeof url !== 'string') return '';
+    return url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
+  }, []);
+
+  const getSwapFeeHint = useCallback((url) => {
+    if (!url) return 0;
+    const key = normalizeMintForCompare(url);
+    if (!key) return 0;
+    const value = swapFeeHintsRef.current[key];
+    return typeof value === 'number' && value > 0 ? value : 0;
+  }, [normalizeMintForCompare]);
+
+  const rememberSwapFeeHint = useCallback((url, fee) => {
+    if (!url || typeof fee !== 'number' || Number.isNaN(fee) || fee < 0) return;
+    const key = normalizeMintForCompare(url);
+    if (!key) return;
+    swapFeeHintsRef.current[key] = fee;
+  }, [normalizeMintForCompare]);
+
+  const extractSwapFeeFromError = useCallback((payload) => {
+    if (!payload) return null;
+    if (typeof payload.fee === 'number') return payload.fee;
+    if (typeof payload.fees === 'number') return payload.fees;
+    const texts = [];
+    const pushIfString = (value) => {
+      if (typeof value === 'string' && value.trim()) {
+        texts.push(value);
+      }
+    };
+    pushIfString(payload.detail);
+    pushIfString(payload.error);
+    pushIfString(payload.message);
+    if (typeof payload === 'string') {
+      pushIfString(payload);
+    }
+    for (const text of texts) {
+      const match = text.match(/fees?\s*(?:\(|:)?\s*(\d+)/i);
+      if (match) {
+        const parsed = Number(match[1]);
+        if (!Number.isNaN(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }, []);
+
+  const parseJsonSafely = useCallback(async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleGenerateEcashToken = useCallback(async () => {
+    const amount = parseInt(ecashSendAmountInput || '0', 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEcashSendError(t('messages.enterValidAmount'));
+      return;
+    }
+
+    const estimatedFee = getSwapFeeHint(mintUrl);
+    if (amount + estimatedFee > ecashBalance) {
+      const errMsg = t('messages.insufficientBalance');
+      setEcashSendError(errMsg);
+      showInfoMessage(errMsg, 'error');
+      return;
+    }
+
+    setLoading(true);
+    setEcashSendError('');
+    setEcashTokenCopied(false);
+
+    const attemptTokenGeneration = async (feeReserve = estimatedFee, attempt = 1) => {
+      const normalizedFee = Number(feeReserve) > 0 ? Number(feeReserve) : 0;
+      const requiredTotal = amount + normalizedFee;
+
+      const selection = selectProofsForAmount(requiredTotal);
+      if (!selection.ok || !Array.isArray(selection.picked) || selection.picked.length === 0) {
+        throw new Error(t('messages.insufficientBalance'));
+      }
+
+      const uniquePicked = selection.picked;
+      const mintCandidates = Array.from(new Set(uniquePicked.map((p) => (p?.mintUrl || '').trim()).filter(Boolean)));
+      if (mintCandidates.length > 1) {
+        throw new Error(t('messages.ecashTokenMultipleMints'));
+      }
+      const targetMintUrl = mintCandidates[0] || mintUrl;
+      if (!targetMintUrl) {
+        throw new Error(t('messages.mintUnknown'));
+      }
+
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(targetMintUrl)}`));
+      if (!keysResp.ok) {
+        throw new Error(t('messages.mintKeysFailed'));
+      }
+      const mintKeys = await keysResp.json();
+
+      const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
+      const changeAmount = Math.max(0, selection.total - amount - normalizedFee);
+      const changeOutputs = changeAmount > 0
+        ? await createBlindedOutputs(changeAmount, mintKeys)
+        : { outputs: [], outputDatas: [] };
+      const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
+      const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
+      const normalizedInputs = normalizeProofsForApi(uniquePicked);
+
+      const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: normalizedInputs,
+          outputs: combinedOutputs,
+          mintUrl: targetMintUrl
+        })
+      });
+
+      if (!swapResp.ok) {
+        const errJson = await parseJsonSafely(swapResp);
+        const parsedFee = extractSwapFeeFromError(errJson);
+        if (parsedFee !== null && parsedFee !== normalizedFee && attempt < 3) {
+          rememberSwapFeeHint(targetMintUrl, parsedFee);
+          return attemptTokenGeneration(parsedFee, attempt + 1);
+        }
+
+        let errorMessage = t('messages.ecashTokenCreateFailed');
+        if (errJson?.error) {
+          const translated = translateErrorMessage(errJson.error);
+          if (translated) {
+            errorMessage = translated;
+          } else {
+            errorMessage = errJson.error;
+          }
+        } else if (errJson?.detail) {
+          errorMessage = translateErrorMessage(errJson.detail) || errJson.detail;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const swapData = await swapResp.json();
+      const signatures = swapData?.signatures || swapData?.promises || [];
+      if (!Array.isArray(signatures) || signatures.length === 0) {
+        throw new Error(t('messages.ecashTokenCreateFailed'));
+      }
+
+      const allProofs = await signaturesToProofs(signatures, mintKeys, combinedOutputDatas);
+      const paymentProofCount = paymentOutputs.outputDatas.length;
+      const paymentProofs = allProofs.slice(0, paymentProofCount);
+      const changeProofs = allProofs.slice(paymentProofCount);
+
+      removeProofs(uniquePicked, targetMintUrl);
+      if (changeProofs.length) {
+        addProofs(changeProofs, targetMintUrl);
+      }
+
+      const token = createCashuToken({
+        mint: targetMintUrl,
+        proofs: paymentProofs,
+        unit: 'sat'
+      });
+
+      setEcashSendToken(token);
+      setEcashSendTokenAmount(amount);
+      setEcashSendTokenMint(targetMintUrl);
+      setEcashSendAmountInput('');
+      setEcashBalance(getBalanceSats());
+
+      addTransaction({
+        id: Date.now(),
+        type: 'send',
+        amount,
+        timestamp: new Date().toISOString(),
+        status: 'confirmed',
+        description: t('wallet.ecashSend'),
+        memo: t('wallet.ecashTokenMemo'),
+        mintUrl: targetMintUrl
+      });
+
+      showInfoMessage(t('messages.ecashTokenReady', { amount: formatAmount(amount) }), 'success');
+    };
+
+    try {
+      await attemptTokenGeneration(getSwapFeeHint(mintUrl));
+    } catch (error) {
+      console.error('Failed to create eCash token:', error);
+      const fallback = translateErrorMessage(error?.message) || t('messages.ecashTokenCreateFailed');
+      setEcashSendError(fallback);
+      showInfoMessage(fallback, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    addTransaction,
+    ecashBalance,
+    ecashSendAmountInput,
+    extractSwapFeeFromError,
+    formatAmount,
+    getBalanceSats,
+    getSwapFeeHint,
+    mintUrl,
+    parseJsonSafely,
+    rememberSwapFeeHint,
+    selectProofsForAmount,
+    setEcashBalance,
+    showInfoMessage,
+    t,
+    translateErrorMessage
+  ]);
 
   const generateInvoice = async () => {
     if (!receiveAmount) {
@@ -1789,58 +2260,56 @@ function Wallet() {
       return;
     }
 
+    const createNut18Request = () => {
+      const requestId = `nut18_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const transports = [
+        createHttpPostTransport(`${API_BASE_URL}/api/payment-request/${requestId}`)
+      ];
+      if (nostrIdentity?.nprofile) {
+        transports.push({
+          t: 'nostr',
+          a: nostrIdentity.nprofile
+        });
+      }
+
+      const requestString = createPaymentRequest({
+        id: requestId,
+        amount,
+        unit: 'sat',
+        single_use: true,
+        mints: [mintUrl],
+        description: '',
+        transports
+      });
+
+      return { requestId, requestString };
+    };
+
     try {
       setLoading(true);
       setQrLoaded(false);
       setReceiveCompleted(false);
       setInvoiceError('');
 
-      // Legacy generation
-      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-      if (!keysResp.ok) throw new Error(t('messages.mintKeysFailed'));
-      const mintKeys = await keysResp.json();
-      const { outputs, outputDatas } = await createBlindedOutputs(amount, mintKeys);
-
-      const pendingData = {
-          requestId,
-          amount,
-          outputDatas: serializeOutputDatas(outputDatas),
-          timestamp: Date.now()
-      };
-      localStorage.setItem(`cashu_ecash_req_${requestId}`, JSON.stringify(pendingData));
-
-      const payload = {
-          mint: mintUrl,
-          amount,
-          outputs,
-          requestId
-      };
-      const jsonStr = JSON.stringify(payload);
-      const base64Data = btoa(jsonStr);
-      const requestString = `cashu:request:${base64Data}`;
+      const { requestId, requestString } = createNut18Request();
 
       setEcashRequest(requestString);
       setEcashRequestId(requestId);
-      setEcashRequestMode('legacy');
-      setReceiveTab('lightning');
+      setReceiveTab('ecash');
       setQrLoaded(true);
+      setLastReceiveMode('ecash');
 
       localStorage.setItem('cashu_last_ecash_request_id', requestId);
       localStorage.setItem('cashu_last_ecash_request_amount', amount.toString());
-      localStorage.setItem('cashu_last_ecash_request_type', 'legacy');
       localStorage.setItem('cashu_last_ecash_request_string', requestString);
-      setLastReceiveMode('ecash');
-      
+
       startEcashPolling(requestId);
 
-      console.log('[DEBUG] Legacy eCash request generated:', {
+      console.log('[DEBUG] eCash request generated:', {
         amount,
         mintUrl,
         requestId
       });
-
     } catch (error) {
       console.error('Failed to generate eCash request:', error);
       const errorMessage = error.message || t('messages.ecashRequestGenerationFailed');
@@ -1860,13 +2329,11 @@ function Wallet() {
     setReceivedAmount(0);
     setReceiveAmount('');
     setReceiveAmountTooLow(false);
-    setEcashRequestMode('legacy');
     setReceiveTab('lightning'); // Reset to Lightning tab
 
     // Clear eCash request from localStorage
     localStorage.removeItem('cashu_last_ecash_request_id');
     localStorage.removeItem('cashu_last_ecash_request_amount');
-    localStorage.removeItem('cashu_last_ecash_request_type');
     localStorage.removeItem('cashu_last_ecash_request_string');
 
     const target = receiveOriginRef.current || '/wallet';
@@ -1886,7 +2353,6 @@ function Wallet() {
     setCheckingPayment(false);
     setReceiveAmount('');
     setReceiveAmountTooLow(false);
-    setEcashRequestMode('legacy');
     navigate('/wallet/receive', { state: { from: fallback } });
   }, [location.pathname, navigate, stopAutoRedeem]);
 
@@ -1900,16 +2366,6 @@ function Wallet() {
     setInvoiceError('');
     navigate('/wallet/send', { state: { from: fallback } });
   }, [location.pathname, navigate]);
-
-  const exitSendFlow = useCallback(() => {
-    setSendAmount('');
-    setSendAddress('');
-    setInvoiceQuote(null);
-    setInvoiceError('');
-    setEnableSendScanner(false);
-    const target = sendOriginRef.current || '/wallet';
-    navigate(target, { replace: true });
-  }, [navigate]);
 
   useEffect(() => {
     if (!isReceiveView && wasReceiveViewRef.current) {
@@ -1952,63 +2408,8 @@ function Wallet() {
   const isEcashRequest = (val) => {
     if (!val || typeof val !== 'string') return false;
     const trimmed = val.trim();
-    const lower = trimmed.toLowerCase();
-    return lower.startsWith('cashu:request:') || lower.startsWith('creqa') || lower.startsWith('req_');
+    return /^creqA/.test(trimmed);
   };
-
-  function parseEcashRequest(val) {
-    try {
-      if (!val || typeof val !== 'string') return null;
-      const trimmed = val.trim();
-      if (/^cashu:request:/i.test(trimmed)) {
-        const base64Data = trimmed.replace(/^cashu:request:/i, '');
-        const jsonStr = atob(base64Data);
-        const payload = JSON.parse(jsonStr);
-        return { ...payload, protocol: 'legacy' };
-      }
-      if (/^creqa/i.test(trimmed)) {
-        const payload = parsePaymentRequest(trimmed);
-        return { ...payload, protocol: 'nut18' };
-      }
-      if (trimmed.startsWith('req_')) {
-        const parts = trimmed.split(':');
-        const requestId = parts[0];
-        
-        try {
-          const stored = localStorage.getItem(`cashu_ecash_req_${requestId}`);
-          if (stored) {
-            const data = JSON.parse(stored);
-            let outputs = [];
-            if (Array.isArray(data.outputDatas)) {
-              const outputDatas = typeof data.outputDatas === 'string' 
-                ? JSON.parse(data.outputDatas) 
-                : data.outputDatas;
-                
-              outputs = outputDatas.map(od => ({
-                amount: od.amount,
-                B_: od.B_
-              }));
-            }
-            
-            return {
-              requestId,
-              amount: data.amount,
-              outputs,
-              mint: '',
-              protocol: 'legacy'
-            };
-          }
-        } catch (e) {
-          console.warn('Failed to lookup req_ ID:', e);
-        }
-        return { requestId, protocol: 'legacy' };
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to parse eCash request:', error);
-      return null;
-    }
-  }
 
   const isLightningAddress = (val) => {
     if (!val || typeof val !== 'string') return false;
@@ -2023,121 +2424,12 @@ function Wallet() {
     return s.replace(/\s+/g, '').toLowerCase();
   };
 
-  const normalizeMintForCompare = useCallback((url) => {
-    if (!url || typeof url !== 'string') return '';
-    return url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
-  }, []);
-
-  const getSwapFeeHint = useCallback((url) => {
-    if (!url) return 0;
-    const key = normalizeMintForCompare(url);
-    if (!key) return 0;
-    const value = swapFeeHintsRef.current[key];
-    return typeof value === 'number' && value > 0 ? value : 0;
-  }, [normalizeMintForCompare]);
-
-  const rememberSwapFeeHint = useCallback((url, fee) => {
-    if (!url || typeof fee !== 'number' || Number.isNaN(fee) || fee < 0) return;
-    const key = normalizeMintForCompare(url);
-    if (!key) return;
-    swapFeeHintsRef.current[key] = fee;
-  }, [normalizeMintForCompare]);
-
-  const extractSwapFeeFromError = useCallback((payload) => {
-    if (!payload) return null;
-    if (typeof payload.fee === 'number') return payload.fee;
-    if (typeof payload.fees === 'number') return payload.fees;
-    const texts = [];
-    const pushIfString = (value) => {
-      if (typeof value === 'string' && value.trim()) {
-        texts.push(value);
-      }
-    };
-    pushIfString(payload.detail);
-    pushIfString(payload.error);
-    pushIfString(payload.message);
-    if (typeof payload === 'string') {
-      pushIfString(payload);
-    }
-    for (const text of texts) {
-      const match = text.match(/fees?\s*(?:\(|:)?\s*(\d+)/i);
-      if (match) {
-        const parsed = Number(match[1]);
-        if (!Number.isNaN(parsed)) {
-          return parsed;
-        }
-      }
-    }
-    return null;
-  }, []);
-
-  const parseJsonSafely = async (resp) => {
-    try {
-      return await resp.json();
-    } catch {
-      return null;
-    }
-  };
-
-  const isMeaninglessErrorCode = (value) => {
+  const isMeaninglessErrorCode = useCallback((value) => {
     if (!value || typeof value !== 'string') return false;
     const trimmed = value.trim();
     if (!trimmed) return false;
     return /^[0-9a-f]{8,}$/i.test(trimmed) || /^[0-9]{6,}$/.test(trimmed);
-  };
-
-  const translateErrorMessage = (errorMsg) => {
-    if (!errorMsg || typeof errorMsg !== 'string') return errorMsg;
-
-    const msg = errorMsg.toLowerCase();
-
-    // Already paid errors
-    if (msg.includes('already paid') || msg.includes('alreday paid')) {
-      return t('messages.alreadyPaidInvoice');
-    }
-
-    // Invoice expired
-    if (msg.includes('expired') || msg.includes('expire')) {
-      return t('messages.expiredInvoice');
-    }
-
-    // Invalid invoice
-    if (msg.includes('invalid invoice') || msg.includes('invalid bolt11')) {
-      return t('messages.invalidInvoice');
-    }
-
-    // Insufficient balance
-    if (msg.includes('insufficient') || msg.includes('not enough')) {
-      return t('messages.insufficientBalanceSimple');
-    }
-
-    // Payment failed
-    if (msg.includes('payment failed') || msg.includes('failed to pay')) {
-      return t('messages.paymentFailed');
-    }
-
-    // Route not found
-    if (msg.includes('no route') || msg.includes('route not found')) {
-      return t('messages.noRouteFound');
-    }
-
-    // Timeout
-    if (msg.includes('timeout') || msg.includes('timed out')) {
-      return t('messages.requestTimeout');
-    }
-
-    // Connection error
-    if (msg.includes('connection') || msg.includes('network')) {
-      return t('messages.networkError');
-    }
-
-    if (msg.includes('keyset') || msg.includes('wrong mint') || msg.includes('other mint') || msg.includes('different mint') || msg.includes('unknown mint') || msg.includes('not from this mint')) {
-      return t('messages.mintMismatchSendShort');
-    }
-
-    // Return original message if no match
-    return errorMsg;
-  };
+  }, []);
 
   const formatMintLabel = useCallback((url) => {
     if (!url || typeof url !== 'string') return t('messages.mintUnknown');
@@ -2161,7 +2453,7 @@ function Wallet() {
     });
   }, [mintUrl, formatMintLabel, normalizeMintForCompare, t]);
 
-  const buildLightningAddressErrorMessage = (err) => {
+  const buildLightningAddressErrorMessage = useCallback((err) => {
     const fallback = t('messages.addressInvoiceError');
     const providerFallback = t('messages.lightningAddressRejected');
 
@@ -2187,7 +2479,7 @@ function Wallet() {
     }
 
     return fallback;
-  };
+  }, [isMeaninglessErrorCode, t, translateErrorMessage]);
 
   // Auto-fetch quote when invoice is entered
   useEffect(() => {
@@ -2306,263 +2598,69 @@ function Wallet() {
     };
 
     fetchInvoiceQuote();
-  }, [sendAddress]);
+  }, [sendAddress, formatAmount, mintUrl, t, translateErrorMessage]);
 
   // Send confirmation state
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const sendCtxRef = useRef(null); // { bolt11, quoteData }
 
-  const handleEcashRequestSend = useCallback(async () => {
-    const handleNut18Send = async (requestPayload) => {
-      const {
-        amount: rawAmount,
-        mints: allowedMints = [],
-        transports = [],
-        unit = 'sat',
-        id,
-        description: memo = ''
-      } = requestPayload;
+  const handleNut18Send = useCallback(async (requestPayload) => {
+    const {
+      amount: rawAmount,
+      mints: allowedMints = [],
+      transports = [],
+      unit = 'sat',
+      id,
+      description: memo = ''
+    } = requestPayload;
 
-      const amount = Number(rawAmount);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error(t('messages.invalidAmount'));
-      }
+    const amount = Number(rawAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error(t('messages.invalidAmount'));
+    }
 
-      const transportList = Array.isArray(transports) ? transports : [];
-      const getAddress = (t) => t?.a || t?.address || t?.url || '';
-      const normalizedType = (t) => (t?.t || t?.type || '').toString().toLowerCase();
-      const postTransport = transportList.find((transport) => {
-        const type = normalizedType(transport);
-        const address = getAddress(transport);
-        const isHttpType = type === 'post' || type === 'http' || type === 'https';
-        const isHttpUrl = typeof address === 'string' && /^https?:\/\//i.test(address.trim());
-        return isHttpType || isHttpUrl;
-      });
-      const nostrTransport = transportList.find((transport) => {
-        const type = normalizedType(transport);
-        const address = getAddress(transport);
-        return (type === 'nostr' || (!type && address)) && address;
-      });
+    const transportList = Array.isArray(transports) ? transports : [];
+    const getAddress = (t) => t?.a || t?.address || t?.url || '';
+    const normalizedType = (t) => (t?.t || t?.type || '').toString().toLowerCase();
+    const postTransport = transportList.find((transport) => {
+      const type = normalizedType(transport);
+      const address = getAddress(transport);
+      const isHttpType = type === 'post' || type === 'http' || type === 'https';
+      const isHttpUrl = typeof address === 'string' && /^https?:\/\//i.test(address.trim());
+      return isHttpType || isHttpUrl;
+    });
+    const nostrTransport = transportList.find((transport) => {
+      const type = normalizedType(transport);
+      const address = getAddress(transport);
+      return (type === 'nostr' || (!type && address)) && address;
+    });
 
-      const postEndpoint = (postTransport && getAddress(postTransport)) || '';
-      const nostrEndpoint = (nostrTransport && getAddress(nostrTransport)) || '';
+    const postEndpoint = (postTransport && getAddress(postTransport)) || '';
+    const nostrEndpoint = (nostrTransport && getAddress(nostrTransport)) || '';
 
-      if (Array.isArray(allowedMints) && allowedMints.length > 0) {
-        const currentMint = normalizeMintForCompare(mintUrl);
-        const allowed = allowedMints.some((allowedMint) => normalizeMintForCompare(allowedMint) === currentMint);
-        if (!allowed) {
-          const errorMsg = t('messages.ecashRequestMintMismatch', {
-            requestMint: formatMintLabel(allowedMints[0]),
-            currentMint: formatMintLabel(mintUrl)
-          });
-          setInvoiceError(errorMsg);
-          showInfoMessage(errorMsg, 'error');
-          throw new Error(errorMsg);
-        }
-      }
-
-      const attemptNut18Send = async (feeReserve = getSwapFeeHint(mintUrl), attempt = 1) => {
-        const feeValue = Number(feeReserve) > 0 ? Number(feeReserve) : 0;
-        const required = amount + feeValue;
-        const available = getBalanceSats();
-        if (available < required) {
-          throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(required - available) }));
-        }
-
-        const { ok, picked } = selectProofsForAmount(required);
-        if (!ok) throw new Error(t('messages.insufficientBalance'));
-        const mintMismatchMessage = getMintMismatchMessage(picked);
-        if (mintMismatchMessage) {
-          setInvoiceError(mintMismatchMessage);
-          showInfoMessage(mintMismatchMessage, 'error');
-          throw new Error(mintMismatchMessage);
-        }
-        const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
-
-        const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
-        if (!keysResp.ok) {
-          throw new Error(t('messages.mintKeysFailed'));
-        }
-        const mintKeys = await keysResp.json();
-
-        // Calculate actual input total after deduplication
-        const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-        if (actualInputTotal < required) {
-          throw new Error(t('messages.insufficientBalance'));
-        }
-        console.log('[eCash Send] Input proofs:', uniquePicked.map(p => ({ amount: p.amount, id: p.id?.slice(0, 8) })));
-        console.log('[eCash Send] Input total:', actualInputTotal, 'Payment amount:', amount, 'Fee reserve:', feeValue);
-
-        const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
-        console.log('[eCash Send] Payment outputs created:', paymentOutputs.outputs.length, 'outputs');
-        console.log('[eCash Send] Payment outputs amounts:', paymentOutputs.outputs.map(o => o.amount));
-        const paymentOutputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-        console.log('[eCash Send] Payment output total:', paymentOutputTotal, 'Expected:', amount);
-
-        const changeAmount = Math.max(0, actualInputTotal - Number(amount) - feeValue);
-        console.log('[eCash Send] Change calculated:', changeAmount);
-
-        const changeOutputs = changeAmount > 0 ? await createBlindedOutputs(changeAmount, mintKeys) : { outputs: [], outputDatas: [] };
-        if (changeAmount > 0) {
-          console.log('[eCash Send] Change outputs created:', changeOutputs.outputs.length, 'outputs');
-          console.log('[eCash Send] Change outputs amounts:', changeOutputs.outputs.map(o => o.amount));
-          const changeOutputTotal = changeOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-          console.log('[eCash Send] Change output total:', changeOutputTotal, 'Expected:', changeAmount);
-        }
-
-        const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
-        const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
-
-        // Calculate output total for verification
-        const outputTotal = paymentOutputs.outputs.reduce((sum, o) => sum + Number(o.amount || 0), 0) +
-                           (changeOutputs.outputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0);
-        console.log('[eCash Send] === BALANCE CHECK ===');
-        console.log('[eCash Send] Input total:', actualInputTotal);
-        console.log('[eCash Send] Output total:', outputTotal);
-        console.log('[eCash Send] Difference (should equal fee):', actualInputTotal - outputTotal);
-        console.log('[eCash Send] Payment amount:', amount);
-        console.log('[eCash Send] Fee reserve:', feeValue);
-        console.log('[eCash Send] Change amount:', changeAmount);
-        console.log('[eCash Send] Input count:', uniquePicked.length);
-        console.log('[eCash Send] Output count:', combinedOutputs.length);
-
-        const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            inputs: uniquePicked,
-            outputs: combinedOutputs,
-            mintUrl,
-            requestId: id
-          })
-        });
-
-        if (!swapResp.ok) {
-          const err = await parseJsonSafely(swapResp);
-          const parsedFee = extractSwapFeeFromError(err);
-          if (parsedFee !== null && parsedFee !== feeValue && attempt < 3) {
-            console.warn('[eCash Send] Mint reported fee, retrying with fee reserve:', parsedFee);
-            rememberSwapFeeHint(mintUrl, parsedFee);
-            return attemptNut18Send(parsedFee, attempt + 1);
-          }
-          let msg = t('messages.ecashSendFailed');
-          const errMessage = err?.error || err?.detail || err?.message;
-          if (typeof errMessage === 'string' && errMessage.trim()) {
-            msg = translateErrorMessage(errMessage);
-          }
-          throw new Error(msg);
-        }
-
-        const swapData = await swapResp.json();
-        const signatures = swapData?.signatures || swapData?.promises || [];
-        if (!signatures.length) {
-          throw new Error(t('messages.ecashSendFailed'));
-        }
-        const allProofs = await signaturesToProofs(signatures, mintKeys, combinedOutputDatas);
-        const paymentProofCount = paymentOutputs.outputDatas.length;
-        const paymentProofs = allProofs.slice(0, paymentProofCount);
-        const changeProofs = allProofs.slice(paymentProofCount);
-
-        const paymentPayload = createPaymentPayload({
-          id,
-          memo,
-          mint: mintUrl,
-          unit: unit || 'sat',
-          proofs: paymentProofs
-        });
-
-        try {
-          if (postEndpoint) {
-            await sendPaymentViaPost(postEndpoint, paymentPayload);
-          } else if (nostrEndpoint) {
-            await sendPaymentViaNostr({
-              nprofile: nostrEndpoint,
-              payload: paymentPayload
-            });
-          } else {
-            throw new Error(t('messages.paymentRequestMissingTransport'));
-          }
-          removeProofs(uniquePicked, mintUrl);
-          if (changeProofs.length) {
-            addProofs(changeProofs, mintUrl);
-          }
-        } catch (error) {
-          console.error('Payment transport failed:', error);
-          removeProofs(uniquePicked, mintUrl);
-          const fallbackProofs = [...paymentProofs, ...changeProofs];
-          if (fallbackProofs.length) {
-            addProofs(fallbackProofs, mintUrl);
-          }
-          throw error instanceof Error ? error : new Error(String(error));
-        }
-
-        addTransaction({
-          id: Date.now(),
-          type: 'send',
-          amount,
-          timestamp: new Date().toISOString(),
-          status: 'confirmed',
-          description: t('wallet.ecashSend'),
-          memo: memo || '',
-          mintUrl
-        });
-
-        await loadWalletData();
-        showInfoMessage(t('messages.ecashSendSuccess'), 'success');
-
-        navigate('/wallet/payment-success', {
-          state: {
-            amount,
-            type: 'ecash_send',
-            from: '/wallet/send'
-          },
-          replace: true
-        });
-      };
-
-      await attemptNut18Send(getSwapFeeHint(mintUrl));
-    };
-
-    try {
-      setLoading(true);
-      setInvoiceError('');
-
-      const requestPayload = parseEcashRequest(sendAddress);
-      if (!requestPayload) {
-        throw new Error(t('messages.invalidEcashRequest'));
-      }
-
-      if (requestPayload.protocol === 'nut18') {
-        await handleNut18Send(requestPayload);
-        return;
-      }
-
-      const { mint, amount, outputs: serializedOutputs, requestId } = requestPayload;
-
-      if (!amount || amount <= 0) {
-        throw new Error(t('messages.invalidAmount'));
-      }
-
-      const targetMint = mint || mintUrl;
+    if (Array.isArray(allowedMints) && allowedMints.length > 0) {
       const currentMint = normalizeMintForCompare(mintUrl);
-      const requestMint = normalizeMintForCompare(targetMint);
-
-      if (currentMint !== requestMint) {
+      const allowed = allowedMints.some((allowedMint) => normalizeMintForCompare(allowedMint) === currentMint);
+      if (!allowed) {
         const errorMsg = t('messages.ecashRequestMintMismatch', {
-          requestMint: formatMintLabel(targetMint),
+          requestMint: formatMintLabel(allowedMints[0]),
           currentMint: formatMintLabel(mintUrl)
         });
         setInvoiceError(errorMsg);
         showInfoMessage(errorMsg, 'error');
         throw new Error(errorMsg);
       }
+    }
 
+    const attemptNut18Send = async (feeReserve = getSwapFeeHint(mintUrl), attempt = 1) => {
+      const feeValue = Number(feeReserve) > 0 ? Number(feeReserve) : 0;
+      const required = amount + feeValue;
       const available = getBalanceSats();
-      if (available < amount) {
-        throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(amount - available) }));
+      if (available < required) {
+        throw new Error(t('messages.insufficientBalanceDetails', { amount: formatAmount(required - available) }));
       }
 
-      const { ok, picked, total } = selectProofsForAmount(amount);
+      const { ok, picked } = selectProofsForAmount(required);
       if (!ok) throw new Error(t('messages.insufficientBalance'));
       const mintMismatchMessage = getMintMismatchMessage(picked);
       if (mintMismatchMessage) {
@@ -2570,94 +2668,105 @@ function Wallet() {
         showInfoMessage(mintMismatchMessage, 'error');
         throw new Error(mintMismatchMessage);
       }
-
-      // Handle both old (OutputData with secrets) and new (blinded messages only) legacy formats
-      let receiverOutputs = serializedOutputs;
-      if (Array.isArray(serializedOutputs) && serializedOutputs.length > 0 && serializedOutputs[0].blindedMessage) {
-        // Old format: Extract blindedMessage from OutputData structure
-        receiverOutputs = serializedOutputs.map(item => item.blindedMessage);
-      }
-
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
 
-      // Calculate actual input total after deduplication
-      const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      let changeOutputs = undefined;
-      let changeOutputDatas = undefined;
-      const change = Math.max(0, actualInputTotal - Number(amount));
+      const keysResp = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(mintUrl)}`));
+      if (!keysResp.ok) {
+        throw new Error(t('messages.mintKeysFailed'));
+      }
+      const mintKeys = await keysResp.json();
 
-      if (change > 0) {
-        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(targetMint)}`));
-        if (!kr.ok) throw new Error(t('messages.mintKeysFetchError'));
-        const mintKeys = await kr.json();
-        const built = await createBlindedOutputs(change, mintKeys);
-        changeOutputs = built.outputs;
-        changeOutputDatas = built.outputDatas;
+      const actualInputTotal = uniquePicked.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      if (actualInputTotal < required) {
+        throw new Error(t('messages.insufficientBalance'));
       }
 
-      const allOutputs = [...receiverOutputs, ...(changeOutputs || [])];
+      const paymentOutputs = await createBlindedOutputs(amount, mintKeys);
+      const changeAmount = Math.max(0, actualInputTotal - Number(amount) - feeValue);
+      const changeOutputs = changeAmount > 0 ? await createBlindedOutputs(changeAmount, mintKeys) : { outputs: [], outputDatas: [] };
 
-      // Calculate output total for verification
-      const receiverTotal = receiverOutputs.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-      const changeTotal = changeOutputs?.reduce((sum, o) => sum + Number(o.amount || 0), 0) || 0;
-      console.log('[eCash Send Legacy] Swap balance check:', {
-        inputTotal: actualInputTotal,
-        outputTotal: receiverTotal + changeTotal,
-        receiverAmount: amount,
-        changeAmount: change,
-        inputCount: uniquePicked.length,
-        outputCount: allOutputs.length
-      });
+      const combinedOutputs = [...paymentOutputs.outputs, ...changeOutputs.outputs];
+      const combinedOutputDatas = [...paymentOutputs.outputDatas, ...changeOutputs.outputDatas];
 
+      const normalizedInputs = normalizeProofsForApi(uniquePicked);
       const swapResp = await fetch(apiUrl('/api/cashu/swap'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputs: uniquePicked,
-          outputs: allOutputs,
-          mintUrl: targetMint,
-          requestId
+          inputs: normalizedInputs,
+          outputs: combinedOutputs,
+          mintUrl,
+          requestId: id
         })
       });
 
       if (!swapResp.ok) {
+        const err = await parseJsonSafely(swapResp);
+        const parsedFee = extractSwapFeeFromError(err);
+        if (parsedFee !== null && parsedFee !== feeValue && attempt < 3) {
+          rememberSwapFeeHint(mintUrl, parsedFee);
+          return attemptNut18Send(parsedFee, attempt + 1);
+        }
         let msg = t('messages.ecashSendFailed');
-        try {
-          const err = await swapResp.json();
-          if (err?.error) {
-            msg = translateErrorMessage(err.error);
-          }
-        } catch {}
+        const errMessage = err?.error || err?.detail || err?.message;
+        if (typeof errMessage === 'string' && errMessage.trim()) {
+          msg = translateErrorMessage(errMessage);
+        }
         throw new Error(msg);
       }
 
       const swapData = await swapResp.json();
-      const signatures = swapData?.signatures || [];
-      const changeSignatures = signatures.slice(receiverOutputs.length);
-
-      let changeProofs = [];
-      if (change > 0 && changeSignatures.length > 0 && changeOutputDatas) {
-        const kr = await fetch(apiUrl(`/api/cashu/keys?mintUrl=${encodeURIComponent(targetMint)}`));
-        if (kr.ok) {
-          const mintKeys = await kr.json();
-          changeProofs = await signaturesToProofs(changeSignatures, mintKeys, changeOutputDatas);
-        }
+      const signatures = swapData?.signatures || swapData?.promises || [];
+      if (!signatures.length) {
+        throw new Error(t('messages.ecashSendFailed'));
       }
+      const allProofs = await signaturesToProofs(signatures, mintKeys, combinedOutputDatas);
+      const paymentProofCount = paymentOutputs.outputDatas.length;
+      const paymentProofs = allProofs.slice(0, paymentProofCount);
+      const changeProofs = allProofs.slice(paymentProofCount);
 
-      removeProofs(uniquePicked);
-      if (changeProofs.length > 0) {
-        addProofs(changeProofs, targetMint);
+      const paymentPayload = createPaymentPayload({
+        id,
+        memo,
+        mint: mintUrl,
+        unit: unit || 'sat',
+        proofs: paymentProofs
+      });
+
+      try {
+        if (postEndpoint) {
+          await sendPaymentViaPost(postEndpoint, paymentPayload);
+        } else if (nostrEndpoint) {
+          await sendPaymentViaNostr({
+            nprofile: nostrEndpoint,
+            payload: paymentPayload
+          });
+        } else {
+          throw new Error(t('messages.paymentRequestMissingTransport'));
+        }
+        removeProofs(uniquePicked, mintUrl);
+        if (changeProofs.length) {
+          addProofs(changeProofs, mintUrl);
+        }
+      } catch (error) {
+        console.error('Payment transport failed:', error);
+        removeProofs(uniquePicked, mintUrl);
+        const fallbackProofs = [...paymentProofs, ...changeProofs];
+        if (fallbackProofs.length) {
+          addProofs(fallbackProofs, mintUrl);
+        }
+        throw error instanceof Error ? error : new Error(String(error));
       }
 
       addTransaction({
         id: Date.now(),
         type: 'send',
-        amount: amount,
+        amount,
         timestamp: new Date().toISOString(),
         status: 'confirmed',
         description: t('wallet.ecashSend'),
-        memo: '',
-        mintUrl: targetMint
+        memo: memo || '',
+        mintUrl
       });
 
       await loadWalletData();
@@ -2671,6 +2780,39 @@ function Wallet() {
         },
         replace: true
       });
+    };
+
+    await attemptNut18Send(getSwapFeeHint(mintUrl));
+  }, [
+    addTransaction,
+    extractSwapFeeFromError,
+    formatAmount,
+    formatMintLabel,
+    getMintMismatchMessage,
+    getSwapFeeHint,
+    loadWalletData,
+    mintUrl,
+    navigate,
+    normalizeMintForCompare,
+    parseJsonSafely,
+    rememberSwapFeeHint,
+    setInvoiceError,
+    showInfoMessage,
+    t,
+    translateErrorMessage
+  ]);
+
+  const handleEcashRequestSend = useCallback(async () => {
+    try {
+      setLoading(true);
+      setInvoiceError('');
+
+      const requestPayload = parseEcashRequest(sendAddress);
+      if (!requestPayload) {
+        throw new Error(t('messages.invalidEcashRequest'));
+      }
+
+      await handleNut18Send(requestPayload);
     } catch (error) {
       console.error('Failed to send eCash:', error);
       const errorMessage = translateErrorMessage(error?.message) || t('messages.ecashSendFailed');
@@ -2679,7 +2821,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendAddress, t, getBalanceSats, formatAmount, selectProofsForAmount, getMintMismatchMessage, showInfoMessage, apiUrl, deserializeOutputDatas, createBlindedOutputs, translateErrorMessage, signaturesToProofs, removeProofs, addProofs, addTransaction, loadWalletData, navigate, mintUrl, normalizeMintForCompare, formatMintLabel, createPaymentPayload, sendPaymentViaNostr]);
+  }, [handleNut18Send, parseEcashRequest, sendAddress, setInvoiceError, setLoading, showInfoMessage, t, translateErrorMessage]);
 
   const prepareSend = useCallback(async () => {
     if (enableSendScanner) {
@@ -2784,13 +2926,14 @@ function Wallet() {
       }
 
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
+      const normalizedInputs = normalizeProofsForApi(uniquePicked);
 
       const m = await fetch(apiUrl('/api/cashu/melt'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           quote: quoteData?.quote || quoteData?.quote_id,
-          inputs: uniquePicked,
+          inputs: normalizedInputs,
           outputs: changeOutputs,
           mintUrl
         })
@@ -2876,7 +3019,31 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendAddress, invoiceQuote, enableSendScanner, setEnableSendScanner, setInvoiceError, addToast, t, apiUrl, getBalanceSats, selectProofsForAmount, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setInvoiceQuote, navigate, translateErrorMessage, formatAmount, formatDate, mintUrl, getMintMismatchMessage, showInfoMessage]);
+  }, [
+    sendAddress,
+    invoiceQuote,
+    enableSendScanner,
+    setEnableSendScanner,
+    setInvoiceError,
+    setLoading,
+    t,
+    addTransaction,
+    loadWalletData,
+    setEcashBalance,
+    setSendAmount,
+    setSendAddress,
+    setShowSend,
+    setInvoiceQuote,
+    navigate,
+    translateErrorMessage,
+    formatAmount,
+    mintUrl,
+    getMintMismatchMessage,
+    showInfoMessage,
+    handleEcashRequestSend,
+    buildLightningAddressErrorMessage,
+    sendAmount
+  ]);
 
   const [pendingSendDetails, setPendingSendDetails] = useState(null);
   
@@ -2911,9 +3078,10 @@ function Wallet() {
       }
       // Deduplicate inputs defensively
       const uniquePicked = Array.from(new Map(picked.map(p => [p?.secret || JSON.stringify(p), p])).values());
+      const normalizedInputs = normalizeProofsForApi(uniquePicked);
       const m = await fetch(apiUrl('/api/cashu/melt'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: uniquePicked, outputs: changeOutputs, mintUrl })
+        body: JSON.stringify({ quote: quoteData?.quote || quoteData?.quote_id, inputs: normalizedInputs, outputs: changeOutputs, mintUrl })
       });
       if (!m.ok) {
         let msg = t('messages.sendFailed');
@@ -2991,7 +3159,26 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [sendCtxRef, t, selectProofsForAmount, apiUrl, createBlindedOutputs, addTransaction, removeProofs, addProofs, loadWalletData, setEcashBalance, setSendAmount, setSendAddress, setShowSend, setEnableSendScanner, setShowSendConfirm, setPendingSendDetails, navigate, pendingSendDetails, translateErrorMessage, formatAmount, formatDate, mintUrl, getMintMismatchMessage]);
+  }, [
+    sendCtxRef,
+    t,
+    addTransaction,
+    loadWalletData,
+    setEcashBalance,
+    setSendAmount,
+    setSendAddress,
+    setShowSend,
+    setEnableSendScanner,
+    setShowSendConfirm,
+    setPendingSendDetails,
+    navigate,
+    pendingSendDetails,
+    translateErrorMessage,
+    mintUrl,
+    getMintMismatchMessage,
+    showInfoMessage,
+    setLoading
+  ]);
 
   const convertFunds = useCallback(async () => {
     if (!convertAmount || convertAmount <= 0) {
@@ -3008,8 +3195,8 @@ function Wallet() {
       }
     }
 
-    if (amount > ECASH_CONFIG.maxAmount) {
-      showInfoMessage(t('messages.maxConversionAmount', { amount: formatAmount(ECASH_CONFIG.maxAmount) }), 'error');
+    if (amount > MAX_CONVERSION_AMOUNT) {
+      showInfoMessage(t('messages.maxConversionAmount', { amount: formatAmount(MAX_CONVERSION_AMOUNT) }), 'error');
       return;
     }
 
@@ -3022,7 +3209,7 @@ function Wallet() {
     } finally {
       setLoading(false);
     }
-  }, [convertAmount, convertDirection, ecashBalance, ECASH_CONFIG, showInfoMessage, t, formatAmount, setLoading]);
+  }, [convertAmount, convertDirection, ecashBalance, showInfoMessage, t, formatAmount, setLoading]);
 
   return (
     <div className="wallet-page">
@@ -3038,188 +3225,374 @@ function Wallet() {
               <h2><Icon name="send" size={20} /> {t('wallet.sendTitle')}</h2>
             </div>
             <div className="send-card-body">
-              {!isConnected ? (
-                <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                  {networkDisconnectedMessage}
-                </div>
-              ) : null}
-              {enableSendScanner ? (
-                <div className="qr-scanner-section">
-                  <QrScanner onScan={handleSendQrScan} onError={handleSendQrError} />
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => setEnableSendScanner(false)}
-                  >
-                    {t('wallet.closeScanner')}
-                  </button>
-                </div>
-              ) : (
-                <div className="qr-rescan">
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => setEnableSendScanner(true)}
-                    disabled={!isConnected}
-                  >
-                    <Icon name="camera" size={16} /> {t('wallet.scanQR')}
-                  </button>
-                </div>
-              )}
-              <div className="input-group">
-                <label>{t('wallet.lightningAddress')}</label>
-                <textarea
-                  value={sendAddress}
-                  onChange={(e) => setSendAddress(e.target.value)}
-                  placeholder={t('wallet.invoicePlaceholder')}
-                  rows="3"
-                  disabled={!isConnected}
-                />
-                <small>
-                  {isBolt11Invoice(sendAddress)
-                    ? t('wallet.invoiceDetected')
-                    : isEcashRequest(sendAddress)
-                      ? t('wallet.ecashRequestDetected')
-                      : isLightningAddress(sendAddress)
-                        ? t('wallet.addressDetected')
-                        : t('wallet.invoiceOrAddressHint')}
-                </small>
+              <div className="send-tabs">
+                <button
+                  className={`send-tab ${sendTab === 'lightning' ? 'active' : ''}`}
+                  onClick={() => setSendTab('lightning')}
+                >
+                  <Icon name="bolt" size={14} /> {t('wallet.lightningTab')}
+                </button>
+                <button
+                  className={`send-tab ${sendTab === 'ecash' ? 'active' : ''}`}
+                  onClick={() => setSendTab('ecash')}
+                >
+                  <Icon name="coins" size={14} /> {t('wallet.ecashTab')}
+                </button>
               </div>
-              {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && (
-                <div className="input-group">
-                  <label>{t('wallet.amountToSend')}</label>
-                  <input
-                    type="number"
-                    value={sendAmount}
-                    onChange={(e) => setSendAmount(e.target.value)}
-                    placeholder={t('wallet.amountPlaceholder')}
-                    min="1"
-                    max={ecashBalance}
-                    disabled={!isConnected}
-                  />
-                  <small>{t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}</small>
-                  {sendFiatDisplay && (
-                    <div className="fiat-hint">
-                      {t('wallet.fiatApprox', { value: sendFiatDisplay, source: rateSourceLabel })}
+              <div className="send-info">
+                <Icon name="info" size={16} />
+                {sendTab === 'ecash' ? t('wallet.sendViaEcash') : t('wallet.sendViaLightning')}
+              </div>
+
+              {sendTab === 'lightning' ? (
+                <>
+                  {!isConnected ? (
+                    <div className="network-warning" style={{ marginBottom: '1rem' }}>
+                      {networkDisconnectedMessage}
+                    </div>
+                  ) : null}
+                  {enableSendScanner ? (
+                    <div className="qr-scanner-section">
+                      <QrScanner onScan={handleSendQrScan} onError={handleSendQrError} />
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => setEnableSendScanner(false)}
+                      >
+                        {t('wallet.closeScanner')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="qr-rescan">
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => setEnableSendScanner(true)}
+                        disabled={!isConnected}
+                      >
+                        <Icon name="camera" size={16} /> {t('wallet.scanQR')}
+                      </button>
                     </div>
                   )}
-                </div>
-              )}
-              {isEcashRequest(sendAddress) && (() => {
-                const requestPayload = parseEcashRequest(sendAddress);
-                if (!requestPayload) return null;
-                const requestAmount = Number(requestPayload.amount || 0);
-                const requestFiatDisplay = fiatRate.rate ? formatFiatAmount(requestAmount) : null;
-                const requestMemo = requestPayload.description || requestPayload.memo || '';
-                const allowedMints = Array.isArray(requestPayload.mints) ? requestPayload.mints : [];
-                const transport = Array.isArray(requestPayload.transports) && requestPayload.transports.length
-                  ? requestPayload.transports[0]
-                  : null;
-                const transportLabel = transport?.t === 'nostr'
-                  ? t('wallet.nostrTransport')
-                  : transport?.t === 'post'
-                    ? t('wallet.httpTransport')
-                    : transport?.t
-                      ? transport.t.toUpperCase()
-                      : t('wallet.unknownTransport');
+                  <div className="input-group">
+                    <label>{t('wallet.lightningAddress')}</label>
+                    <textarea
+                      value={sendAddress}
+                      onChange={(e) => setSendAddress(e.target.value)}
+                      placeholder={t('wallet.invoicePlaceholder')}
+                      rows="3"
+                      disabled={!isConnected}
+                    />
+                    <small>
+                      {isBolt11Invoice(sendAddress)
+                        ? t('wallet.invoiceDetected')
+                        : isEcashRequest(sendAddress)
+                          ? t('wallet.ecashRequestDetected')
+                          : isLightningAddress(sendAddress)
+                            ? t('wallet.addressDetected')
+                            : t('wallet.invoiceOrAddressHint')}
+                    </small>
+                  </div>
+                  {isLightningAddress(sendAddress) && !isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && (
+                    <div className="input-group">
+                      <label>{t('wallet.amountToSend')}</label>
+                      <input
+                        type="number"
+                        value={sendAmount}
+                        onChange={(e) => setSendAmount(e.target.value)}
+                        placeholder={t('wallet.amountPlaceholder')}
+                        min="1"
+                        max={ecashBalance}
+                        disabled={!isConnected}
+                      />
+                      <small>{t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}</small>
+                      {sendFiatDisplay && (
+                        <div className="fiat-hint">
+                          {t('wallet.fiatApprox', { value: sendFiatDisplay, source: rateSourceLabel })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {isEcashRequest(sendAddress) && (() => {
+                    const requestPayload = parseEcashRequest(sendAddress);
+                    if (!requestPayload) return null;
+                    const requestAmount = Number(requestPayload.amount || 0);
+                    const requestFiatDisplay = fiatRate.rate ? formatFiatAmount(requestAmount) : null;
+                    const requestMemo = requestPayload.description || requestPayload.memo || '';
+                    const allowedMints = Array.isArray(requestPayload.mints) ? requestPayload.mints : [];
+                    const transport = Array.isArray(requestPayload.transports) && requestPayload.transports.length
+                      ? requestPayload.transports[0]
+                      : null;
+                    const transportLabel = transport?.t === 'nostr'
+                      ? t('wallet.nostrTransport')
+                      : transport?.t === 'post'
+                        ? t('wallet.httpTransport')
+                        : transport?.t
+                          ? transport.t.toUpperCase()
+                          : t('wallet.unknownTransport');
 
-                return (
-                  <div className="payment-request-details">
-                    <div className="detail-row primary">
-                      <span>{t('wallet.ecashRequestAmount')}</span>
-                      <strong>{formatAmount(requestAmount)} sats</strong>
+                    return (
+                      <div className="payment-request-details">
+                        <div className="detail-row primary">
+                          <span>{t('wallet.ecashRequestAmount')}</span>
+                          <strong>{formatAmount(requestAmount)} sats</strong>
+                        </div>
+                        {requestFiatDisplay && (
+                          <div className="detail-row">
+                            <span>{t('wallet.fiatApproxLabel')}</span>
+                            <strong>{t('wallet.fiatApprox', { value: requestFiatDisplay, source: rateSourceLabel })}</strong>
+                          </div>
+                        )}
+                        <div className="detail-row">
+                          <span>{t('wallet.afterBalance')}</span>
+                          <strong>{formatAmount(ecashBalance - requestAmount)} sats</strong>
+                        </div>
+                        {requestMemo && (
+                          <div className="detail-row narrow">
+                            <span>{t('wallet.paymentRequestMemoLabel')}</span>
+                            <span className="muted">{requestMemo}</span>
+                          </div>
+                        )}
+                        {(requestPayload.id || allowedMints.length > 0 || transport) && (
+                          <div style={{ marginTop: '0.5rem' }}>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => setShowRequestDetails(!showRequestDetails)}
+                              style={{ fontSize: '0.9rem', padding: '0.25rem 0' }}
+                            >
+                              {showRequestDetails ? `△ ${t('common.showLess')}` : `▽ ${t('common.showMore')}`}
+                            </button>
+                          </div>
+                        )}
+                        {showRequestDetails && (
+                          <>
+                            {requestPayload.id && (
+                              <div className="detail-row narrow">
+                                <span>{t('wallet.paymentRequestId')}</span>
+                                <span className="muted">{requestPayload.id}</span>
+                              </div>
+                            )}
+                            {allowedMints.length > 0 && (
+                              <div className="detail-row narrow">
+                                <span>{t('wallet.allowedMints')}</span>
+                                <span className="muted">{allowedMints.map(formatMintLabel).join(', ')}</span>
+                              </div>
+                            )}
+                            {transport && (
+                              <div className="detail-row narrow">
+                                <span>{t('wallet.transport')}</span>
+                                <span className="muted">
+                                  {transportLabel}
+                                  {transport?.a && (
+                                    <>
+                                      {' · '}
+                                      <span style={{ wordBreak: 'break-all' }}>{transport.a}</span>
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {invoiceQuote && !isEcashRequest(sendAddress) && (
+                    <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
+                      <div>{t('wallet.sendAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
+                      <div>{t('wallet.fee')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
+                      <div>{t('wallet.afterBalance')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
                     </div>
-                    {requestFiatDisplay && (
-                      <div className="detail-row">
-                        <span>{t('wallet.fiatApproxLabel')}</span>
-                        <strong>{t('wallet.fiatApprox', { value: requestFiatDisplay, source: rateSourceLabel })}</strong>
-                      </div>
-                    )}
-                    <div className="detail-row">
-                      <span>{t('wallet.afterBalance')}</span>
-                      <strong>{formatAmount(ecashBalance - requestAmount)} sats</strong>
+                  )}
+                  {invoiceError && (
+                    <div className="warning-banner danger" style={{ marginTop: '1rem' }}>
+                      {invoiceError}
                     </div>
-                    {requestMemo && (
-                      <div className="detail-row narrow">
-                        <span>{t('wallet.paymentRequestMemoLabel')}</span>
-                        <span className="muted">{requestMemo}</span>
+                  )}
+                  <div className="send-actions">
+                    <button
+                      onClick={prepareSend}
+                      className="primary-btn"
+                      disabled={
+                        loading ||
+                        fetchingQuote ||
+                        !isConnected ||
+                        !!invoiceError ||
+                        (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
+                        (isEcashRequest(sendAddress) && !parseEcashRequest(sendAddress)) ||
+                        (!isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
+                        (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
+                      }
+                    >
+                      {loading ? t('wallet.sending') : fetchingQuote ? t('common.checkingInvoice') : t('wallet.send')}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {!isConnected && (
+                    <div className="network-warning" style={{ marginBottom: '1rem' }}>
+                      {networkDisconnectedMessage}
+                    </div>
+                  )}
+                  <div className="ecash-keypad-card">
+                    <div className="ecash-keypad-display">
+                      <span className="label">{t('wallet.amount')}</span>
+                      <div className="value">
+                        {formatAmount(ecashSendToken ? ecashSendTokenAmount : ecashSendAmountValue || 0)} <span className="unit">sats</span>
                       </div>
-                    )}
-                    {(requestPayload.id || allowedMints.length > 0 || transport) && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <button
-                          type="button"
-                          className="link-btn"
-                          onClick={() => setShowRequestDetails(!showRequestDetails)}
-                          style={{ fontSize: '0.9rem', padding: '0.25rem 0' }}
-                        >
-                          {showRequestDetails ? `△ ${t('common.showLess')}` : `▽ ${t('common.showMore')}`}
-                        </button>
+                      {!ecashSendToken && ecashSendFiatDisplay && (
+                        <div className="fiat">
+                          {t('wallet.fiatApprox', { value: ecashSendFiatDisplay, source: rateSourceLabel })}
+                        </div>
+                      )}
+                      {ecashSendToken && ecashTokenFiatDisplay && (
+                        <div className="fiat">
+                          {t('wallet.fiatApprox', { value: ecashTokenFiatDisplay, source: rateSourceLabel })}
+                        </div>
+                      )}
+                      <div className="available">
+                        {t('wallet.availableBalance', { amount: formatAmount(ecashBalance) })}
                       </div>
-                    )}
-                    {showRequestDetails && (
+                    </div>
+                    {!ecashSendToken && (
                       <>
-                        {requestPayload.id && (
-                          <div className="detail-row narrow">
-                            <span>{t('wallet.paymentRequestId')}</span>
-                            <span className="muted">{requestPayload.id}</span>
+                        <div className="ecash-keypad-grid">
+                          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'del'].map((val) => (
+                            <button
+                              key={val}
+                              type="button"
+                              className="ecash-keypad-button"
+                              onClick={() => handleEcashKeypadPress(val)}
+                              aria-label={val === 'del' ? t('wallet.keypadDelete') : undefined}
+                              disabled={loading || !isConnected}
+                            >
+                              {val === 'del' ? '⌫' : val}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="send-actions keypad-actions">
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => handleEcashKeypadPress('clear')}
+                            disabled={loading}
+                          >
+                            {t('wallet.clearAmount')}
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={handleGenerateEcashToken}
+                            disabled={loading || !ecashSendAmountValue || ecashSendAmountValue > ecashBalance || !isConnected}
+                          >
+                            {loading ? t('wallet.generatingRequest') : t('wallet.confirmAmount')}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {ecashSendError && (
+                    <div className="warning-banner danger" style={{ marginBottom: '1rem' }}>
+                      {ecashSendError}
+                    </div>
+                  )}
+                  {ecashSendToken && (
+                    <>
+                      <div className="invoice-section receive-invoice">
+                        <div className="qr-placeholder">
+                          <div
+                            className="qr-image-container"
+                            onClick={() => {
+                              if (!ecashSendToken) return;
+                              setQrModalPayload({
+                                type: 'token',
+                                data: ecashSendToken,
+                                amount: ecashSendTokenAmount,
+                                mint: ecashSendTokenMint || mintUrl
+                              });
+                              setShowQrModal(true);
+                            }}
+                          >
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&ecc=H&data=${encodeURIComponent(ecashSendToken)}`}
+                              alt="Cashu Token QR"
+                              className="qr-image"
+                            />
+                            <div className="qr-logo-overlay">
+                              <img src="/logo-192.png" alt="Logo" className="qr-logo" />
+                            </div>
                           </div>
-                        )}
-                        {allowedMints.length > 0 && (
-                          <div className="detail-row narrow">
-                            <span>{t('wallet.allowedMints')}</span>
-                            <span className="muted">{allowedMints.map(formatMintLabel).join(', ')}</span>
-                          </div>
-                        )}
-                        {transport && (
-                          <div className="detail-row narrow">
-                            <span>{t('wallet.transport')}</span>
-                            <span className="muted">
-                              {transportLabel}
-                              {transport?.a && (
+                          <div className="qr-zoom-hint">{t('wallet.tapToZoom')}</div>
+                        </div>
+                        <label className="invoice-copy-label">{t('wallet.ecashTokenCopyHint')}</label>
+                        <div className="invoice-input-wrapper">
+                          <textarea
+                            value={ecashSendToken}
+                            readOnly
+                            className="invoice-textarea clickable"
+                            onFocus={(e) => e.target.select()}
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(ecashSendToken);
+                                setEcashTokenCopied(true);
+                                setTimeout(() => setEcashTokenCopied(false), 2000);
+                              } catch {
+                                addToast(t('messages.copyFailed'), 'error');
+                              }
+                            }}
+                            rows="5"
+                          />
+                          {ecashTokenCopied && (
+                            <div className="copy-success-message">{t('wallet.copied')}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="send-actions">
+                        <div className="qr-detail-card qr-detail-textarea">
+                          <div className="qr-detail-row">
+                            <span className="label">{t('wallet.amount')}</span>
+                            <span className="value">
+                              {formatAmount(ecashSendTokenAmount)} sats
+                              {ecashTokenFiatDisplay && (
                                 <>
                                   {' · '}
-                                  <span style={{ wordBreak: 'break-all' }}>{transport.a}</span>
+                                  {ecashTokenFiatDisplay}
+                                  {rateSourceLabel ? ` (${rateSourceLabel})` : ''}
                                 </>
                               )}
                             </span>
                           </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })()}
-              {invoiceQuote && !isEcashRequest(sendAddress) && (
-                <div style={{ marginTop: '1rem', padding: '0.75rem', fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-                  <div>{t('wallet.sendAmount')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.invoiceAmount)} sats</strong></div>
-                  <div>{t('wallet.fee')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.feeReserve)} sats</strong></div>
-                  <div>{t('wallet.afterBalance')}: <strong style={{ color: 'var(--text-primary)' }}>{formatAmount(invoiceQuote.available - invoiceQuote.need)} sats</strong></div>
-                </div>
+                          <div className="qr-detail-line">
+                            <span className="label">{t('wallet.mintLabel')}</span>
+                            <span className="value">{formatMintLabel(ecashSendTokenMint || mintUrl)}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={handleResetEcashToken}
+                        >
+                          {t('wallet.createAnotherToken')}
+                        </button>
+                      </div>
+                      <div className="ecash-token-note info">
+                        <Icon name="info" size={16} />
+                        <span>{t('wallet.ecashTokenInstructions')}</span>
+                      </div>
+                      <div className="ecash-token-note info">
+                        <Icon name="info" size={16} />
+                        <span>{t('wallet.ecashTokenShareHint')}</span>
+                      </div>
+                      <div className="ecash-token-note warning">
+                        <Icon name="alert-circle" size={16} />
+                        <span>{t('wallet.ecashTokenWarning')}</span>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
-              {invoiceError && (
-                <div className="warning-banner danger" style={{ marginTop: '1rem' }}>
-                  {invoiceError}
-                </div>
-              )}
-              <div className="send-actions">
-                <button
-                  onClick={prepareSend}
-                  className="primary-btn"
-                  disabled={
-                    loading ||
-                    fetchingQuote ||
-                    !isConnected ||
-                    !!invoiceError ||
-                    (isBolt11Invoice(sendAddress) && !invoiceQuote) ||
-                    (isEcashRequest(sendAddress) && !parseEcashRequest(sendAddress)) ||
-                    (!isBolt11Invoice(sendAddress) && !isEcashRequest(sendAddress) && !(isLightningAddress(sendAddress) && Number(sendAmount) > 0)) ||
-                    (invoiceQuote && invoiceQuote.available < invoiceQuote.need)
-                  }
-                >
-                  {loading ? t('wallet.sending') : fetchingQuote ? t('common.checkingInvoice') : t('wallet.send')}
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -3238,11 +3611,23 @@ function Wallet() {
               >
                 <Icon name="bolt" size={14} /> {t('wallet.lightningTab')}
               </button>
+              <button
+                className={`receive-tab ${receiveTab === 'ecash' ? 'active' : ''}`}
+                onClick={() => setReceiveTab('ecash')}
+              >
+                <Icon name="coins" size={14} /> {t('wallet.ecashTab')}
+              </button>
+              <button
+                className={`receive-tab ${receiveTab === 'token' ? 'active' : ''}`}
+                onClick={() => setReceiveTab('token')}
+              >
+                <Icon name="inbox" size={14} /> {t('wallet.tokenTab')}
+              </button>
             </div>
 
             <div className="receive-info" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--card-bg)', borderRadius: '8px', fontSize: '0.875rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Icon name="info" size={16} />
-              {t('wallet.receiveViaLightning')}
+              {receiveTab === 'token' ? t('wallet.receiveViaToken') : receiveTab === 'ecash' ? t('wallet.receiveViaEcash') : t('wallet.receiveViaLightning')}
             </div>
 
             <div className="receive-card-body">
@@ -3256,7 +3641,7 @@ function Wallet() {
                       </svg>
                     </div>
                     <h2 className="success-title">
-                      {lastReceiveMode === 'ecash' ? t('wallet.paymentRequestPaidTitle') : t('wallet.receiveComplete')}
+                      {lastReceiveMode === 'token' ? t('wallet.tokenReceivedTitle') : lastReceiveMode === 'ecash' ? t('wallet.paymentRequestPaidTitle') : t('wallet.receiveComplete')}
                     </h2>
                     <p className="success-amount">
                       <span className="amount-value">{formatAmount(receivedAmount)}</span> sats
@@ -3267,7 +3652,7 @@ function Wallet() {
                       </p>
                     )}
                     <p className="success-message">
-                      {lastReceiveMode === 'ecash' ? t('wallet.paymentRequestPaidDescription') : t('wallet.receiveSuccess')}
+                      {lastReceiveMode === 'token' ? t('wallet.tokenReceivedDescription') : lastReceiveMode === 'ecash' ? t('wallet.paymentRequestPaidDescription') : t('wallet.receiveSuccess')}
                     </p>
                   </div>
                   <div className="receive-actions">
@@ -3431,25 +3816,25 @@ function Wallet() {
                     </>
                   )}
                 </>
-              ) : (
+              ) : receiveTab === 'ecash' ? (
                 <>
                   <div className="warning-banner warning">
                     <div className="warning-content">
                       {t('wallet.receiveRequestHint')}
                     </div>
                   </div>
-                  {!ecashRequest ? (
-                    <>
-                      {!isConnected && (
-                        <div className="network-warning" style={{ marginBottom: '1rem' }}>
-                          {networkDisconnectedMessage}
-                        </div>
-                      )}
-                      <div className="input-group">
-                        <label>{t('wallet.amountToReceive')}</label>
-                        <input
-                          type="number"
-                          value={receiveAmount}
+                      {!ecashRequest ? (
+                        <>
+                          {!isConnected && (
+                            <div className="network-warning" style={{ marginBottom: '1rem' }}>
+                              {networkDisconnectedMessage}
+                            </div>
+                          )}
+                          <div className="input-group">
+                            <label>{t('wallet.amountToReceive')}</label>
+                            <input
+                              type="number"
+                              value={receiveAmount}
                           onChange={(e) => handleReceiveAmountChange(e.target.value)}
                           placeholder="10000"
                           min={RECEIVE_MIN_AMOUNT}
@@ -3549,7 +3934,7 @@ function Wallet() {
                           </div>
                           <div className="qr-detail-line">
                             <span className="label">{t('wallet.transport')}</span>
-                            <span className="value">{t('wallet.nostrTransport')}</span>
+                            <span className="value">{activeTransportSummary || t('wallet.unknownTransport')}</span>
                           </div>
                           {ecashRequestId && (
                             <div className="qr-detail-line">
@@ -3568,18 +3953,81 @@ function Wallet() {
                         <button
                           type="button"
                           className="primary-btn"
-                          onClick={() => {
-                            setEcashRequest('');
-                            setEcashRequestId(null);
-                            setCheckingPayment(false);
-                            setEcashRequestMode('legacy');
-                            localStorage.removeItem('cashu_last_ecash_request_id');
-                            localStorage.removeItem('cashu_last_ecash_request_amount');
-                            localStorage.removeItem('cashu_last_ecash_request_type');
-                            localStorage.removeItem('cashu_last_ecash_request_string');
-                          }}
+                            onClick={() => {
+                              setEcashRequest('');
+                              setEcashRequestId(null);
+                              setCheckingPayment(false);
+                              localStorage.removeItem('cashu_last_ecash_request_id');
+                              localStorage.removeItem('cashu_last_ecash_request_amount');
+                              localStorage.removeItem('cashu_last_ecash_request_string');
+                            }}
                         >
                           {t('wallet.recreate')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="warning-banner info">
+                    <div className="warning-content">
+                      {t('wallet.tokenReceiveHint')}
+                    </div>
+                  </div>
+
+                  {enableTokenScanner ? (
+                    <div className="qr-scanner-section">
+                      <QrScanner onScan={handleTokenQrScan} onError={handleTokenQrError} />
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => setEnableTokenScanner(false)}
+                      >
+                        {t('wallet.closeScanner')}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="input-group">
+                        <label>{t('wallet.pasteToken')}</label>
+                        <textarea
+                          value={ecashTokenInput}
+                          onChange={(e) => setEcashTokenInput(e.target.value)}
+                          placeholder="cashuA..."
+                          rows="5"
+                          style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
+                        />
+                        <small>{t('wallet.tokenInputHint')}</small>
+                      </div>
+
+                      {invoiceError && (
+                        <div className="receive-error" style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          padding: '0.75rem',
+                          borderRadius: '0.5rem',
+                          marginTop: '0.5rem'
+                        }}>
+                          {invoiceError}
+                        </div>
+                      )}
+
+                      <div className="receive-actions">
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          onClick={() => setEnableTokenScanner(true)}
+                          disabled={loading}
+                        >
+                          <Icon name="qrcode" size={16} /> {t('wallet.scanQrCode')}
+                        </button>
+                        <button
+                          onClick={handleReceiveToken}
+                          className="primary-btn"
+                          disabled={loading || !ecashTokenInput.trim()}
+                        >
+                          {loading ? t('wallet.receiving') : t('wallet.receiveToken')}
                         </button>
                       </div>
                     </>
@@ -3651,9 +4099,6 @@ function Wallet() {
               )}
             </div>
             <div className="balance-manage">
-              <button className="icon-btn" onClick={checkPendingQuote} title={t('wallet.checkPending')} disabled={loading}>
-                <Icon name="repeat" size={18} />
-              </button>
               <button className="icon-btn" onClick={handleBackup} title={t('wallet.backup')}>
                 <Icon name="download" size={18} />
               </button>
@@ -3879,9 +4324,9 @@ function Wallet() {
                   {convertAmount && (
                     <>
                       <br />
-                      {t('wallet.fee')}: {Math.ceil(convertAmount * ECASH_CONFIG.feeRate)} sats
+                      {t('wallet.fee')}: {Math.ceil(convertAmount * CONVERSION_FEE_RATE)} sats
                       <br />
-                      {t('wallet.actualConversion')}: {Math.max(0, convertAmount - Math.ceil(convertAmount * ECASH_CONFIG.feeRate))} sats
+                      {t('wallet.actualConversion')}: {Math.max(0, convertAmount - Math.ceil(convertAmount * CONVERSION_FEE_RATE))} sats
                     </>
                   )}
                 </small>
@@ -3889,7 +4334,7 @@ function Wallet() {
               <div className="conversion-info">
                 <div className="info-item">
                   <Icon name="info" size={16} />
-                  <span>{t('wallet.conversionFee')}: {(ECASH_CONFIG.feeRate * 100).toFixed(1)}%</span>
+                  <span>{t('wallet.conversionFee')}: {(CONVERSION_FEE_RATE * 100).toFixed(1)}%</span>
                 </div>
                 <div className="info-item">
                   <Icon name="clock" size={16} />
@@ -4213,8 +4658,29 @@ function Wallet() {
                 {proofs.map((proof, index) => {
                   const isValid = proof?.amount > 0 && proof?.secret && (proof?.id || proof?.C);
                   const isDisabled = proof?.disabled || false;
+                  const disabledReason = proof?.disabledReason || '';
+                  const disabledMessage = proof?.disabledMessage || '';
                   const mintUrl = proof?.mintUrl || 'Unknown Mint';
                   const displayMintUrl = mintUrl.length > 40 ? mintUrl.substring(0, 37) + '...' : mintUrl;
+                  const canToggleProof = !isDisabled || disabledReason === 'user';
+                  let toggleTitle = isDisabled ? t('wallet.enableProof') : t('wallet.disableProof');
+                  if (isDisabled && disabledReason === 'swap_failed') {
+                    toggleTitle = t('wallet.swapFailedProofLocked');
+                  } else if (isDisabled && disabledReason && disabledReason !== 'user') {
+                    toggleTitle = t('wallet.disabledReasonUnknown');
+                  }
+
+                  // Get disabled reason text
+                  let disabledReasonText = '';
+                  if (isDisabled) {
+                    if (disabledReason === 'swap_failed') {
+                      disabledReasonText = t('wallet.disabledReasonSwapFailed');
+                    } else if (disabledReason === 'user') {
+                      disabledReasonText = t('wallet.disabledReasonUser');
+                    } else {
+                      disabledReasonText = t('wallet.disabledReasonUnknown');
+                    }
+                  }
 
                   return (
                     <div
@@ -4227,29 +4693,63 @@ function Wallet() {
                           <span className="proof-amount">{formatAmount(proof?.amount || 0)} sats</span>
                           <div className={`proof-status ${isDisabled ? 'disabled' : (isValid ? 'valid' : 'invalid')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             {isDisabled ? t('wallet.disabled') : (isValid ? t('wallet.valid') : t('wallet.invalid'))}
+                            {isDisabled && disabledReason === 'swap_failed' && (
+                              <button
+                                onClick={() => retrySwap(proof)}
+                                className="icon-btn"
+                                title={t('wallet.retrySwap')}
+                                style={{ marginLeft: '0', padding: '0.25rem' }}
+                                disabled={loading}
+                              >
+                                <Icon name="repeat" size={18} />
+                              </button>
+                            )}
                             <button
                               onClick={() => {
-                                toggleProofDisabled(proof?.secret || JSON.stringify(proof));
-                                loadWalletData();
+                                if (!canToggleProof) return;
+                                handleToggleProof(proof);
                               }}
                               className="icon-btn"
-                              title={isDisabled ? t('wallet.enableProof') : t('wallet.disableProof')}
+                              title={toggleTitle}
                               style={{ marginLeft: '0', padding: '0.25rem' }}
+                              disabled={!canToggleProof}
                             >
                               <Icon name={isDisabled ? 'eye' : 'eye-off'} size={18} />
                             </button>
                           </div>
                         </div>
                       </div>
+                      {isDisabled && disabledReasonText && (
+                        <div className="proof-disabled-reason" style={{
+                          fontSize: '0.85rem',
+                          color: 'var(--error)',
+                          marginTop: '0.5rem',
+                          padding: '0.5rem',
+                          backgroundColor: 'var(--error-bg)',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem'
+                        }}>
+                          <Icon name="alert-circle" size={14} />
+                          <span>{disabledReasonText}</span>
+                          {disabledMessage && <span style={{ marginLeft: '0.25rem', fontSize: '0.8rem', opacity: 0.8 }}>({disabledMessage})</span>}
+                        </div>
+                      )}
                       <div className="proof-mint" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
                         Mint: <span className="monospace" title={mintUrl}>{displayMintUrl}</span>
                       </div>
                       <div className="proof-secret">
-                        Secret: <span className="monospace">{(proof?.secret || '').substring(0, 16)}...</span>
+                        Secret: <span className="monospace">{proof?.secret || ''}</span>
                       </div>
                       <div className="proof-id monospace">
-                        ID: {(proof?.id || proof?.C || '').substring(0, 12)}...
+                        ID: {proof?.id || proof?.C || ''}
                       </div>
+                      {proof?.createdAt && (
+                        <div className="proof-timestamp" style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
+                          {t('wallet.createdAt')}: {new Date(proof.createdAt).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
