@@ -2295,7 +2295,7 @@ function Wallet() {
 
       setEcashRequest(requestString);
       setEcashRequestId(requestId);
-      setReceiveTab('ecash');
+      // setReceiveTab('ecash'); // eCash tab hidden
       setQrLoaded(true);
       setLastReceiveMode('ecash');
 
@@ -3232,12 +3232,13 @@ function Wallet() {
                 >
                   <Icon name="bolt" size={14} /> {t('wallet.lightningTab')}
                 </button>
-                <button
+                {/* eCash tab hidden */}
+                {/* <button
                   className={`send-tab ${sendTab === 'ecash' ? 'active' : ''}`}
                   onClick={() => setSendTab('ecash')}
                 >
                   <Icon name="coins" size={14} /> {t('wallet.ecashTab')}
-                </button>
+                </button> */}
               </div>
               <div className="send-info">
                 <Icon name="info" size={16} />
@@ -3611,18 +3612,20 @@ function Wallet() {
               >
                 <Icon name="bolt" size={14} /> {t('wallet.lightningTab')}
               </button>
-              <button
+              {/* eCash tab hidden */}
+              {/* <button
                 className={`receive-tab ${receiveTab === 'ecash' ? 'active' : ''}`}
                 onClick={() => setReceiveTab('ecash')}
               >
                 <Icon name="coins" size={14} /> {t('wallet.ecashTab')}
-              </button>
-              <button
+              </button> */}
+              {/* Token tab hidden - also eCash related */}
+              {/* <button
                 className={`receive-tab ${receiveTab === 'token' ? 'active' : ''}`}
                 onClick={() => setReceiveTab('token')}
               >
                 <Icon name="inbox" size={14} /> {t('wallet.tokenTab')}
-              </button>
+              </button> */}
             </div>
 
             <div className="receive-info" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--card-bg)', borderRadius: '8px', fontSize: '0.875rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
